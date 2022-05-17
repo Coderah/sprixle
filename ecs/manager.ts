@@ -17,7 +17,9 @@ type ComponentMap<ComponentTypes> = { [id: string]: Set<Keys<ComponentTypes>> };
 
 export type EntityAdminState<ComponentTypes> = {
     entities: Immutable<EntitiesByID<ComponentTypes>>;
+    /** Maps entity type to set of Entity IDs */
     entityMap: Immutable<EntityMap<ComponentTypes>>;
+    /** Maps entity ID to set of ComponentTypes */
     componentMap: Immutable<ComponentMap<ComponentTypes>>;
 };
 

@@ -222,13 +222,13 @@ export class Manager<ExactComponentTypes = defaultComponentTypes, ComponentTypes
     updateComponent<
         T extends Immutable<Entity<ComponentTypes>>,
         K extends Keys<ComponentTypes>,
-    >(entity: T, type: K, modifier: (currentValue: ComponentTypes[K]) => ComponentTypes[K]) {
+    >(entity: T, type: K, modifier: ComponentTypes[K] | ((currentValue: ComponentTypes[K]) => ComponentTypes[K])) {
         // Weird fix for typescript issue (can't use K here), and cant cast as const even with type as...
         const path = ['components', type] as const;
 
         const currentValue = entity.getIn(path, this.COMPONENT_DEFAULTS[type]);
 
-        return entity.setIn(path, modifier(currentValue));
+        return entity.setIn(path, modifier instanceof Function ? modifier(currentValue) : modifier);
     }
 
     getComponent<K extends Keys<ComponentTypes>>(entity: typeof this['Entity'], type: K): ComponentTypes[K] {

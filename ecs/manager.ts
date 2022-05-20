@@ -148,6 +148,9 @@ export class Manager<ExactComponentTypes = defaultComponentTypes, ComponentTypes
         );
     }
 
+    /**
+     * Get all Entities that have a component of type
+     */
     getEntities(
         state: typeof this['State'],
         componentType: Keys<ComponentTypes>
@@ -157,6 +160,7 @@ export class Manager<ExactComponentTypes = defaultComponentTypes, ComponentTypes
             .map((id) => this.getEntity(state, id));
     }
 
+    /** Get Entities that have these specific component types (intersection) */
     getEntitiesWith(
         state: typeof this['State'],
         types: Set<Keys<ComponentTypes>>
@@ -172,6 +176,7 @@ export class Manager<ExactComponentTypes = defaultComponentTypes, ComponentTypes
         return intersectedEntities.map((id) => this.getEntity(state, id));
     }
 
+    /** Get all entities that have any of a set of component types */
     getEntitiesOf(
         state: typeof this['State'],
         types: Set<Keys<ComponentTypes>>
@@ -201,7 +206,7 @@ export class Manager<ExactComponentTypes = defaultComponentTypes, ComponentTypes
         each(components, (value, type) => {
             entity = this.addComponent(entity, type as Keys<ExactComponentTypes>, value as any);
         })
-    
+
         return entity;
     }
 

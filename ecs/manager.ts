@@ -1,5 +1,6 @@
 import { Set } from 'immutable';
 import uuid from 'uuid-random';
+import { each } from 'lodash';
 
 import imm, { Immutable } from "./imm";
 
@@ -196,28 +197,13 @@ export class Manager<ExactComponentTypes = defaultComponentTypes, ComponentTypes
         return entity.setIn(path, value);
     }
 
-    // TODO: revisit this, make a "component transformers" map?
-    // addComponents(entity: typeof this['Entity'], components: {[key: string]: any} & ComponentTypes) {
-    //     each(components, (value, type) => {
-    //         if (type in this.COMPONENT_DEFAULTS) {
-    //             switch (type) {
-    //                 case 'damageDescriptor':
-    //                     // TODO: this doesn't work cause the input type will mismatch, shouldn't do this here anyway,
-    //                     // parsing of a const to an appropriate component should be a util
-    //                     value = parseDamageDescriptor(value);
-    //                     break;
-    //                 case 'health':
-    //                     entity = addComponent(entity, 'maxHealth', value);
-    //                     break;
-    //                 default:
-    //                     value = value;
-    //             }
-    //             entity = addComponent(entity, type as Keys<ComponentTypes>, value);
-    //         }
-    //     });
+    addComponents(entity: typeof this['Entity'], components: Partial<ComponentTypes>) {
+        each(components, (value, type) => {
+            entity = this.addComponent(entity, type as Keys<ExactComponentTypes>, value as any);
+        })
     
-    //     return entity;
-    // }
+        return entity;
+    }
 
     updateComponent<
         T extends Immutable<Entity<ComponentTypes>>,

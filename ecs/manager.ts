@@ -27,7 +27,7 @@ export type EntityAdminState<ComponentTypes> = {
     previouslyUpdatedEntities: Set<EntityID>
 };
 
-type defaultComponentTypes = {
+export type defaultComponentTypes = {
     ownerID: string,
     createdAt: number,
     updatedAt: number,
@@ -96,8 +96,7 @@ export class Manager<ExactComponentTypes extends defaultComponentTypes> {
             this.updatedEntity(state, entity);
         }
     
-        // return state.setIn(['entities', entity.get('id')], entity);
-        state.entities[entity.id] = entity;
+        state.entities.set(entity.id, entity);
         return entity;
     }
 
@@ -105,7 +104,7 @@ export class Manager<ExactComponentTypes extends defaultComponentTypes> {
         state: typeof this.State,
         entity: typeof this.Entity
     ) {
-        state.entities[entity.id] = entity;
+        state.entities.set(entity.id, entity);
         this.updatedEntity(state, entity);
     
         keys(entity.components).forEach((key) => {
@@ -119,8 +118,8 @@ export class Manager<ExactComponentTypes extends defaultComponentTypes> {
         state: typeof this.State,
         entity: typeof this.Entity
     ) {
-        delete state.entities[entity.id];
-        delete state.componentMap[entity.id];
+        state.entities.delete(entity.id);
+        state.componentMap.delete(entity.id);
     
         keys(entity.components).forEach((key) => {
             state = this.removeEntityMapping(state, entity, key);
@@ -155,7 +154,7 @@ export class Manager<ExactComponentTypes extends defaultComponentTypes> {
     }
 
     getEntity(state: typeof this.State, id: string) {
-        return state.entities[id];
+        return state.entities.get(id) || this.createEntity();
     }
 
     getSingletonEntity(

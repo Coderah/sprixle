@@ -70,6 +70,7 @@ export const postProcessCelShader = {
             vec4 normalColor = normalize(originalColor);
             vec4 luminosity = generic_desaturate(originalColor.rgb, 1.0);
 
+
             if (luminosity.x < cels[7].x) {
                 gl_FragColor = originalColor * cels[7].y;
             } else if (luminosity.x < cels[6].x) {
@@ -89,6 +90,7 @@ export const postProcessCelShader = {
             } else if (luminosity.x > cels[0].x) {
                 gl_FragColor = normalColor * vec4(5.0,5.0,5.0,1.0);
             }
+            gl_FragColor.w = originalColor.w;
        }
     `
 

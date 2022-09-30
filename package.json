@@ -7,14 +7,32 @@
     "test": "test"
   },
   "dependencies": {
+    "@babel/core": "^7.19.3",
+    "@babel/plugin-syntax-typescript": "^7.18.6",
+    "@babel/plugin-transform-runtime": "^7.19.1",
+    "@babel/preset-env": "^7.19.3",
+    "@babel/preset-typescript": "^7.18.6",
     "@types/lodash": "^4.14.182",
+    "@types/three": "^0.144.0",
+    "babel-loader": "^8.2.5",
+    "clean-webpack-plugin": "^4.0.0",
+    "copy-webpack-plugin": "^11.0.0",
+    "css-loader": "^6.7.1",
+    "git-commit-count": "^1.1.3",
     "gl-matrix": "^3.4.3",
+    "html-webpack-plugin": "^5.5.0",
     "immutable": "^4.1.0",
     "lodash": "^4.17.21",
-    "typescript": "^4.7.4",
-    "uuid-random": "^1.3.2"
+    "stats.js": "^0.17.0",
+    "style-loader": "^3.3.1",
+    "three": "^0.144.0",
+    "three-mesh-bvh": "^0.5.16",
+    "three-stdlib": "^2.17.0",
+    "ts-loader": "^9.4.1",
+    "typescript": "^4.8.4",
+    "uuid-random": "^1.3.2",
+    "webpack": "^5.74.0"
   },
-  "devDependencies": {},
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1"
   },
@@ -27,5 +45,9 @@
   "bugs": {
     "url": "https://github.com/Coderah/sprixle/issues"
   },
-  "homepage": "https://github.com/Coderah/sprixle#readme"
+  "homepage": "https://github.com/Coderah/sprixle#readme",
+  "devDependencies": {
+    "webpack-cli": "^4.10.0",
+    "webpack-dev-server": "^4.11.1"
+  }
 }

@@ -13,22 +13,35 @@ interface Set<T> {
     reduce<A>(callbackFn: (accumulator: A, value: T) => A, accumulator: A): A;
     union(b: Set<T>): Set<T>;
     intersect(...b: Set<T>[]): Set<T>;
+    subtract(...b: Set<T>[]): Set<T>;
 }
 
-Set.prototype.reduce = function<T, A>(this: Set<T>, callbackFn: (accumulator: A, value: T) => A, accumulator: A) {
-    this.forEach(value => {
+Set.prototype.reduce = function <T, A>(
+    this: Set<T>,
+    callbackFn: (accumulator: A, value: T) => A,
+    accumulator: A
+) {
+    this.forEach((value) => {
         accumulator = callbackFn(accumulator, value);
     });
 
     return accumulator;
-}
+};
+
+Set.prototype.subtract = function <T>(this: Set<T>, ...b: Set<T>[]) {
+    return new Set<T>(
+        Array.from(this).filter((x) => !b.some((bb) => bb.has(x)))
+    );
+};
 
 Set.prototype.union = function <T>(this: Set<T>, b: Set<T>) {
     return new Set([...this, ...b]);
 };
 
 Set.prototype.intersect = function <T>(this: Set<T>, ...b: Set<T>[]) {
-    return new Set<T>(Array.from(this).filter((x) => b.every(bb => bb.has(x))));
+    return new Set<T>(
+        Array.from(this).filter((x) => b.every((bb) => bb.has(x)))
+    );
 };
 
 Set.prototype.map = function <T, V>(

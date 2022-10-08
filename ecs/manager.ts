@@ -44,9 +44,14 @@ export class Manager<ExactComponentTypes extends defaultComponentTypes> {
     readonly State: EntityAdminState<typeof this.ComponentTypes>;
     readonly Entity: Entity<typeof this.ComponentTypes>;
     COMPONENT_DEFAULTS: ExactComponentTypes;
+    componentTypesSet: Set<keyof ExactComponentTypes>;
+
+    // TODO just store state here, its mutable so the whole and set thing is annoying
+    // we already have tickstate for previous and such
     
     constructor(componentDefaults: ExactComponentTypes) {
         this.COMPONENT_DEFAULTS = {...DEFAULT_COMPONENT_DEFAULTS, ...componentDefaults};
+        this.componentTypesSet = new Set(Object.keys(this.COMPONENT_DEFAULTS) as Array<keyof ExactComponentTypes>);
     }
 
     createInitialState() {
@@ -85,6 +90,7 @@ export class Manager<ExactComponentTypes extends defaultComponentTypes> {
     ) {
         if (
             // TODO optimize, this is maybe not good?
+            // this doesn't even work with mutable...
             !state.entities.has(entity.id) ||
             !keySet(this.getEntity(state, entity.id)
                 .components)
@@ -97,7 +103,7 @@ export class Manager<ExactComponentTypes extends defaultComponentTypes> {
         }
     
         state.entities.set(entity.id, entity);
-        return entity;
+        return state;
     }
 
     registerEntity(
@@ -118,13 +124,14 @@ export class Manager<ExactComponentTypes extends defaultComponentTypes> {
         state: typeof this.State,
         entity: typeof this.Entity
     ) {
-        state.entities.delete(entity.id);
-        state.componentMap.delete(entity.id);
-    
         keys(entity.components).forEach((key) => {
             state = this.removeEntityMapping(state, entity, key);
         });
-    
+
+        state.entities.delete(entity.id);
+        state.componentMap.delete(entity.id);
+        
+        this.updatedEntity(state, entity);
         return state;
     }
 
@@ -154,7 +161,7 @@ export class Manager<ExactComponentTypes extends defaultComponentTypes> {
     }
 
     getEntity(state: typeof this.State, id: string) {
-        return state.entities.get(id) || this.createEntity();
+        return state.entities.get(id) || this.createEntity(id);
     }
 
     getSingletonEntity(
@@ -200,8 +207,8 @@ export class Manager<ExactComponentTypes extends defaultComponentTypes> {
             state.entityMap.get(type) || new Set<string>
         );
     
-        const intersectedEntities = entityMaps
-            .first()
+        const intersectedEntities = (entityMaps
+            .first() || new Set<string>)
             .intersect(...entityMaps);
     
         return intersectedEntities.map((id) => this.getEntity(state, id));
@@ -238,7 +245,9 @@ export class Manager<ExactComponentTypes extends defaultComponentTypes> {
 
     addComponents(entity: typeof this.Entity, components: typeof this.ComponentTypes) {
         each(components, (value, type) => {
-            entity = this.addComponent(entity, type as keyof ExactComponentTypes, value);
+            if (this.componentTypesSet.has(type as keyof ExactComponentTypes)) {
+                entity = this.addComponent(entity, type as keyof ExactComponentTypes, value);
+            }
         })
 
         return entity;

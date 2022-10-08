@@ -1,7 +1,7 @@
 import { Camera, Plane, Raycaster, Renderer, Vector2, Vector3 } from 'three';
 import { now } from '../util/now';
 
-var plane = new Plane(new Vector3(0, 1, 0), 0);
+var plane = new Plane(new Vector3(0, 0, 0), 0);
 var raycaster = new Raycaster();
 var intersectPoint = new Vector3();
 

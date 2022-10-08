@@ -14,7 +14,19 @@ interface Set<T> {
     union(b: Set<T>): Set<T>;
     intersect(...b: Set<T>[]): Set<T>;
     subtract(...b: Set<T>[]): Set<T>;
+    filter(fn: (value: T) => boolean): Set<T>;
+    find(fn: (value: T) => boolean): T | null;
 }
+
+Set.prototype.filter = function <T>(this: Set<T>, fn: (value: T) => boolean) {
+    return new Set<T>(
+        Array.from(this).filter(fn)
+    );
+};
+
+Set.prototype.find = function <T>(this: Set<T>, fn: (value: T) => boolean) {
+    return Array.from(this).find(fn);
+};
 
 Set.prototype.reduce = function <T, A>(
     this: Set<T>,
@@ -52,7 +64,7 @@ Set.prototype.map = function <T, V>(
 };
 
 Set.prototype.first = function <T>(this: Set<T>) {
-    return this.values()[0];
+    return this.values().next().value;
 };
 
 Set.prototype.equals = function <T>(this: Set<T>, b: Set<T>) {

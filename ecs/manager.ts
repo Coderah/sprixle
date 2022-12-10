@@ -48,10 +48,21 @@ export class Manager<ExactComponentTypes extends defaultComponentTypes> {
 
     // TODO just store state here, its mutable so the whole and set thing is annoying
     // we already have tickstate for previous and such
+    state = this.createInitialState();
     
     constructor(componentDefaults: ExactComponentTypes) {
         this.COMPONENT_DEFAULTS = {...DEFAULT_COMPONENT_DEFAULTS, ...componentDefaults};
         this.componentTypesSet = new Set(Object.keys(this.COMPONENT_DEFAULTS) as Array<keyof ExactComponentTypes>);
+    }
+
+    setState(
+        newState: typeof this.State | ((state: typeof this.State) => typeof this.State)
+    ) {
+        if (newState instanceof Function) {
+            this.state = newState(this.state)
+        } else {
+            this.state = newState;
+        }
     }
 
     createInitialState() {
@@ -73,111 +84,102 @@ export class Manager<ExactComponentTypes extends defaultComponentTypes> {
         });
     }
 
-    private updatedEntity(state: typeof this.State, entity: typeof this.Entity) {
+    private updatedEntity(entity: typeof this.Entity) {
         entity.components.updatedAt = Date.now();
-        state.updatedEntities.add(entity.id);
+        this.state.updatedEntities.add(entity.id);
     }
 
     /** to be called after each set of systems (end of a frame) */
-    tick(state: typeof this.State) {
+    tick() {
+        const {state} = this;
         state.previouslyUpdatedEntities = state.updatedEntities;
         state.updatedEntities = new Set;
     }
 
     updateEntity(
-        state: typeof this.State,
         entity: typeof this.Entity
     ) {
+        const {state} = this;
         if (
             // TODO optimize, this is maybe not good?
             // this doesn't even work with mutable...
             !state.entities.has(entity.id) ||
-            !keySet(this.getEntity(state, entity.id)
+            !keySet(this.getEntity(entity.id)
                 .components)
                 .equals(keySet(entity.components)) ||
             !state.entities.has(entity.id)
         ) {
-            return this.registerEntity(state, entity);
+            return this.registerEntity(entity);
         } else {
-            this.updatedEntity(state, entity);
+            this.updatedEntity(entity);
         }
     
         state.entities.set(entity.id, entity);
-        return state;
     }
 
     registerEntity(
-        state: typeof this.State,
         entity: typeof this.Entity
     ) {
+        const {state} = this;
         state.entities.set(entity.id, entity);
-        this.updatedEntity(state, entity);
+        this.updatedEntity(entity);
     
         keys(entity.components).forEach((key) => {
-            state = this.addEntityMapping(state, entity, key);
+            this.addEntityMapping(entity, key);
         });
-    
-        return state;
     }
 
     deregisterEntity(
-        state: typeof this.State,
         entity: typeof this.Entity
     ) {
+        const {state} = this;
         keys(entity.components).forEach((key) => {
-            state = this.removeEntityMapping(state, entity, key);
+            this.removeEntityMapping(entity, key);
         });
 
         state.entities.delete(entity.id);
         state.componentMap.delete(entity.id);
         
-        this.updatedEntity(state, entity);
-        return state;
+        this.updatedEntity(entity);
     }
 
     addEntityMapping(
-        state: typeof this.State,
         entity: typeof this.Entity,
         componentType: Keys<typeof this.ComponentTypes>
     ) {
+        const {state} = this;
         if (!state.entityMap.has(componentType)) state.entityMap.set(componentType, new Set);
         state.entityMap.get(componentType)?.add(entity.id);
 
         if (!state.componentMap.has(entity.id)) state.componentMap.set(entity.id, new Set);
         state.componentMap.get(entity.id)?.add(componentType);
-    
-        return state;
     }
 
     removeEntityMapping(
-        state: typeof this.State,
         entity: typeof this.Entity,
         componentType: Keys<typeof this.ComponentTypes>
     ) {
+        const {state} = this;
         state.entityMap.get(componentType)?.delete(entity.id);
         state.componentMap.get(entity.id)?.delete(componentType);
-    
-        return state;
     }
 
-    getEntity(state: typeof this.State, id: string) {
-        return state.entities.get(id) || this.createEntity(id);
+    getEntity(id: string) {
+        return this.state.entities.get(id) || this.createEntity(id);
     }
 
     getSingletonEntity(
-        state: typeof this.State,
         componentType: Keys<typeof this.ComponentTypes>
     ): Entity<typeof this.ComponentTypes> {
         // TODO: should we share all singleton under one roof?
-        return this.getEntities(state, componentType).first() || this.createEntity(componentType as string);
+        return this.getEntities(componentType).first() || this.createEntity(componentType as string);
     }
 
     getSingletonEntityComponent<K extends Keys<typeof this.ComponentTypes>>(
-        state: typeof this.State,
         componentType: K
     ): typeof this.ComponentTypes[K] {
         return this.getComponent(
-            this.getEntities(state, componentType).first() || this.createEntity(componentType as string),
+            this.getEntities(componentType).first() || this.createEntity(componentType as string),
             componentType
         );
     }
@@ -186,23 +188,23 @@ export class Manager<ExactComponentTypes extends defaultComponentTypes> {
      * Get all Entities that have a component of type
      */
     getEntities(
-        state: typeof this.State,
         componentType: Keys<typeof this.ComponentTypes>
     ): Set<Entity<typeof this.ComponentTypes>> {
         // TODO: optimize?
+        const {state} = this;
         const entityMap = state.entityMap.get(componentType);
         if (!entityMap) {
             return new Set;
         } else {
-            return entityMap.map(id => this.getEntity(state, id))
+            return entityMap.map(id => this.getEntity(id))
         }
     }
 
     /** Get Entities that have these specific component types (intersection) */
     getEntitiesWith(
-        state: typeof this.State,
         types: Set<Keys<typeof this.ComponentTypes>>
     ): Set<Entity<typeof this.ComponentTypes>> {
+        const {state} = this;
         const entityMaps = types.map((type) =>
             state.entityMap.get(type) || new Set<string>
         );
@@ -211,17 +213,16 @@ export class Manager<ExactComponentTypes extends defaultComponentTypes> {
             .first() || new Set<string>)
             .intersect(...entityMaps);
     
-        return intersectedEntities.map((id) => this.getEntity(state, id));
+        return intersectedEntities.map((id) => this.getEntity(id));
     }
 
     /** Get all entities that have any of a set of component types */
     getEntitiesOf(
-        state: typeof this.State,
         types: Set<Keys<typeof this.ComponentTypes>>
     ): Set<typeof this.Entity> {
         return types.reduce(
             (entities, type) => 
-                entities.union(this.getEntities(state, type)),
+                entities.union(this.getEntities(type)),
             new Set<typeof this.Entity>
         )
     }

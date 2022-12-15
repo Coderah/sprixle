@@ -195,20 +195,20 @@ export class Manager<ExactComponentTypes extends defaultComponentTypes> {
         );
     }
 
+    getEntityIds(componentType: Keys<typeof this.ComponentTypes>): Set<string> {
+        // TODO: optimize?
+        const { state } = this;
+        const entityMap = state.entityMap.get(componentType);
+        return entityMap || new Set();
+    }
+
     /**
      * Get all Entities that have a component of type
      */
     getEntities(
         componentType: Keys<typeof this.ComponentTypes>
     ): Set<Entity<typeof this.ComponentTypes>> {
-        // TODO: optimize?
-        const { state } = this;
-        const entityMap = state.entityMap.get(componentType);
-        if (!entityMap) {
-            return new Set();
-        } else {
-            return entityMap.map((id) => this.getEntity(id));
-        }
+        return this.getEntityIds(componentType).map((id) => this.getEntity(id));
     }
 
     /** Get Entities that have these specific component types (intersection) */
@@ -225,6 +225,13 @@ export class Manager<ExactComponentTypes extends defaultComponentTypes> {
         ).intersect(...entityMaps);
 
         return intersectedEntities.map((id) => this.getEntity(id));
+    }
+
+    getEntityIdsOf(types: Set<Keys<typeof this.ComponentTypes>>): Set<string> {
+        return types.reduce(
+            (entities, type) => entities.union(this.getEntityIds(type)),
+            new Set<string>()
+        );
     }
 
     /** Get all entities that have any of a set of component types */
@@ -254,6 +261,23 @@ export class Manager<ExactComponentTypes extends defaultComponentTypes> {
         // }
 
         entity.components[type] = value;
+        return entity;
+    }
+
+    removeComponent<
+        T extends typeof this.Entity,
+        K extends Keys<typeof this.ComponentTypes>
+    >(entity: T, type: K) {
+        // Weird fix for typescript issue (can't use K here), and cant cast as const even with type as...
+        // const path = ['components', type] as const;
+
+        // if (entity.hasIn(path)) {
+        //     console.warn('entity cannot have more than one of component type', type);
+        //     return entity;
+        // }
+
+        delete entity.components[type];
+        this.removeEntityMapping(entity, type);
         return entity;
     }
 

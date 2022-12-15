@@ -1,9 +1,17 @@
-import { Camera, Plane, Raycaster, Renderer, Vector2, Vector3 } from 'three';
+import {
+    Camera,
+    Plane,
+    Raycaster,
+    Renderer,
+    Scene,
+    Vector2,
+    Vector3,
+} from 'three';
 import { now } from '../util/now';
 
-var plane = new Plane(new Vector3(0, 0, 0), 0);
-var raycaster = new Raycaster();
-var intersectPoint = new Vector3();
+const plane = new Plane(new Vector3(0, 1, 0), 1);
+export const raycaster = new Raycaster();
+const intersectPoint = new Vector3();
 
 const worldMousePosition = new Vector3();
 const screenMousePosition = new Vector2();

@@ -5,16 +5,17 @@ import { simplifiedNoise } from './shaderIncludes';
 import { glsl } from './util';
 
 export const postProcessKuwaharaRoto = {
-
-	uniforms: {
-		cameraPosition: { value: new Vector3()},
+    uniforms: {
+        cameraPosition: { value: new Vector3() },
         tDiffuse: { value: new Texture() },
         colorSlider: { value: 1.0 },
-        resolution: {value: new Vector2(window.innerWidth, window.innerHeight)},
+        resolution: {
+            value: new Vector2(window.innerWidth, window.innerHeight),
+        },
         time: uniformTime,
-	},
+    },
 
-	vertexShader: glsl`
+    vertexShader: glsl`
         varying vec2 vUv;
 		varying vec4 pos;
 
@@ -31,7 +32,7 @@ export const postProcessKuwaharaRoto = {
 		}
         `,
 
-	fragmentShader: glsl`
+    fragmentShader: glsl`
         varying vec2 vUv;
         varying vec4 pos;
 
@@ -162,11 +163,10 @@ export const postProcessKuwaharaRoto = {
             vec3 colMask = sobel(step/resolution.x, step/resolution.y, vUv);
             vec3 stroke = strokeColor*colMask;
             
-            gl_FragColor = vec4(0.,0.,0., 1.0);
-            if (stroke.x < 1.2) { //if (rotoColor.r > .2) {
+            //gl_FragColor = vec4(0.5,0.5,0.5, 1.0);
+            //if (stroke.x < 1.2) { //if (rotoColor.r > .2) {
                 gl_FragColor = kuwahara(vUv, resolution.xy, 5);
-            }
+            //}
        }
-    `
-
+    `,
 };

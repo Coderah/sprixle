@@ -80,6 +80,7 @@ export class Manager<ExactComponentTypes extends defaultComponentTypes> {
             entityMap: new Map(),
             componentMap: new Map(),
 
+            previouslyUpdatedEntities: new Set(),
             updatedEntities: new Set(),
         } as EntityAdminState<typeof this.ComponentTypes>;
     }
@@ -104,8 +105,11 @@ export class Manager<ExactComponentTypes extends defaultComponentTypes> {
     /** to be called after each set of systems (end of a frame) */
     tick() {
         const { state } = this;
-        state.previouslyUpdatedEntities = state.updatedEntities;
-        state.updatedEntities = new Set();
+        state.previouslyUpdatedEntities.clear();
+        state.updatedEntities.forEach((e) =>
+            state.previouslyUpdatedEntities.add(e)
+        );
+        state.updatedEntities.clear();
     }
 
     updateEntity(entity: typeof this.Entity) {

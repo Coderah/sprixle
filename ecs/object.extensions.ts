@@ -13,15 +13,41 @@ interface Set<T> {
     reduce<A>(callbackFn: (accumulator: A, value: T) => A, accumulator: A): A;
     union(b: Set<T>): Set<T>;
     intersect(...b: Set<T>[]): Set<T>;
+    /** Loops through `this` and only runs `fn` for items that are also in `b` */
+    eachIntersect(b: Set<T>, fn: (value: T) => boolean | void): void;
     subtract(...b: Set<T>[]): Set<T>;
+    /** Loops through `this` and only runs `fn` for items that are not in `b` */
+    eachSub(b: Set<T>, fn: (value: T) => boolean | void): void;
     filter(fn: (value: T) => boolean): Set<T>;
     find(fn: (value: T) => boolean): T | null;
 }
 
+Set.prototype.eachIntersect = function <T>(
+    this: Set<T>,
+    b: Set<T>,
+    fn: (value: T) => boolean
+) {
+    return this.forEach((t) => {
+        if (b.has(t)) {
+            return fn(t);
+        }
+    });
+};
+
+Set.prototype.eachSub = function <T>(
+    this: Set<T>,
+    b: Set<T>,
+    fn: (value: T) => boolean
+) {
+    return this.forEach((t) => {
+        if (!b.has(t)) {
+            return fn(t);
+        }
+    });
+};
+
 Set.prototype.filter = function <T>(this: Set<T>, fn: (value: T) => boolean) {
-    return new Set<T>(
-        Array.from(this).filter(fn)
-    );
+    return new Set<T>(Array.from(this).filter(fn));
 };
 
 Set.prototype.find = function <T>(this: Set<T>, fn: (value: T) => boolean) {

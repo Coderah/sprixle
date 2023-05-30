@@ -3,7 +3,6 @@ import { each } from 'lodash';
 import { keys, keySet } from './dict';
 import './object.extensions.ts';
 
-//   ^?
 type Keys<T> = keyof T;
 export type EntityID = string;
 
@@ -28,13 +27,13 @@ export type EntityAdminState<ComponentTypes> = {
 };
 
 export type defaultComponentTypes = {
-    ownerID: string;
+    ownerId: string;
     createdAt: number;
     updatedAt: number;
 };
 
 export const DEFAULT_COMPONENT_DEFAULTS: defaultComponentTypes = {
-    ownerID: 'default_id',
+    ownerId: 'default_id',
     createdAt: 0,
     updatedAt: 0,
 };
@@ -139,6 +138,8 @@ export class Manager<ExactComponentTypes extends defaultComponentTypes> {
         keys(entity.components).forEach((key) => {
             this.addEntityMapping(entity, key);
         });
+
+        return entity;
     }
 
     deregisterEntity(entity: typeof this.Entity) {
@@ -192,7 +193,7 @@ export class Manager<ExactComponentTypes extends defaultComponentTypes> {
 
     getSingletonEntityComponent<K extends Keys<typeof this.ComponentTypes>>(
         componentType: K
-    ): typeof this.ComponentTypes[K] {
+    ): (typeof this.ComponentTypes)[K] {
         return this.getComponent(
             this.getSingletonEntity(componentType),
             componentType
@@ -254,7 +255,7 @@ export class Manager<ExactComponentTypes extends defaultComponentTypes> {
     >(
         entity: T,
         type: K,
-        value: typeof this.ComponentTypes[K] = this.COMPONENT_DEFAULTS[type]
+        value: (typeof this.ComponentTypes)[K] = this.COMPONENT_DEFAULTS[type]
     ) {
         // Weird fix for typescript issue (can't use K here), and cant cast as const even with type as...
         // const path = ['components', type] as const;
@@ -290,13 +291,11 @@ export class Manager<ExactComponentTypes extends defaultComponentTypes> {
         components: typeof this.ComponentTypes
     ) {
         each(components, (value, type) => {
-            if (this.componentTypesSet.has(type as keyof ExactComponentTypes)) {
-                entity = this.addComponent(
-                    entity,
-                    type as keyof ExactComponentTypes,
-                    value
-                );
-            }
+            entity = this.addComponent(
+                entity,
+                type as keyof ExactComponentTypes,
+                value
+            );
         });
 
         return entity;
@@ -309,10 +308,10 @@ export class Manager<ExactComponentTypes extends defaultComponentTypes> {
         entity: T,
         type: K,
         modifier:
-            | typeof this.ComponentTypes[K]
+            | (typeof this.ComponentTypes)[K]
             | ((
-                  currentValue: typeof this.ComponentTypes[K]
-              ) => typeof this.ComponentTypes[K])
+                  currentValue: (typeof this.ComponentTypes)[K]
+              ) => (typeof this.ComponentTypes)[K])
     ) {
         // Weird fix for typescript issue (can't use K here), and cant cast as const even with type as...
         const path = ['components', type] as const;
@@ -329,7 +328,7 @@ export class Manager<ExactComponentTypes extends defaultComponentTypes> {
     getComponent<K extends Keys<typeof this.ComponentTypes>>(
         entity: typeof this.Entity,
         type: K
-    ): typeof this.ComponentTypes[K] {
+    ): (typeof this.ComponentTypes)[K] {
         return entity.components[type];
     }
 }

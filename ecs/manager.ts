@@ -181,6 +181,10 @@ export class Manager<ExactComponentTypes extends defaultComponentTypes> {
         return this.state.entities.get(id) || this.createEntity(id);
     }
 
+    entityExists(id: string) {
+        return this.state.entities.has(id);
+    }
+
     getSingletonEntity(
         componentType: Keys<typeof this.ComponentTypes>
     ): Entity<typeof this.ComponentTypes> {

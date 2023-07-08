@@ -195,6 +195,15 @@ export class Manager<ExactComponentTypes extends defaultComponentTypes> {
         );
     }
 
+    setSingletonEntityComponent<K extends Keys<typeof this.ComponentTypes>>(
+        componentType: K,
+        value: (typeof this.ComponentTypes)[K]
+    ) {
+        const entity = this.getSingletonEntity(componentType);
+        this.addComponent(entity, componentType, value);
+        this.registerEntity(entity);
+    }
+
     getSingletonEntityComponent<K extends Keys<typeof this.ComponentTypes>>(
         componentType: K
     ): (typeof this.ComponentTypes)[K] {
@@ -217,6 +226,7 @@ export class Manager<ExactComponentTypes extends defaultComponentTypes> {
     getEntities(
         componentType: Keys<typeof this.ComponentTypes>
     ): Set<Entity<typeof this.ComponentTypes>> {
+        // TODO update this to handle removing component type mapping at point of lookup?
         return this.getEntityIds(componentType).map((id) => this.getEntity(id));
     }
 

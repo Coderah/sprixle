@@ -2,6 +2,7 @@ import uuid from 'uuid-random';
 import { each } from 'lodash';
 import { keys, keySet } from './dict';
 import './object.extensions.ts';
+import { now } from '../util/now';
 
 type Keys<T> = keyof T;
 export type EntityID = string;
@@ -22,8 +23,10 @@ export type EntityAdminState<ComponentTypes> = {
     /** Maps entity ID to set of ComponentTypes */
     componentMap: ComponentMap<ComponentTypes>;
 
+    newEntities: Set<EntityID>;
     updatedEntities: Set<EntityID>;
     previouslyUpdatedEntities: Set<EntityID>;
+    deletedEntities: Set<Entity<ComponentTypes>>;
 };
 
 export type defaultComponentTypes = {
@@ -79,8 +82,10 @@ export class Manager<ExactComponentTypes extends defaultComponentTypes> {
             entityMap: new Map(),
             componentMap: new Map(),
 
+            newEntities: new Set(),
             previouslyUpdatedEntities: new Set(),
             updatedEntities: new Set(),
+            deletedEntities: new Set(),
         } as EntityAdminState<typeof this.ComponentTypes>;
     }
 
@@ -97,7 +102,7 @@ export class Manager<ExactComponentTypes extends defaultComponentTypes> {
     }
 
     private updatedEntity(entity: typeof this.Entity) {
-        entity.components.updatedAt = Date.now();
+        entity.components.updatedAt = now();
         this.state.updatedEntities.add(entity.id);
     }
 
@@ -105,10 +110,12 @@ export class Manager<ExactComponentTypes extends defaultComponentTypes> {
     tick() {
         const { state } = this;
         state.previouslyUpdatedEntities.clear();
+        state.newEntities.clear();
         state.updatedEntities.forEach((e) =>
             state.previouslyUpdatedEntities.add(e)
         );
         state.updatedEntities.clear();
+        state.deletedEntities.clear();
     }
 
     updateEntity(entity: typeof this.Entity) {
@@ -132,6 +139,11 @@ export class Manager<ExactComponentTypes extends defaultComponentTypes> {
 
     registerEntity(entity: typeof this.Entity) {
         const { state } = this;
+
+        if (!this.entityExists(entity.id)) {
+            state.newEntities.add(entity.id);
+        }
+
         state.entities.set(entity.id, entity);
         this.updatedEntity(entity);
 
@@ -150,6 +162,7 @@ export class Manager<ExactComponentTypes extends defaultComponentTypes> {
 
         state.entities.delete(entity.id);
         state.componentMap.delete(entity.id);
+        state.deletedEntities.add(entity);
 
         this.updatedEntity(entity);
     }
@@ -223,6 +236,7 @@ export class Manager<ExactComponentTypes extends defaultComponentTypes> {
     /**
      * Get all Entities that have a component of type
      */
+    // TODO introduce forEntities (and with and of)
     getEntities(
         componentType: Keys<typeof this.ComponentTypes>
     ): Set<Entity<typeof this.ComponentTypes>> {

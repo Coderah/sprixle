@@ -2,10 +2,12 @@ import {
     BufferGeometry,
     Mesh,
     MeshStandardMaterial,
+    BoxGeometry,
     Object3D,
 } from 'three';
 import em from '../entityManager';
 import { scene } from '../scene';
+import { meshQuery } from '../queries';
 
 const objectMaterial = new MeshStandardMaterial({
     metalness: 0,
@@ -14,18 +16,13 @@ const objectMaterial = new MeshStandardMaterial({
 });
 
 export const models: { [key: string]: Object3D } = {
+    cube: new Mesh(new BoxGeometry(), objectMaterial),
 };
 
-export function meshSystem(state: typeof em.State, delta: number) {
-    const entityMap = state.entityMap;
-    const typeEntities = entityMap.get('type');
-    const meshEntities = entityMap.get('mesh') || new Set;
+const consumer = meshQuery.createConsumer();
 
-    if (!typeEntities) return state;
-
-    typeEntities.subtract(meshEntities).forEach((id) => {
-        let entity = em.getEntity(state, id);
-        if (!entity) return;
+export function meshSystem(delta: number) {
+    consumer.forNew((entity) => {
         const position = entity.components.position;
         const type = entity.components.type;
 
@@ -38,16 +35,20 @@ export function meshSystem(state: typeof em.State, delta: number) {
                 BufferGeometry,
                 MeshStandardMaterial
             >;
+        } else {
+            // TODO: figure out how to handle this case, we want to consume each entity??
+            consumer.consumed = false;
         }
 
         if (mesh) {
-            if (position) mesh.position.copy(position);
+            if (position) {
+                mesh.position.copy(position);
+                entity.components.position = mesh.position; // hack.. not sure how I feel about it
+            }
             scene.add(mesh);
-            entity = em.addComponent(entity, 'mesh', mesh);
+            em.addComponent(entity, 'mesh', mesh);
 
-            state = em.registerEntity(state, entity);
+            em.updatedEntity(entity);
         }
     });
-
-    return state;
 }

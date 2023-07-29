@@ -19,13 +19,16 @@ import {
 import { initInput, inputTick } from '../input/input';
 import { now } from '../util/now';
 import { camera } from './camera';
-import em, { getState, setState } from './entityManager';
+import em from './entityManager';
 import { gltfLoader } from './loader';
 import { renderer } from './renderer';
 import { scene } from './scene';
 import { meshSystem, models } from './system/meshSystem';
 
 import { postProcessCelShader } from '../shader/PostProcessCelShader';
+import { spawnSystem } from './system/spawnSystem';
+import { velocitySystem } from './system/velocitySystem';
+import { boundsSystem } from './system/boundsSystem';
 
 // Add the extension functions
 THREE.BufferGeometry.prototype.computeBoundsTree = computeBoundsTree;
@@ -42,15 +45,11 @@ gltfLoader.load('assets/boilerplate-test.glb', (gltf) => {
 });
 
 const controls = new MapControls(camera, renderer.domElement);
-setState((state) => {
-    // Setup initial entities here
-    const meshOwnerEntity = em.createEntity('meshOwner');
-    em.addComponent(meshOwnerEntity, 'type', 'boilerplate-test');
-    em.addComponent(meshOwnerEntity, 'position', new Vector3(0, 0, 0));
-    state = em.registerEntity(state, meshOwnerEntity);
-
-    return state;
-});
+// Setup initial entities here
+// const meshOwnerEntity = em.createEntity('meshOwner');
+// em.addComponent(meshOwnerEntity, 'type', 'boilerplate-test');
+// em.addComponent(meshOwnerEntity, 'position', new Vector3(0, 0, 0));
+// em.registerEntity(meshOwnerEntity);
 
 document.body.appendChild(renderer.domElement);
 // controls.update();
@@ -80,13 +79,13 @@ composer.addPass(renderPass);
 // composer.addPass( saoPass );
 
 const BloomPass = new UnrealBloomPass(new Vector2(1024, 1024), 0.05, 0.4, 0.65);
-composer.addPass(BloomPass);
+// composer.addPass(BloomPass);
 
 // const copyPass = new ShaderPass(CopyShader);
 // composer.addPass(copyPass);
 
 const celPass = new ShaderPass(postProcessCelShader);
-composer.addPass(celPass);
+// composer.addPass(celPass);
 
 // const taaRenderPass = new TAARenderPass( scene, camera );
 // taaRenderPass.unbiased = false;
@@ -108,14 +107,16 @@ function tick() {
 
     camera.layers.enableAll();
 
-    let state = getState();
     controls.update();
 
     inputTick(camera);
 
-    state = meshSystem(state, delta);
+    spawnSystem(delta);
+    meshSystem(delta);
+    velocitySystem(delta);
+    boundsSystem(delta);
 
-    setState(state);
+    em.tick();
 
     composer.render(delta);
     stats.end();

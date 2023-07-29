@@ -20,7 +20,16 @@ interface Set<T> {
     eachSub(b: Set<T>, fn: (value: T) => boolean | void): void;
     filter(fn: (value: T) => boolean): Set<T>;
     find(fn: (value: T) => boolean): T | null;
+    every(fn: (value: T) => boolean): boolean;
 }
+
+Set.prototype.every = function <T>(this: Set<T>, fn: (value: T) => boolean) {
+    for (let item of this) {
+        if (!fn(item)) return false;
+    }
+
+    return true;
+};
 
 Set.prototype.eachIntersect = function <T>(
     this: Set<T>,

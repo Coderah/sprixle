@@ -3,29 +3,45 @@ import { each } from 'lodash';
 import { keys, keySet } from './dict';
 import './object.extensions.ts';
 import { now } from '../util/now';
+import {
+    Query,
+    QueryName,
+    QueryParameters,
+    QueryParametersInput,
+} from './query';
+import { ComponentTypes } from '../boilerplate/components';
 
-type Keys<T> = keyof T;
-export type EntityID = string;
+export type Keys<T> = keyof T;
+export type entityId = string;
 
 export type Entity<ComponentTypes> = {
-    id: EntityID;
+    id: entityId;
     components: ComponentTypes;
 };
 
-type EntitiesByID<ComponentTypes> = Map<EntityID, Entity<ComponentTypes>>; //{ [id: string]: Entity<ComponentTypes> };
-type EntityMap<ComponentTypes> = Map<Keys<ComponentTypes>, Set<EntityID>>; //{ [type in Keys<ComponentTypes>]?: Set<string> };
-type ComponentMap<ComponentTypes> = Map<EntityID, Set<Keys<ComponentTypes>>>; //{ [id: string]: Set<Keys<ComponentTypes>> }; // TODO do we actually need ComponentMap for anything?
+type EntitiesById<ComponentTypes> = Map<entityId, Entity<ComponentTypes>>; //{ [id: string]: Entity<ComponentTypes> };
+type EntityMap<ComponentTypes> = Map<Keys<ComponentTypes>, Set<entityId>>; //{ [type in Keys<ComponentTypes>]?: Set<string> };
+type ComponentMap<ComponentTypes> = Map<entityId, Set<Keys<ComponentTypes>>>; //{ [id: string]: Set<Keys<ComponentTypes>> }; // TODO do we actually need ComponentMap for anything?
+type QueryMap = Map<entityId, Set<QueryName>>; //{ [id: string]: Set<Keys<ComponentTypes>> }; // TODO do we actually need ComponentMap for anything?
 
-export type EntityAdminState<ComponentTypes> = {
-    entities: EntitiesByID<ComponentTypes>;
-    /** Maps entity type to set of Entity IDs */
+export type EntityAdminState<
+    ComponentTypes,
+    ExactComponentTypes extends defaultComponentTypes
+> = {
+    entities: EntitiesById<ComponentTypes>;
+    /** Maps entity type to set of Entity Ids */
     entityMap: EntityMap<ComponentTypes>;
-    /** Maps entity ID to set of ComponentTypes */
+    /** Maps entity Id to set of ComponentTypes */
     componentMap: ComponentMap<ComponentTypes>;
+    /** Maps entity Id to set of queries */
+    queryMap: QueryMap;
 
-    newEntities: Set<EntityID>;
-    updatedEntities: Set<EntityID>;
-    previouslyUpdatedEntities: Set<EntityID>;
+    /** Queries effectively define archetypes and maintain performant query sets according to actual system needs */
+    queries: Map<string, Query<ExactComponentTypes>>;
+
+    newEntities: Set<entityId>;
+    updatedEntities: Set<entityId>;
+    previouslyUpdatedEntities: Set<entityId>;
     deletedEntities: Set<Entity<ComponentTypes>>;
 };
 
@@ -43,13 +59,14 @@ export const DEFAULT_COMPONENT_DEFAULTS: defaultComponentTypes = {
 
 export class Manager<ExactComponentTypes extends defaultComponentTypes> {
     readonly ComponentTypes: Partial<ExactComponentTypes>;
-    readonly State: EntityAdminState<typeof this.ComponentTypes>;
+    readonly State: EntityAdminState<
+        typeof this.ComponentTypes,
+        ExactComponentTypes
+    >;
     readonly Entity: Entity<typeof this.ComponentTypes>;
     COMPONENT_DEFAULTS: ExactComponentTypes;
     componentTypesSet: Set<keyof ExactComponentTypes>;
 
-    // TODO just store state here, its mutable so the whole and set thing is annoying
-    // we already have tickstate for previous and such
     state = this.createInitialState();
 
     constructor(componentDefaults: ExactComponentTypes) {
@@ -81,12 +98,30 @@ export class Manager<ExactComponentTypes extends defaultComponentTypes> {
             entities: new Map(),
             entityMap: new Map(),
             componentMap: new Map(),
+            queryMap: new Map(),
+
+            queries: new Map(),
 
             newEntities: new Set(),
             previouslyUpdatedEntities: new Set(),
             updatedEntities: new Set(),
             deletedEntities: new Set(),
-        } as EntityAdminState<typeof this.ComponentTypes>;
+        } as EntityAdminState<typeof this.ComponentTypes, ExactComponentTypes>;
+    }
+
+    createQuery(
+        queryParameters: QueryParametersInput<Partial<ExactComponentTypes>>
+    ) {
+        const query = new Query(this, queryParameters);
+
+        if (this.state.queries.has(query.queryName))
+            return this.state.queries.get(
+                query.queryName
+            ) as Query<ExactComponentTypes>;
+
+        this.state.queries.set(query.queryName, query);
+
+        return query;
     }
 
     createEntity(id = uuid()): typeof this.Entity {
@@ -101,9 +136,13 @@ export class Manager<ExactComponentTypes extends defaultComponentTypes> {
         };
     }
 
-    private updatedEntity(entity: typeof this.Entity) {
+    updatedEntity(entity: typeof this.Entity) {
         entity.components.updatedAt = now();
         this.state.updatedEntities.add(entity.id);
+
+        this.state.queryMap.get(entity.id)?.forEach((queryName) => {
+            this.state.queries.get(queryName)?.updateEntity(entity);
+        });
     }
 
     /** to be called after each set of systems (end of a frame) */
@@ -116,25 +155,8 @@ export class Manager<ExactComponentTypes extends defaultComponentTypes> {
         );
         state.updatedEntities.clear();
         state.deletedEntities.clear();
-    }
 
-    updateEntity(entity: typeof this.Entity) {
-        const { state } = this;
-        if (
-            // TODO optimize, this is maybe not good?
-            // this doesn't even work with mutable...
-            !state.entities.has(entity.id) ||
-            !keySet(this.getEntity(entity.id).components).equals(
-                keySet(entity.components)
-            ) ||
-            !state.entities.has(entity.id)
-        ) {
-            return this.registerEntity(entity);
-        } else {
-            this.updatedEntity(entity);
-        }
-
-        state.entities.set(entity.id, entity);
+        this.state.queries.forEach((q) => q.tick());
     }
 
     registerEntity(entity: typeof this.Entity) {
@@ -151,6 +173,11 @@ export class Manager<ExactComponentTypes extends defaultComponentTypes> {
             this.addEntityMapping(entity, key);
         });
 
+        // TODO: optimize this a bit?
+        this.state.queries.forEach((query, queryName) => {
+            query.handleEntity(entity);
+        });
+
         return entity;
     }
 
@@ -163,6 +190,8 @@ export class Manager<ExactComponentTypes extends defaultComponentTypes> {
         state.entities.delete(entity.id);
         state.componentMap.delete(entity.id);
         state.deletedEntities.add(entity);
+
+        // TODO: add query un-indexing
 
         this.updatedEntity(entity);
     }
@@ -244,6 +273,16 @@ export class Manager<ExactComponentTypes extends defaultComponentTypes> {
         return this.getEntityIds(componentType).map((id) => this.getEntity(id));
     }
 
+    /** Run `handler` for every entity with `componentType` ends early if `handler` returns `true` */
+    for(
+        componentType: Keys<typeof this.ComponentTypes>,
+        handler: (entity: typeof this.Entity) => boolean
+    ) {
+        this.getEntityIds(componentType).forEach((id) =>
+            handler(this.getEntity(id))
+        );
+    }
+
     /** Get Entities that have these specific component types (intersection) */
     getEntitiesWith(
         types: Set<Keys<typeof this.ComponentTypes>>
@@ -285,13 +324,15 @@ export class Manager<ExactComponentTypes extends defaultComponentTypes> {
         type: K,
         value: (typeof this.ComponentTypes)[K] = this.COMPONENT_DEFAULTS[type]
     ) {
-        // Weird fix for typescript issue (can't use K here), and cant cast as const even with type as...
-        // const path = ['components', type] as const;
+        if (!(type in entity.components)) {
+            this.addEntityMapping(entity, type);
 
-        // if (entity.hasIn(path)) {
-        //     console.warn('entity cannot have more than one of component type', type);
-        //     return entity;
-        // }
+            this.state.queries.forEach((query, queryName) => {
+                if (queryName.includes(type.toString())) {
+                    query.handleEntity(entity);
+                }
+            });
+        }
 
         entity.components[type] = value;
         return entity;
@@ -301,16 +342,9 @@ export class Manager<ExactComponentTypes extends defaultComponentTypes> {
         T extends typeof this.Entity,
         K extends Keys<typeof this.ComponentTypes>
     >(entity: T, type: K) {
-        // Weird fix for typescript issue (can't use K here), and cant cast as const even with type as...
-        // const path = ['components', type] as const;
-
-        // if (entity.hasIn(path)) {
-        //     console.warn('entity cannot have more than one of component type', type);
-        //     return entity;
-        // }
-
         delete entity.components[type];
         this.removeEntityMapping(entity, type);
+        // TODO update queries
         return entity;
     }
 

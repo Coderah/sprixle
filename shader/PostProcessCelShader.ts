@@ -4,25 +4,25 @@ import { simplifiedNoise } from './shaderIncludes';
 import { glsl } from './util';
 
 export const postProcessCelShader = {
-
-	uniforms: {
-		cameraPosition: { value: new Vector3()},
+    uniforms: {
+        cameraPosition: { value: new Vector3() },
         tDiffuse: { value: new Texture() },
-        cels: { value: [
-            // threshold, tint
-            new Vector2(1.5, 3), // white
-            new Vector2(0.8, 2), // highlight
-            new Vector2(0.75, 0.6), // neutral
-            new Vector2(0.4, 0.5),// shadow
-            new Vector2(0.2, 0.3), // deep shadow
-            new Vector2(0.06, 0.35), // deeper shadow
-            new Vector2(0.03, 0.125), // deepest shadow
-            new Vector2(0.01, 0), // black
+        cels: {
+            value: [
+                // threshold, tint
+                new Vector2(1.5, 1.2), // white
+                new Vector2(0.8, 1), // highlight
+                new Vector2(0.75, 0.95), // neutral
+                new Vector2(0.4, 0.85), // shadow
+                new Vector2(0.2, 0.8), // deep shadow
+                new Vector2(0.06, 0.75), // deeper shadow
+                new Vector2(0.03, 0.65), // deepest shadow
+                new Vector2(0.01, 0), // black
+            ],
+        },
+    },
 
-        ] }
-	},
-
-	vertexShader: glsl`
+    vertexShader: glsl`
         varying vec2 vUv;
 		varying vec4 pos;
         // varying vec4 worldPos;
@@ -40,7 +40,7 @@ export const postProcessCelShader = {
 		}
         `,
 
-	fragmentShader: glsl`
+    fragmentShader: glsl`
         varying vec2 vUv;
         varying vec4 pos;
         uniform vec2[8] cels;
@@ -92,6 +92,5 @@ export const postProcessCelShader = {
             }
             gl_FragColor.w = originalColor.w;
        }
-    `
-
+    `,
 };

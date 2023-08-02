@@ -39,7 +39,9 @@ export class SplatMaterial extends PointsMaterial {
         this.onBeforeCompile = (shader) => {
             shader.uniforms.color = { value: this.color };
             shader.uniforms.u_time = parameters.time;
-            shader.uniforms.sizeVariance = { value: parameters.sizeVariance || 25 };
+            shader.uniforms.sizeVariance = {
+                value: parameters.sizeVariance || 25,
+            };
             shader.uniforms.spriteSheetSize = {
                 value: this.userData.spriteSheetSize,
             };
@@ -47,7 +49,9 @@ export class SplatMaterial extends PointsMaterial {
                 value: this.userData.spriteSize,
             };
             shader.uniforms.spriteIndex = { value: this.userData.spriteIndex };
-            shader.uniforms.spriteFrameCount = { value: parameters.spriteFrameCount };
+            shader.uniforms.spriteFrameCount = {
+                value: parameters.spriteFrameCount,
+            };
             shader.uniforms.depthBias = { value: parameters.depthBias };
             shader.uniforms.renderTexture = lightTextureUniform;
             shader.uniforms.tDepth = {
@@ -58,9 +62,8 @@ export class SplatMaterial extends PointsMaterial {
             // };
             shader.uniforms.randomizeInsteadOfAnimate = {
                 value: parameters.randomizeInsteadOfAnimate || false,
-            }
-            shader.vertexShader =
-                glsl`
+            };
+            shader.vertexShader = glsl`
                     varying vec4 pos;
                     varying vec3 worldPos;
                     varying float depth;
@@ -82,7 +85,7 @@ export class SplatMaterial extends PointsMaterial {
                         return fract(sin(dot(co.xy ,vec2(12.9898,78.233))) * 43758.5453);
                     }
         
-                    ${shader.vertexShader}` ;
+                    ${shader.vertexShader}`;
 
             shader.vertexShader =
                 shader.vertexShader.substring(
@@ -189,7 +192,7 @@ export class SplatMaterial extends PointsMaterial {
                             // outgoingLight = color.rgb * vec3((randTest(worldPos.xz) * 0.25));
                         } else {
                             if (distance(outgoingLight, color) > 0.7) {
-                                discard;
+                                // discard;
                             } else if (randTest(worldPos.xz) > 0.95) {
                                 // outgoingLight *= vec3(randTest(worldPos.xz) * 0.75 );
                             }
@@ -205,8 +208,8 @@ export class SplatMaterial extends PointsMaterial {
                         gl_FragColor = vec4( outgoingLight, diffuseColor.a );
                     } else {
                         // gl_FragColor = vec4(0.0);
-                        discard;
-                        // gl_FragColor = vec4(color, 0.0);
+                        // discard;
+                        gl_FragColor = vec4(color, 1.0);
                     }
                 }
             `;

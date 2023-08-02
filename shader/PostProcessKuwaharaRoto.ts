@@ -8,7 +8,7 @@ export const postProcessKuwaharaRoto = {
     uniforms: {
         cameraPosition: { value: new Vector3() },
         tDiffuse: { value: new Texture() },
-        colorSlider: { value: 1.0 },
+        colorSlider: { value: 0.3 },
         resolution: {
             value: new Vector2(window.innerWidth, window.innerHeight),
         },
@@ -53,7 +53,7 @@ export const postProcessKuwaharaRoto = {
             return vec4(bw, bw, bw, 1.0);
         }
 
-        float step = 1.1;
+        float step = 1.2;
 
         float intensity(in vec4 color){
             return sqrt((color.x*color.x)+(color.y*color.y)+(color.z*color.z));
@@ -144,29 +144,29 @@ export const postProcessKuwaharaRoto = {
         }
 
         void main() {
-            // vec4 originalColor = texture2D(tDiffuse, vUv);
-            // vec2 v = vec2(vUv);
+            vec4 originalColor = texture2D(tDiffuse, vUv);
+            vec2 v = vec2(vUv);
 
-            // float A = photoshop_desaturate(texture2D(tDiffuse, v.xy).rgb).g;
-            // v.x += 0.0009;
-            // float A2 = photoshop_desaturate(texture2D(tDiffuse, v.xy).rgb).g;
-            // v.x -= 0.0009;
-            // v.y += 0.0009;
-            // float A3 = photoshop_desaturate(texture2D(tDiffuse, v.xy).rgb).g;
+            float A = photoshop_desaturate(texture2D(tDiffuse, v.xy).rgb).g;
+            v.x += 0.0009;
+            float A2 = photoshop_desaturate(texture2D(tDiffuse, v.xy).rgb).g;
+            v.x -= 0.0009;
+            v.y += 0.0009;
+            float A3 = photoshop_desaturate(texture2D(tDiffuse, v.xy).rgb).g;
 
-            // float shaderSlider = colorSlider;//sin(time/1000.0);
-            // vec4 rotoColor = vec4(0.0) + map(shaderSlider, -1.0, 1.0, 10.0,20.4)*(.09-length(A-vec2( A2,A3 )));
+            float shaderSlider = sin(time/1000.0);
+            vec4 rotoColor = vec4(0.0) + map(shaderSlider, -1.0, 1.0, 10.0,20.4)*(.09-length(A-vec2( A2,A3 )));
             
-            // rotoColor.w = 1.0;
+            rotoColor.w = 1.0;
 
             vec3 strokeColor = vec3(1., 1., 1.);
             vec3 colMask = sobel(step/resolution.x, step/resolution.y, vUv);
             vec3 stroke = strokeColor*colMask;
             
-            //gl_FragColor = vec4(0.5,0.5,0.5, 1.0);
-            //if (stroke.x < 1.2) { //if (rotoColor.r > .2) {
+            gl_FragColor =  vec4(0.8,0.8,0.8, .4) * texture2D(tDiffuse, vUv);
+            if (stroke.x < .6) { //if (rotoColor.r > .2) {
                 gl_FragColor = kuwahara(vUv, resolution.xy, 5);
-            //}
+            }
        }
     `,
 };

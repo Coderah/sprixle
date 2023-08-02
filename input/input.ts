@@ -112,6 +112,7 @@ export function initInput(renderer: Renderer) {
     document.addEventListener('keydown', handleKeyDown);
     document.addEventListener('mousedown', handleMouseDown);
     document.addEventListener('mouseup', handleMouseUp);
+    document.addEventListener('dragend', handleMouseUp);
     document.addEventListener('mousemove', handleMouseMove);
     document.addEventListener('mouseleave', handleMouseMove);
 }

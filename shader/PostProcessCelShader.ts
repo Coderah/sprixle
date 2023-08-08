@@ -10,13 +10,13 @@ export const postProcessCelShader = {
         cels: {
             value: [
                 // threshold, tint
-                new Vector2(1.5, 1.2), // white
-                new Vector2(0.8, 1), // highlight
-                new Vector2(0.75, 0.95), // neutral
-                new Vector2(0.4, 0.85), // shadow
-                new Vector2(0.2, 0.8), // deep shadow
-                new Vector2(0.06, 0.75), // deeper shadow
-                new Vector2(0.03, 0.65), // deepest shadow
+                new Vector2(1, 0.95), // white
+                new Vector2(0.8, 0.9), // highlight
+                new Vector2(0.75, 0.85), // neutral
+                new Vector2(0.4, 0.765), // shadow
+                new Vector2(0.2, 0.74), // deep shadow
+                new Vector2(0.06, 0.72), // deeper shadow
+                new Vector2(0.03, 0.7), // deepest shadow
                 new Vector2(0.01, 0), // black
             ],
         },
@@ -91,6 +91,7 @@ export const postProcessCelShader = {
                 gl_FragColor = normalColor * vec4(5.0,5.0,5.0,1.0);
             }
             gl_FragColor.w = originalColor.w;
+            #include <colorspace_fragment>
        }
     `,
 };

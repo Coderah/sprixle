@@ -136,12 +136,12 @@ export class Manager<ExactComponentTypes extends defaultComponentTypes> {
         };
     }
 
-    updatedEntity(entity: typeof this.Entity) {
-        entity.components.updatedAt = now();
+    updatedEntity(entity: typeof this.Entity, firstTime = false) {
+        if (!firstTime) entity.components.updatedAt = now();
         this.state.updatedEntities.add(entity.id);
 
         this.state.queryMap.get(entity.id)?.forEach((queryName) => {
-            this.state.queries.get(queryName)?.updateEntity(entity);
+            this.state.queries.get(queryName)?.updatedEntity(entity);
         });
     }
 
@@ -162,12 +162,14 @@ export class Manager<ExactComponentTypes extends defaultComponentTypes> {
     registerEntity(entity: typeof this.Entity) {
         const { state } = this;
 
+        let firstTime = false;
         if (!this.entityExists(entity.id)) {
             state.newEntities.add(entity.id);
+            firstTime = true;
         }
 
         state.entities.set(entity.id, entity);
-        this.updatedEntity(entity);
+        this.updatedEntity(entity, firstTime);
 
         keys(entity.components).forEach((key) => {
             this.addEntityMapping(entity, key);

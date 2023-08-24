@@ -106,7 +106,7 @@ export class Query<ExactComponentTypes extends defaultComponentTypes> {
                     'updated entity',
                     entity.id
                 );
-                this.updateEntity(entity);
+                this.updatedEntity(entity);
             }
         } else if (matches) {
             console.log('[QUERY]', this.queryName, 'added entity', entity.id);
@@ -124,7 +124,7 @@ export class Query<ExactComponentTypes extends defaultComponentTypes> {
         this.manager.state.queryMap.get(entity.id)?.add(this.queryName);
     }
 
-    updateEntity(entity: typeof this.manager.Entity) {
+    updatedEntity(entity: typeof this.manager.Entity) {
         if (!this.entities.has(entity.id)) return;
         this.consumers.forEach((c) => {
             c.updatedEntities.add(entity.id);

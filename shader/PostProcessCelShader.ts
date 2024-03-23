@@ -17,7 +17,7 @@ export const postProcessCelShader = {
                 new Vector2(0.2, 0.74), // deep shadow
                 new Vector2(0.06, 0.72), // deeper shadow
                 new Vector2(0.03, 0.7), // deepest shadow
-                new Vector2(0.01, 0), // black
+                new Vector2(0.01, 0.65), // black
             ],
         },
     },
@@ -63,6 +63,37 @@ export const postProcessCelShader = {
             return vec4(bw, bw, bw, 1.0);
         }
 
+        float luma(vec3 color) {
+            return dot(color, vec3(0.299, 0.587, 0.114));
+          }
+          
+          float luma(vec4 color) {
+            return dot(color.rgb, vec3(0.299, 0.587, 0.114));
+          }
+
+          float dither2x2(vec2 position, float brightness) {
+            int x = int(mod(position.x, 2.0));
+            int y = int(mod(position.y, 2.0));
+            int index = x + y * 2;
+            float limit = 0.0;
+          
+            if (x < 8) {
+              if (index == 0) limit = 0.25;
+              if (index == 1) limit = 0.75;
+              if (index == 2) limit = 1.00;
+              if (index == 3) limit = 0.50;
+            }
+          
+            return brightness < limit ? 0.0 : 1.0;
+          }
+          
+          vec3 dither2x2(vec2 position, vec3 color) {
+            return color * dither2x2(position, luma(color));
+          }
+          
+          vec4 dither2x2(vec2 position, vec4 color) {
+            return vec4(color.rgb * dither2x2(position, luma(color)), 1.0);
+          }
     
         void main() {
             // TODO consider diffuse  color divide for true original luminosity
@@ -87,10 +118,13 @@ export const postProcessCelShader = {
                 gl_FragColor = originalColor * cels[1].y;
             } else if (luminosity.x < cels[0].x) {
                 gl_FragColor = originalColor * cels[0].y;
-            } else if (luminosity.x > cels[0].x) {
-                gl_FragColor = normalColor * vec4(5.0,5.0,5.0,1.0);
+            } else{
+                gl_FragColor = originalColor * cels[0].y;
             }
             gl_FragColor.w = originalColor.w;
+
+            // gl_FragColor = dither2x2(gl_FragCoord.xy, gl_FragColor);
+
             #include <colorspace_fragment>
        }
     `,

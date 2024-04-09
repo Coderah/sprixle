@@ -112,9 +112,13 @@ function tick() {
     inputTick(camera);
 
     spawnSystem(delta);
+    em.subTick();
     meshSystem(delta);
+    em.subTick();
     velocitySystem(delta);
+    em.subTick();
     boundsSystem(delta);
+    em.subTick();
 
     em.tick();
 

@@ -4,6 +4,7 @@ import {
     MeshStandardMaterial,
     BoxGeometry,
     Object3D,
+    SphereGeometry,
 } from 'three';
 import em from '../entityManager';
 import { scene } from '../scene';
@@ -16,7 +17,7 @@ const objectMaterial = new MeshStandardMaterial({
 });
 
 export const models: { [key: string]: Object3D } = {
-    cube: new Mesh(new BoxGeometry(), objectMaterial),
+    cube: new Mesh(new SphereGeometry(), objectMaterial),
 };
 
 const consumer = meshQuery.createConsumer();
@@ -46,9 +47,7 @@ export function meshSystem(delta: number) {
                 entity.components.position = mesh.position; // hack.. not sure how I feel about it
             }
             scene.add(mesh);
-            em.addComponent(entity, 'mesh', mesh);
-
-            em.updatedEntity(entity);
+            entity.components.mesh = mesh;
         }
     });
 }

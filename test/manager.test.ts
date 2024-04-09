@@ -1,25 +1,48 @@
-
-import { vec2 } from "gl-matrix";
-import { uniqueId } from "lodash";
-import { DEFAULT_COMPONENT_DEFAULTS, Manager } from "../ecs/manager";
+import assert from 'assert';
+import { vec2 } from 'gl-matrix';
+import { DEFAULT_COMPONENT_DEFAULTS, Manager } from '../ecs/manager';
 
 const COMPONENT_DEFAULTS = {
     ...DEFAULT_COMPONENT_DEFAULTS,
-    position: vec2.create()
-}
+    position: vec2.create(),
+};
 
-const em = new Manager(COMPONENT_DEFAULTS);
-let state = em.createInitialState(); //?
+const manager = new Manager(COMPONENT_DEFAULTS);
 
-const entity = em.createEntity('test_entity');
-em.addComponent(entity, 'position');
-em.updateEntity(state, entity);
+const positionQuery = manager.createQuery({
+    includes: ['position'],
+});
 
-em.getComponent(entity, 'updatedAt') //?
-em.getEntities(state, 'position') //?
+const positionConsumer = positionQuery.createConsumer();
 
-state.updatedEntities //?
+const entity = manager.createEntity('test_entity');
+entity.components.updatedAt; //=
+entity.components.position = vec2.create(); //?
+manager.registerEntity(entity);
 
-em.tick(state);
-state.updatedEntities //?
-state.previouslyUpdatedEntities //?
+positionQuery.entities; //=
+positionConsumer.forUpdated((e) => {
+    e.id; //=
+});
+
+assert.equal(positionConsumer.consumedEntities.size, 1);
+assert.equal(positionConsumer.updatedEntities.size, 1);
+
+manager.tick();
+
+assert.equal(positionConsumer.consumedEntities.size, 0);
+assert.equal(positionConsumer.updatedEntities.size, 0);
+
+entity.components.position = vec2.create(); //?
+
+manager.subTick(); //?
+assert.equal(positionConsumer.updatedEntities.size, 1);
+
+entity.components.updatedAt; //=
+manager.getEntities('position'); //=
+
+manager.state.updatedEntities; //=
+
+manager.tick();
+manager.state.updatedEntities; //=
+manager.state.previouslyUpdatedEntities; //=

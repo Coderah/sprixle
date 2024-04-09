@@ -17,6 +17,7 @@ export type entityId = string;
 export type Entity<ComponentTypes> = {
     id: entityId;
     components: ComponentTypes;
+    flagUpdate: (prop: keyof ComponentTypes) => void;
 };
 
 type EntitiesById<ComponentTypes> = Map<entityId, Entity<ComponentTypes>>; //{ [id: string]: Entity<ComponentTypes> };
@@ -38,6 +39,8 @@ export type EntityAdminState<
 
     /** Queries effectively define archetypes and maintain performant query sets according to actual system needs */
     queries: Map<string, Query<ExactComponentTypes>>;
+
+    stagedUpdates: Map<Keys<ExactComponentTypes>, Set<entityId>>;
 
     newEntities: Set<entityId>;
     updatedEntities: Set<entityId>;
@@ -67,7 +70,7 @@ export class Manager<ExactComponentTypes extends defaultComponentTypes> {
     COMPONENT_DEFAULTS: ExactComponentTypes;
     componentTypesSet: Set<keyof ExactComponentTypes>;
 
-    state = this.createInitialState();
+    state: ReturnType<typeof this.createInitialState>;
 
     constructor(componentDefaults: ExactComponentTypes) {
         this.COMPONENT_DEFAULTS = {
@@ -79,6 +82,7 @@ export class Manager<ExactComponentTypes extends defaultComponentTypes> {
                 keyof ExactComponentTypes
             >
         );
+        this.state = this.createInitialState();
     }
 
     setState(
@@ -94,7 +98,7 @@ export class Manager<ExactComponentTypes extends defaultComponentTypes> {
     }
 
     createInitialState() {
-        return {
+        const newState = {
             entities: new Map(),
             entityMap: new Map(),
             componentMap: new Map(),
@@ -102,11 +106,19 @@ export class Manager<ExactComponentTypes extends defaultComponentTypes> {
 
             queries: new Map(),
 
+            stagedUpdates: new Map(),
+
             newEntities: new Set(),
             previouslyUpdatedEntities: new Set(),
             updatedEntities: new Set(),
             deletedEntities: new Set(),
         } as EntityAdminState<typeof this.ComponentTypes, ExactComponentTypes>;
+
+        this.componentTypesSet.forEach((type) => {
+            newState.stagedUpdates.set(type, new Set());
+        });
+
+        return newState;
     }
 
     createQuery(
@@ -127,29 +139,82 @@ export class Manager<ExactComponentTypes extends defaultComponentTypes> {
     createEntity(id = uuid()): typeof this.Entity {
         const timestamp = Date.now();
 
+        const manager = this;
+
+        function flagUpdate(prop: keyof ExactComponentTypes) {
+            manager.state.stagedUpdates.get(prop)?.add(id);
+        }
+
         return {
             id,
-            components: {
-                createdAt: timestamp,
-                updatedAt: timestamp,
-            } as typeof this.ComponentTypes,
+            components: new Proxy(
+                {
+                    createdAt: timestamp,
+                    updatedAt: timestamp,
+                } as typeof this.ComponentTypes,
+                {
+                    set(target, prop, value = null) {
+                        if (
+                            prop !== 'updatedAt' &&
+                            manager.state.entities.has(id)
+                        ) {
+                            flagUpdate(prop as keyof ExactComponentTypes);
+                        }
+                        target[prop] = value;
+                        return true;
+                    },
+                }
+            ),
+            flagUpdate,
         };
     }
 
-    updatedEntity(entity: typeof this.Entity, firstTime = false) {
+    protected updatedEntity(
+        entity: typeof this.Entity,
+        firstTime = false,
+        updateAllQueries = true
+    ) {
         if (!firstTime) entity.components.updatedAt = now();
         this.state.updatedEntities.add(entity.id);
 
-        this.state.queryMap.get(entity.id)?.forEach((queryName) => {
-            this.state.queries.get(queryName)?.updatedEntity(entity);
+        if (updateAllQueries) {
+            this.state.queryMap.get(entity.id)?.forEach((queryName) => {
+                this.state.queries.get(queryName)?.updatedEntity(entity);
+            });
+        }
+    }
+
+    /** to be called after each system */
+    subTick() {
+        const { state } = this;
+        state.stagedUpdates.forEach((componentUpdates, componentType) => {
+            componentUpdates.forEach((entityId) => {
+                const entity = this.getEntity(entityId);
+                if (entity && !this.state.updatedEntities.has(entityId)) {
+                    this.updatedEntity(entity, false, false);
+                }
+
+                this.state.queryMap.get(entityId)?.forEach((queryName) => {
+                    const query = this.state.queries.get(queryName);
+                    if (query?.componentMatches(componentType)) {
+                        query?.updatedEntity(entity);
+                    }
+                });
+            });
+
+            componentUpdates.clear();
         });
     }
 
     /** to be called after each set of systems (end of a frame) */
     tick() {
+        this.subTick();
+
         const { state } = this;
         state.previouslyUpdatedEntities.clear();
         state.newEntities.clear();
+
+        // TODO more efficient?
         state.updatedEntities.forEach((e) =>
             state.previouslyUpdatedEntities.add(e)
         );

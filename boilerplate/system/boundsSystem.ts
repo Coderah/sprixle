@@ -8,16 +8,21 @@ const bounds = new Vector3(100, 100, 100);
 
 export function boundsSystem(delta: number) {
     consumer.forUpdated((entity) => {
-        const { position } = entity.components;
+        const { position, velocity } = entity.components;
+
+        if (!position || !velocity) return;
 
         if (position.x > bounds.x || position.x < -bounds.x) {
-            position.setX(-position.x + 1);
+            velocity.setX(-velocity.x);
+            entity.flagUpdate('velocity');
         }
         if (position.y > bounds.y || position.y < -bounds.y) {
-            position.setY(-position.y + 1);
+            velocity.setY(-velocity.y);
+            entity.flagUpdate('velocity');
         }
         if (position.z > bounds.z || position.z < -bounds.z) {
-            position.setZ(-position.z + 1);
+            velocity.setZ(-velocity.z);
+            entity.flagUpdate('velocity');
         }
     });
 }

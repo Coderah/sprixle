@@ -58,6 +58,14 @@ export class Query<ExactComponentTypes extends defaultComponentTypes> {
         });
     }
 
+    componentMatches(component: keyof typeof this.manager.ComponentTypes) {
+        return this.queryParameters.includes
+            ? this.queryParameters.includes.has(component)
+            : this.queryParameters.excludes
+            ? !this.queryParameters.excludes.has(component)
+            : true;
+    }
+
     entityMatches(entity: typeof this.manager.Entity) {
         if (
             this.queryParameters.includes &&
@@ -68,8 +76,8 @@ export class Query<ExactComponentTypes extends defaultComponentTypes> {
             return false;
         if (
             this.queryParameters.excludes &&
-            !this.queryParameters.excludes.every(
-                (component) => !(component in entity.components)
+            this.queryParameters.excludes.some(
+                (component) => component in entity.components
             )
         )
             return false;

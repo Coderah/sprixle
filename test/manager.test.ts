@@ -25,6 +25,7 @@ positionConsumer.forUpdated((e) => {
     e.id; //=
 });
 
+// consumer tests
 assert.equal(positionConsumer.consumedEntities.size, 1);
 assert.equal(positionConsumer.updatedEntities.size, 1);
 
@@ -38,11 +39,12 @@ entity.components.position = vec2.create(); //?
 manager.subTick(); //?
 assert.equal(positionConsumer.updatedEntities.size, 1);
 
-entity.components.updatedAt; //=
-manager.getEntities('position'); //=
-
-manager.state.updatedEntities; //=
-
 manager.tick();
-manager.state.updatedEntities; //=
-manager.state.previouslyUpdatedEntities; //=
+assert.equal(manager.state.updatedEntities.size, 0);
+assert.equal(manager.state.previouslyUpdatedEntities.size, 1);
+
+// Quiet updates test
+entity.quietSet('position', vec2.create());
+
+manager.subTick();
+assert.equal(manager.state.updatedEntities.size, 0);

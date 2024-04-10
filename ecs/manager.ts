@@ -18,7 +18,14 @@ export type entityId = string;
 export type Entity<ComponentTypes> = {
     id: entityId;
     components: ComponentTypes;
-    flagUpdate: (prop: keyof ComponentTypes) => void;
+    /** flag a deeper update to a component */
+    flagUpdate: (componentType: keyof ComponentTypes) => void;
+
+    /** quietly update a component (avoid update flagging) */
+    quietSet: <T extends keyof ComponentTypes>(
+        componentType: T,
+        value: ComponentTypes[T]
+    ) => void;
 };
 
 type EntitiesById<ComponentTypes> = Map<entityId, Entity<ComponentTypes>>; //{ [id: string]: Entity<ComponentTypes> };
@@ -161,31 +168,33 @@ export class Manager<ExactComponentTypes extends defaultComponentTypes> {
 
         const manager = this;
 
-        function flagUpdate(prop: keyof ExactComponentTypes) {
-            manager.state.stagedUpdates.get(prop)?.add(id);
+        function flagUpdate(componentType: keyof ExactComponentTypes) {
+            manager.state.stagedUpdates.get(componentType)?.add(id);
         }
+
+        const components = {
+            createdAt: timestamp,
+            updatedAt: timestamp,
+        } as typeof this.ComponentTypes;
 
         return {
             id,
-            components: new Proxy(
-                {
-                    createdAt: timestamp,
-                    updatedAt: timestamp,
-                } as typeof this.ComponentTypes,
-                {
-                    set(target, prop, value = null) {
-                        if (
-                            prop !== 'updatedAt' &&
-                            manager.state.entities.has(id)
-                        ) {
-                            flagUpdate(prop as keyof ExactComponentTypes);
-                        }
-                        target[prop] = value;
-                        return true;
-                    },
-                }
-            ),
+            components: new Proxy(components, {
+                set(target, componentType, value = null) {
+                    if (
+                        componentType !== 'updatedAt' &&
+                        manager.state.entities.has(id)
+                    ) {
+                        flagUpdate(componentType as keyof ExactComponentTypes);
+                    }
+                    target[componentType] = value;
+                    return true;
+                },
+            }),
             flagUpdate,
+            quietSet(componentType, value) {
+                components[componentType] = value;
+            },
         };
     }
 

@@ -249,6 +249,7 @@ class Consumer<ExactComponentTypes extends defaultComponentTypes> {
 TODO:
 * figure out how to provide exact types to consumers/queries so there is no "this might not exist" for component lookups
 * figure out if there is a way to optimize query being used in multiple systems?
+* utilize bitmasks for faster matching and queries
 * do we update queries in realtime? or delay/commit them on tick
 * handle removal / deregistering an entity
 * make sure entities can't hangout or be re-indexed if they're not registered

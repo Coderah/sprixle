@@ -244,6 +244,7 @@ export class Manager<ExactComponentTypes extends defaultComponentTypes> {
         this.state.queries.forEach((q) => q.tick());
     }
 
+    // TODO handle deserialized (no proxy or flagUpdate)
     registerEntity(entity: typeof this.Entity) {
         const { state } = this;
 

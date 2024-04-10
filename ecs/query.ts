@@ -197,6 +197,10 @@ class Consumer<ExactComponentTypes extends defaultComponentTypes> {
         this.deletedEntities.add(entity);
     }
 
+    // for(handler: (entity: typeof this.query.manager.Entity) => boolean | void) {
+    //     this.query.for(handler);
+    // }
+
     forUpdated(
         handler: (entity: typeof this.query.manager.Entity) => boolean | void
     ) {
@@ -215,6 +219,16 @@ class Consumer<ExactComponentTypes extends defaultComponentTypes> {
 
         this.newEntities.forEach((id) => {
             return handler(this.query.manager.getEntity(id));
+        });
+    }
+
+    forDeleted(
+        handler: (entity: typeof this.query.manager.Entity) => boolean | void
+    ) {
+        this.consumed = true;
+
+        this.deletedEntities.forEach((entity) => {
+            return handler(entity);
         });
     }
 

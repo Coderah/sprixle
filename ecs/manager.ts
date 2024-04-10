@@ -10,6 +10,7 @@ import {
     QueryParametersInput,
 } from './query';
 import { ComponentTypes } from '../boilerplate/components';
+import { ConsumerSystem, QuerySystem } from './system.ts';
 
 export type Keys<T> = keyof T;
 export type entityId = string;
@@ -136,6 +137,25 @@ export class Manager<ExactComponentTypes extends defaultComponentTypes> {
         return query;
     }
 
+    createSystem(
+        source: Query<ExactComponentTypes>,
+        system: Partial<QuerySystem<ExactComponentTypes>>
+    ): QuerySystem<ExactComponentTypes>;
+    createSystem(
+        source: ReturnType<Query<ExactComponentTypes>['createConsumer']>,
+        system: Partial<ConsumerSystem<ExactComponentTypes>>
+    ): ConsumerSystem<ExactComponentTypes>;
+    createSystem(
+        source:
+            | Query<ExactComponentTypes>
+            | ReturnType<Query<ExactComponentTypes>['createConsumer']>,
+        system:
+            | Partial<QuerySystem<ExactComponentTypes>>
+            | Partial<ConsumerSystem<ExactComponentTypes>>
+    ): QuerySystem<ExactComponentTypes> | ConsumerSystem<ExactComponentTypes> {
+        return { source, ...system };
+    }
+
     createEntity(id = uuid()): typeof this.Entity {
         const timestamp = Date.now();
 
@@ -259,8 +279,14 @@ export class Manager<ExactComponentTypes extends defaultComponentTypes> {
         state.deletedEntities.add(entity);
 
         // TODO: add query un-indexing
+        this.state.queryMap.get(entity.id)?.forEach((queryName) => {
+            const query = this.state.queries.get(queryName);
 
-        this.updatedEntity(entity);
+            query?.removeEntity(entity);
+            this.state.queryMap.get(entity.id)?.delete(queryName);
+        });
+
+        this.updatedEntity(entity, false, false);
     }
 
     addEntityMapping(

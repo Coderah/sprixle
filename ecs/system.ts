@@ -8,6 +8,7 @@ export interface System<
     source:
         | Query<ExactComponentTypes>
         | ReturnType<Query<ExactComponentTypes>['createConsumer']>;
+    tick?(delta: number): void;
 }
 
 export interface ConsumerSystem<
@@ -43,9 +44,11 @@ export class Pipeline<ExactComponentTypes extends defaultComponentTypes> {
         this.systems = systems;
     }
 
-    tick() {
+    tick(delta: number) {
         this.systems.forEach((system) => {
-            const { source } = system;
+            const { source, tick } = system;
+
+            if (tick) tick(delta);
 
             if (source instanceof Query) {
                 if ('all' in system && system.all) {

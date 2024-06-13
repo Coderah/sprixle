@@ -163,6 +163,19 @@ export class Query<ExactComponentTypes extends defaultComponentTypes> {
         });
     }
 
+    find(handler: (entity: typeof this.manager.Entity) => boolean) {
+        let foundEntity: typeof this.manager.Entity;
+
+        this.for((possibleEntity) => {
+            if (handler(possibleEntity)) {
+                foundEntity = possibleEntity;
+                return true;
+            }
+        });
+
+        return foundEntity;
+    }
+
     tick() {
         this.consumers.forEach((c) => c.tick());
     }
@@ -213,7 +226,8 @@ class Consumer<ExactComponentTypes extends defaultComponentTypes> {
         this.consumed = true;
 
         this.updatedEntities.forEach((id) => {
-            this.consumedEntities.add(id);
+            this.updatedEntities.delete(id);
+            // this.consumedEntities.add(id);
             return handler(this.query.manager.getEntity(id, true));
         });
     }
@@ -224,6 +238,7 @@ class Consumer<ExactComponentTypes extends defaultComponentTypes> {
         this.consumed = true;
 
         this.newEntities.forEach((id) => {
+            this.newEntities.delete(id);
             return handler(this.query.manager.getEntity(id, true));
         });
     }
@@ -234,19 +249,20 @@ class Consumer<ExactComponentTypes extends defaultComponentTypes> {
         this.consumed = true;
 
         this.deletedEntities.forEach((entity) => {
+            this.deletedEntities.delete(entity);
             return handler(entity);
         });
     }
 
     tick() {
         if (this.consumed) {
-            this.newEntities.clear();
-            this.deletedEntities.clear();
-            this.consumedEntities.forEach((id) => {
-                this.updatedEntities.delete(id);
-            });
+            // this.newEntities.clear();
+            // this.deletedEntities.clear();
+            // this.consumedEntities.forEach((id) => {
+            //     this.updatedEntities.delete(id);
+            // });
 
-            this.consumedEntities.clear();
+            // this.consumedEntities.clear();
         }
     }
 }

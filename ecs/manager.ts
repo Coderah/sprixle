@@ -313,7 +313,6 @@ export class Manager<ExactComponentTypes extends defaultComponentTypes> {
         state.componentMap.delete(entity.id);
         state.deletedEntities.add(entity);
 
-        // TODO: add query un-indexing
         this.state.queryMap.get(entity.id)?.forEach((queryName) => {
             const query = this.state.queries.get(queryName);
 

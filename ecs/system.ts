@@ -70,6 +70,9 @@ export class Pipeline<ExactComponentTypes extends defaultComponentTypes> {
                 }
                 if ('removed' in system && system.removed) {
                     source.forDeleted(system.removed);
+                } else {
+                    // TODO could be cleaner.
+                    source.deletedEntities.clear();
                 }
             }
             this.manager.subTick();

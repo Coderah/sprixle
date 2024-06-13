@@ -261,7 +261,6 @@ class Consumer<ExactComponentTypes extends defaultComponentTypes> {
             // this.consumedEntities.forEach((id) => {
             //     this.updatedEntities.delete(id);
             // });
-
             // this.consumedEntities.clear();
         }
     }

@@ -3,11 +3,13 @@ import { defaultComponentTypes, entityId, Keys, Manager } from './manager';
 export type QueryName = string;
 
 export type QueryParameters<ComponentTypes> = {
+    flexible?: boolean;
     includes?: Set<Keys<ComponentTypes>>;
     excludes?: Set<Keys<ComponentTypes>>;
 };
 
 export type QueryParametersInput<ComponentTypes> = {
+    flexible?: boolean;
     includes?: Keys<ComponentTypes>[];
     excludes?: Keys<ComponentTypes>[];
 };
@@ -28,7 +30,7 @@ export class Query<ExactComponentTypes extends defaultComponentTypes> {
 
         this.queryName = '';
 
-        this.queryParameters = {};
+        this.queryParameters = { flexible: parameters.flexible };
 
         if (parameters.includes) {
             const includesArray = parameters.includes.sort((a, b) =>
@@ -69,9 +71,13 @@ export class Query<ExactComponentTypes extends defaultComponentTypes> {
     entityMatches(entity: typeof this.manager.Entity) {
         if (
             this.queryParameters.includes &&
-            !this.queryParameters.includes.every(
-                (component) => component in entity.components
-            )
+            (this.queryParameters.flexible
+                ? !this.queryParameters.includes.some(
+                      (component) => component in entity.components
+                  )
+                : !this.queryParameters.includes.every(
+                      (component) => component in entity.components
+                  ))
         )
             return false;
         if (
@@ -153,7 +159,7 @@ export class Query<ExactComponentTypes extends defaultComponentTypes> {
 
     for(handler: (entity: typeof this.manager.Entity) => boolean | void) {
         this.entities.forEach((id) => {
-            return handler(this.manager.getEntity(id));
+            return handler(this.manager.getEntity(id, true));
         });
     }
 
@@ -183,7 +189,7 @@ class Consumer<ExactComponentTypes extends defaultComponentTypes> {
     /** called by Query when adding an entity, for internal use */
     add(id: entityId) {
         this.newEntities.add(id);
-        this.updated(id);
+        // this.updated(id);
     }
 
     /** called by Query when updating an entity, for internal use */
@@ -208,7 +214,7 @@ class Consumer<ExactComponentTypes extends defaultComponentTypes> {
 
         this.updatedEntities.forEach((id) => {
             this.consumedEntities.add(id);
-            return handler(this.query.manager.getEntity(id));
+            return handler(this.query.manager.getEntity(id, true));
         });
     }
 
@@ -218,7 +224,7 @@ class Consumer<ExactComponentTypes extends defaultComponentTypes> {
         this.consumed = true;
 
         this.newEntities.forEach((id) => {
-            return handler(this.query.manager.getEntity(id));
+            return handler(this.query.manager.getEntity(id, true));
         });
     }
 

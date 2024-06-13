@@ -177,7 +177,7 @@ export class Manager<ExactComponentTypes extends defaultComponentTypes> {
             updatedAt: timestamp,
         } as typeof this.ComponentTypes;
 
-        return {
+        const entity = {
             id,
             components: new Proxy(components, {
                 set(target, componentType, value = null) {
@@ -187,7 +187,17 @@ export class Manager<ExactComponentTypes extends defaultComponentTypes> {
                     ) {
                         flagUpdate(componentType as keyof ExactComponentTypes);
                     }
+                    let newComponent = false;
+                    if (!(componentType in target)) {
+                        newComponent = true;
+                    }
                     target[componentType] = value;
+                    if (newComponent) {
+                        manager.state.queries.forEach((query, queryName) => {
+                            query.handleEntity(entity);
+                        });
+                        manager.addEntityMapping(entity, componentType);
+                    }
                     return true;
                 },
             }),
@@ -196,6 +206,8 @@ export class Manager<ExactComponentTypes extends defaultComponentTypes> {
                 components[componentType] = value;
             },
         };
+
+        return entity;
     }
 
     protected updatedEntity(
@@ -227,6 +239,12 @@ export class Manager<ExactComponentTypes extends defaultComponentTypes> {
                     const query = this.state.queries.get(queryName);
                     if (query?.componentMatches(componentType)) {
                         query?.updatedEntity(entity);
+                        console.log(
+                            '[subTick] update',
+                            entityId,
+                            componentType,
+                            query.queryName
+                        );
                     }
                 });
             });
@@ -234,6 +252,8 @@ export class Manager<ExactComponentTypes extends defaultComponentTypes> {
             componentUpdates.clear();
         });
     }
+
+    tickHandlers = new Set<() => void>();
 
     /** to be called after each set of systems (end of a frame) */
     tick() {
@@ -251,6 +271,11 @@ export class Manager<ExactComponentTypes extends defaultComponentTypes> {
         state.deletedEntities.clear();
 
         this.state.queries.forEach((q) => q.tick());
+
+        this.tickHandlers.forEach((h) => {
+            h();
+            this.tickHandlers.delete(h);
+        });
     }
 
     // TODO handle deserialized (no proxy or flagUpdate)
@@ -264,7 +289,7 @@ export class Manager<ExactComponentTypes extends defaultComponentTypes> {
         }
 
         state.entities.set(entity.id, entity);
-        this.updatedEntity(entity, firstTime);
+        this.updatedEntity(entity, firstTime, false);
 
         keys(entity.components).forEach((key) => {
             this.addEntityMapping(entity, key);
@@ -323,7 +348,7 @@ export class Manager<ExactComponentTypes extends defaultComponentTypes> {
     }
 
     getEntity(id: string) {
-        return this.state.entities.get(id) || this.createEntity(id);
+        return this.state.entities.get(id);
     }
 
     entityExists(id: string) {

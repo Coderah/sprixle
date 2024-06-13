@@ -8,23 +8,30 @@ export interface System<
     source:
         | Query<ExactComponentTypes>
         | ReturnType<Query<ExactComponentTypes>['createConsumer']>;
+    /** Runs every frame */
     tick?(delta: number): void;
+    /** Runs at the end of a frame to do any cleanup necessary */
+    cleanup?(entity: TManager['Entity']): void;
 }
 
 export interface ConsumerSystem<
-    T extends defaultComponentTypes,
-    M extends Manager<T> = Manager<T>
-> extends System<T, M> {
-    updated?: (entity: M['Entity']) => boolean | void;
-    new?: (entity: M['Entity']) => boolean | void;
-    removed?: (entity: M['Entity']) => boolean | void;
+    ExactComponentTypes extends defaultComponentTypes,
+    TManager extends Manager<ExactComponentTypes> = Manager<ExactComponentTypes>
+> extends System<ExactComponentTypes, TManager> {
+    /** Runs for each entity that was updated each frame */
+    updated?: (entity: TManager['Entity']) => boolean | void;
+    /** Runs for each new entity each frame */
+    new?: (entity: TManager['Entity']) => boolean | void;
+    /** Runs for each entity that was removed from EntityManager each frame */
+    removed?: (entity: TManager['Entity']) => boolean | void;
 }
 
 export interface QuerySystem<
-    T extends defaultComponentTypes,
-    M extends Manager<T> = Manager<T>
-> extends System<T, M> {
-    all?: (entity: M['Entity']) => boolean | void;
+    ExactComponentTypes extends defaultComponentTypes,
+    TManager extends Manager<ExactComponentTypes> = Manager<ExactComponentTypes>
+> extends System<ExactComponentTypes, TManager> {
+    /** Runs for every entity every frame */
+    all?: (entity: TManager['Entity']) => boolean | void;
 }
 
 export class Pipeline<ExactComponentTypes extends defaultComponentTypes> {
@@ -66,6 +73,20 @@ export class Pipeline<ExactComponentTypes extends defaultComponentTypes> {
                 }
             }
             this.manager.subTick();
+        });
+    }
+
+    cleanup() {
+        this.systems.forEach((system) => {
+            if (system.cleanup) {
+                const { source } = system;
+
+                if (source instanceof Query) {
+                    source.for(system.cleanup);
+                } else {
+                    source.query.for(system.cleanup);
+                }
+            }
         });
     }
 }

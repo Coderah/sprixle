@@ -19,11 +19,11 @@ export interface ConsumerSystem<
     TManager extends Manager<ExactComponentTypes> = Manager<ExactComponentTypes>
 > extends System<ExactComponentTypes, TManager> {
     /** Runs for each entity that was updated each frame */
-    updated?: (entity: TManager['Entity']) => boolean | void;
+    updated?: (entity: TManager['Entity'], delta?: number) => boolean | void;
     /** Runs for each new entity each frame */
-    new?: (entity: TManager['Entity']) => boolean | void;
+    new?: (entity: TManager['Entity'], delta?: number) => boolean | void;
     /** Runs for each entity that was removed from EntityManager each frame */
-    removed?: (entity: TManager['Entity']) => boolean | void;
+    removed?: (entity: TManager['Entity'], delta?: number) => boolean | void;
 }
 
 export interface QuerySystem<
@@ -31,7 +31,7 @@ export interface QuerySystem<
     TManager extends Manager<ExactComponentTypes> = Manager<ExactComponentTypes>
 > extends System<ExactComponentTypes, TManager> {
     /** Runs for every entity every frame */
-    all?: (entity: TManager['Entity']) => boolean | void;
+    all?: (entity: TManager['Entity'], delta?: number) => boolean | void;
 }
 
 export class Pipeline<ExactComponentTypes extends defaultComponentTypes> {
@@ -59,17 +59,17 @@ export class Pipeline<ExactComponentTypes extends defaultComponentTypes> {
 
             if (source instanceof Query) {
                 if ('all' in system && system.all) {
-                    source.for(system.all);
+                    source.for(system.all, delta);
                 }
             } else {
                 if ('updated' in system && system.updated) {
-                    source.forUpdated(system.updated);
+                    source.forUpdated(system.updated, delta);
                 }
                 if ('new' in system && system.new) {
-                    source.forNew(system.new);
+                    source.forNew(system.new, delta);
                 }
                 if ('removed' in system && system.removed) {
-                    source.forDeleted(system.removed);
+                    source.forDeleted(system.removed, delta);
                 } else {
                     // TODO could be cleaner.
                     source.deletedEntities.clear();

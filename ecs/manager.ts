@@ -276,6 +276,8 @@ export class Manager<ExactComponentTypes extends defaultComponentTypes> {
             h();
             this.tickHandlers.delete(h);
         });
+
+        now.cache.clear?.();
     }
 
     // TODO handle deserialized (no proxy or flagUpdate)

@@ -157,9 +157,15 @@ export class Query<ExactComponentTypes extends defaultComponentTypes> {
         this.manager.state.queryMap.get(entity.id)?.delete(this.queryName);
     }
 
-    for(handler: (entity: typeof this.manager.Entity) => boolean | void) {
+    for(
+        handler: (
+            entity: typeof this.manager.Entity,
+            delta?: number
+        ) => boolean | void,
+        delta?: number
+    ) {
         this.entities.forEach((id) => {
-            return handler(this.manager.getEntity(id, true));
+            return handler(this.manager.getEntity(id, true), delta);
         });
     }
 
@@ -221,36 +227,48 @@ class Consumer<ExactComponentTypes extends defaultComponentTypes> {
     // }
 
     forUpdated(
-        handler: (entity: typeof this.query.manager.Entity) => boolean | void
+        handler: (
+            entity: typeof this.query.manager.Entity,
+            delta?: number
+        ) => boolean | void,
+        delta?: number
     ) {
         this.consumed = true;
 
         this.updatedEntities.forEach((id) => {
             this.updatedEntities.delete(id);
             // this.consumedEntities.add(id);
-            return handler(this.query.manager.getEntity(id, true));
+            return handler(this.query.manager.getEntity(id, true), delta);
         });
     }
 
     forNew(
-        handler: (entity: typeof this.query.manager.Entity) => boolean | void
+        handler: (
+            entity: typeof this.query.manager.Entity,
+            delta?: number
+        ) => boolean | void,
+        delta?: number
     ) {
         this.consumed = true;
 
         this.newEntities.forEach((id) => {
             this.newEntities.delete(id);
-            return handler(this.query.manager.getEntity(id, true));
+            return handler(this.query.manager.getEntity(id, true), delta);
         });
     }
 
     forDeleted(
-        handler: (entity: typeof this.query.manager.Entity) => boolean | void
+        handler: (
+            entity: typeof this.query.manager.Entity,
+            delta?: number
+        ) => boolean | void,
+        delta?: number
     ) {
         this.consumed = true;
 
         this.deletedEntities.forEach((entity) => {
             this.deletedEntities.delete(entity);
-            return handler(entity);
+            return handler(entity, delta);
         });
     }
 

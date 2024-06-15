@@ -212,23 +212,27 @@ export class Manager<ExactComponentTypes extends defaultComponentTypes> {
             id,
             components: new Proxy(components, {
                 set(target, componentType, value = null) {
-                    if (
-                        componentType !== 'updatedAt' &&
-                        manager.state.entities.has(id)
-                    ) {
+                    const entityIsRegistered = manager.state.entities.has(id);
+
+                    if (componentType !== 'updatedAt' && entityIsRegistered) {
                         flagUpdate(componentType as keyof ExactComponentTypes);
                     }
+
                     let newComponent = false;
                     if (!(componentType in target)) {
                         newComponent = true;
                     }
                     target[componentType] = value;
-                    if (newComponent) {
+                    if (entityIsRegistered && newComponent) {
                         manager.state.queries.forEach((query, queryName) => {
                             query.handleEntity(entity);
                         });
-                        manager.addEntityMapping(entity, componentType);
+                        manager.addEntityMapping(
+                            entity,
+                            componentType as keyof ExactComponentTypes
+                        );
                     }
+
                     return true;
                 },
             }),
@@ -377,6 +381,15 @@ export class Manager<ExactComponentTypes extends defaultComponentTypes> {
         const { state } = this;
         state.entityMap.get(componentType)?.delete(entity.id);
         state.componentMap.get(entity.id)?.delete(componentType);
+
+        this.state.queryMap.get(entity.id)?.forEach((queryName) => {
+            const query = this.state.queries.get(queryName);
+
+            if (!query?.componentMatches(componentType)) return;
+
+            query?.removeEntity(entity);
+            this.state.queryMap.get(entity.id)?.delete(queryName);
+        });
     }
 
     getEntity(id: string) {

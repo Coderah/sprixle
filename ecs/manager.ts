@@ -458,14 +458,19 @@ export class Manager<ExactComponentTypes extends defaultComponentTypes> {
 
     addComponent<
         T extends typeof this.Entity,
-        K extends Keys<typeof this.ComponentTypes>
+        K extends Keys<typeof this.ComponentTypes>,
+        E = typeof this.Entity & {
+            components: {
+                [key in K]: ExactComponentTypes[K];
+            };
+        }
     >(
         entity: T,
         type: K,
         value: (typeof this.ComponentTypes)[K] = this.COMPONENT_DEFAULTS[type]
-    ) {
+    ): E {
         entity.components[type] = value;
-        return entity;
+        return entity as any as E;
     }
 
     removeComponent<
@@ -495,7 +500,12 @@ export class Manager<ExactComponentTypes extends defaultComponentTypes> {
 
     updateComponent<
         T extends typeof this.Entity,
-        K extends Keys<typeof this.ComponentTypes>
+        K extends Keys<typeof this.ComponentTypes>,
+        E = typeof this.Entity & {
+            components: {
+                [key in K]: ExactComponentTypes[K];
+            };
+        }
     >(
         entity: T,
         type: K,
@@ -504,7 +514,7 @@ export class Manager<ExactComponentTypes extends defaultComponentTypes> {
             | ((
                   currentValue: (typeof this.ComponentTypes)[K]
               ) => (typeof this.ComponentTypes)[K])
-    ) {
+    ): E {
         // Weird fix for typescript issue (can't use K here), and cant cast as const even with type as...
         const path = ['components', type] as const;
 
@@ -514,7 +524,7 @@ export class Manager<ExactComponentTypes extends defaultComponentTypes> {
         entity.components[type] =
             modifier instanceof Function ? modifier(currentValue) : modifier;
 
-        return entity;
+        return entity as any as E;
     }
 
     getComponent<K extends Keys<typeof this.ComponentTypes>>(

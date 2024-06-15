@@ -1,50 +1,96 @@
-import { Manager, defaultComponentTypes } from './manager';
+import {
+    EntityWithComponents,
+    Keys,
+    Manager,
+    defaultComponentTypes,
+} from './manager';
 import { Query } from './query';
 
 export interface System<
     ExactComponentTypes extends defaultComponentTypes,
-    TManager extends Manager<ExactComponentTypes>
+    TManager extends Manager<ExactComponentTypes>,
+    Includes extends Keys<ExactComponentTypes>[]
 > {
     source:
-        | Query<ExactComponentTypes>
-        | ReturnType<Query<ExactComponentTypes>['createConsumer']>;
+        | Query<ExactComponentTypes, Includes>
+        | ReturnType<Query<ExactComponentTypes, Includes>['createConsumer']>;
     /** Runs every frame */
     tick?(delta: number): void;
     /** Runs at the end of a frame to do any cleanup necessary */
-    cleanup?(entity: TManager['Entity']): void;
+    cleanup?(
+        entity: EntityWithComponents<
+            ExactComponentTypes,
+            TManager,
+            Includes[number]
+        >
+    ): void;
 }
 
 export interface ConsumerSystem<
     ExactComponentTypes extends defaultComponentTypes,
+    Includes extends Keys<ExactComponentTypes>[],
     TManager extends Manager<ExactComponentTypes> = Manager<ExactComponentTypes>
-> extends System<ExactComponentTypes, TManager> {
+> extends System<ExactComponentTypes, TManager, Includes> {
     /** Runs for each entity that was updated each frame */
-    updated?: (entity: TManager['Entity'], delta?: number) => boolean | void;
+    updated?: (
+        entity: EntityWithComponents<
+            ExactComponentTypes,
+            TManager,
+            Includes[number]
+        >,
+        delta?: number
+    ) => boolean | void;
     /** Runs for each new entity each frame */
-    new?: (entity: TManager['Entity'], delta?: number) => boolean | void;
+    new?: (
+        entity: EntityWithComponents<
+            ExactComponentTypes,
+            TManager,
+            Includes[number]
+        >,
+        delta?: number
+    ) => boolean | void;
     /** Runs for each entity that was removed from EntityManager each frame */
-    removed?: (entity: TManager['Entity'], delta?: number) => boolean | void;
+    removed?: (
+        entity: EntityWithComponents<
+            ExactComponentTypes,
+            TManager,
+            Includes[number]
+        >,
+        delta?: number
+    ) => boolean | void;
 }
 
 export interface QuerySystem<
     ExactComponentTypes extends defaultComponentTypes,
+    Includes extends Keys<ExactComponentTypes>[],
     TManager extends Manager<ExactComponentTypes> = Manager<ExactComponentTypes>
-> extends System<ExactComponentTypes, TManager> {
+> extends System<ExactComponentTypes, TManager, Includes> {
     /** Runs for every entity every frame */
-    all?: (entity: TManager['Entity'], delta?: number) => boolean | void;
+    all?: (
+        entity: EntityWithComponents<
+            ExactComponentTypes,
+            TManager,
+            Includes[number]
+        >,
+        delta?: number
+    ) => boolean | void;
 }
 
-export class Pipeline<ExactComponentTypes extends defaultComponentTypes> {
+export class Pipeline<
+    ExactComponentTypes extends defaultComponentTypes,
+    Includes extends Keys<ExactComponentTypes>[]
+> {
     manager: Manager<ExactComponentTypes>;
     systems: Array<
-        QuerySystem<ExactComponentTypes> | ConsumerSystem<ExactComponentTypes>
+        | QuerySystem<ExactComponentTypes, Includes>
+        | ConsumerSystem<ExactComponentTypes, Includes>
     >;
 
     constructor(
         manager: Manager<ExactComponentTypes>,
         ...systems: Array<
-            | QuerySystem<ExactComponentTypes>
-            | ConsumerSystem<ExactComponentTypes>
+            | QuerySystem<ExactComponentTypes, Includes>
+            | ConsumerSystem<ExactComponentTypes, Includes>
         >
     ) {
         this.manager = manager;

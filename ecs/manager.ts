@@ -46,7 +46,7 @@ export type EntityAdminState<
     queryMap: QueryMap;
 
     /** Queries effectively define archetypes and maintain performant query sets according to actual system needs */
-    queries: Map<string, Query<ExactComponentTypes>>;
+    queries: Map<string, Query<ExactComponentTypes, any>>;
 
     stagedUpdates: Map<Keys<ExactComponentTypes>, Set<entityId>>;
 
@@ -66,6 +66,16 @@ export const DEFAULT_COMPONENT_DEFAULTS: defaultComponentTypes = {
     ownerId: 'default_id',
     createdAt: 0,
     updatedAt: 0,
+};
+
+export type EntityWithComponents<
+    ExactComponentTypes extends defaultComponentTypes,
+    M extends Manager<ExactComponentTypes>,
+    Components extends Keys<ExactComponentTypes>
+> = M['Entity'] & {
+    components: {
+        [K in Components]: ExactComponentTypes[K];
+    };
 };
 
 export class Manager<ExactComponentTypes extends defaultComponentTypes> {
@@ -129,37 +139,47 @@ export class Manager<ExactComponentTypes extends defaultComponentTypes> {
         return newState;
     }
 
-    createQuery(
-        queryParameters: QueryParametersInput<Partial<ExactComponentTypes>>
+    createQuery<Includes extends Keys<ExactComponentTypes>[]>(
+        queryParameters: QueryParametersInput<
+            typeof this.ComponentTypes,
+            Includes
+        >
     ) {
         const query = new Query(this, queryParameters);
 
         if (this.state.queries.has(query.queryName))
-            return this.state.queries.get(
-                query.queryName
-            ) as Query<ExactComponentTypes>;
+            return this.state.queries.get(query.queryName) as Query<
+                ExactComponentTypes,
+                Includes
+            >;
 
         this.state.queries.set(query.queryName, query);
 
         return query;
     }
 
-    createSystem(
-        source: Query<ExactComponentTypes>,
-        system: Partial<QuerySystem<ExactComponentTypes>>
-    ): QuerySystem<ExactComponentTypes>;
-    createSystem(
-        source: ReturnType<Query<ExactComponentTypes>['createConsumer']>,
-        system: Partial<ConsumerSystem<ExactComponentTypes>>
-    ): ConsumerSystem<ExactComponentTypes>;
-    createSystem(
+    createSystem<Includes extends Keys<ExactComponentTypes>[]>(
+        source: Query<ExactComponentTypes, Includes>,
+        system: Partial<QuerySystem<ExactComponentTypes, Includes>>
+    ): QuerySystem<ExactComponentTypes, Includes>;
+    createSystem<Includes extends Keys<ExactComponentTypes>[]>(
+        source: ReturnType<
+            Query<ExactComponentTypes, Includes>['createConsumer']
+        >,
+        system: Partial<ConsumerSystem<ExactComponentTypes, Includes>>
+    ): ConsumerSystem<ExactComponentTypes, Includes>;
+    createSystem<Includes extends Keys<ExactComponentTypes>[]>(
         source:
-            | Query<ExactComponentTypes>
-            | ReturnType<Query<ExactComponentTypes>['createConsumer']>,
+            | Query<ExactComponentTypes, Includes>
+            | ReturnType<
+                  Query<ExactComponentTypes, Includes>['createConsumer']
+              >,
         system:
-            | Partial<QuerySystem<ExactComponentTypes>>
-            | Partial<ConsumerSystem<ExactComponentTypes>>
-    ): QuerySystem<ExactComponentTypes> | ConsumerSystem<ExactComponentTypes> {
+            | Partial<QuerySystem<ExactComponentTypes, Includes>>
+            | Partial<ConsumerSystem<ExactComponentTypes, Includes>>
+    ):
+        | QuerySystem<ExactComponentTypes, Includes>
+        | ConsumerSystem<ExactComponentTypes, Includes> {
         return { source, ...system };
     }
 
@@ -358,11 +378,11 @@ export class Manager<ExactComponentTypes extends defaultComponentTypes> {
 
     getSingletonEntity<
         K extends Keys<typeof this.ComponentTypes>,
-        E = typeof this.Entity & {
-            components: {
-                [key in K]: ExactComponentTypes[K];
-            };
-        }
+        E = EntityWithComponents<
+            ExactComponentTypes,
+            Manager<ExactComponentTypes>,
+            K
+        >
     >(componentType: K): E {
         // TODO: should we share all singleton under one roof?
         if (!this.entityExists(componentType as string)) {
@@ -459,11 +479,11 @@ export class Manager<ExactComponentTypes extends defaultComponentTypes> {
     addComponent<
         T extends typeof this.Entity,
         K extends Keys<typeof this.ComponentTypes>,
-        E = typeof this.Entity & {
-            components: {
-                [key in K]: ExactComponentTypes[K];
-            };
-        }
+        E = EntityWithComponents<
+            ExactComponentTypes,
+            Manager<ExactComponentTypes>,
+            K
+        >
     >(
         entity: T,
         type: K,
@@ -501,11 +521,11 @@ export class Manager<ExactComponentTypes extends defaultComponentTypes> {
     updateComponent<
         T extends typeof this.Entity,
         K extends Keys<typeof this.ComponentTypes>,
-        E = typeof this.Entity & {
-            components: {
-                [key in K]: ExactComponentTypes[K];
-            };
-        }
+        E = EntityWithComponents<
+            ExactComponentTypes,
+            Manager<ExactComponentTypes>,
+            K
+        >
     >(
         entity: T,
         type: K,

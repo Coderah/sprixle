@@ -1,30 +1,51 @@
-import { defaultComponentTypes, entityId, Keys, Manager } from './manager';
+import {
+    defaultComponentTypes,
+    Entity,
+    entityId,
+    EntityWithComponents,
+    Keys,
+    Manager,
+} from './manager';
 
 export type QueryName = string;
 
-export type QueryParameters<ComponentTypes> = {
+export type QueryParameters<ComponentTypes, IncludeKeys> = {
     flexible?: boolean;
     includes?: Set<Keys<ComponentTypes>>;
     excludes?: Set<Keys<ComponentTypes>>;
 };
 
-export type QueryParametersInput<ComponentTypes> = {
+export type QueryParametersInput<ComponentTypes, IncludeKeys> = {
     flexible?: boolean;
-    includes?: Keys<ComponentTypes>[];
+    includes?: IncludeKeys;
     excludes?: Keys<ComponentTypes>[];
 };
 
-export class Query<ExactComponentTypes extends defaultComponentTypes> {
-    manager: Manager<ExactComponentTypes>;
+export type ValuesOf<T extends any[]> = T[number];
+
+type UnionFromKeys<T extends readonly string[]> = {
+    [K in T[number] as `${K}`]: string;
+};
+
+const testArray = ['test', 'fun'] as const;
+type test = UnionFromKeys<Keys<defaultComponentTypes>[]>;
+
+export class Query<
+    ExactComponentTypes extends defaultComponentTypes,
+    Includes extends Keys<ExactComponentTypes>[],
+    M extends Manager<ExactComponentTypes> = Manager<ExactComponentTypes>,
+    E = EntityWithComponents<ExactComponentTypes, M, Includes[number]>
+> {
+    manager: M;
     queryName: QueryName;
 
-    queryParameters: QueryParameters<Partial<ExactComponentTypes>>;
+    queryParameters: QueryParameters<Partial<ExactComponentTypes>, Includes>;
     entities = new Set<entityId>();
-    consumers = new Array<Consumer<ExactComponentTypes>>();
+    consumers = new Array<Consumer<ExactComponentTypes, Includes, M, E>>();
 
     constructor(
-        manager: Manager<ExactComponentTypes>,
-        parameters: QueryParametersInput<Partial<ExactComponentTypes>>
+        manager: M,
+        parameters: QueryParametersInput<Partial<ExactComponentTypes>, Includes>
     ) {
         this.manager = manager;
 
@@ -158,19 +179,16 @@ export class Query<ExactComponentTypes extends defaultComponentTypes> {
     }
 
     for(
-        handler: (
-            entity: typeof this.manager.Entity,
-            delta?: number
-        ) => boolean | void,
+        handler: (entity: E, delta?: number) => boolean | void,
         delta?: number
     ) {
         this.entities.forEach((id) => {
-            return handler(this.manager.getEntity(id, true), delta);
+            return handler(this.manager.getEntity(id) as any as E, delta);
         });
     }
 
-    find(handler: (entity: typeof this.manager.Entity) => boolean) {
-        let foundEntity: typeof this.manager.Entity;
+    find(handler: (entity: E) => boolean) {
+        let foundEntity: E;
 
         this.for((possibleEntity) => {
             if (handler(possibleEntity)) {
@@ -188,8 +206,13 @@ export class Query<ExactComponentTypes extends defaultComponentTypes> {
 }
 
 /** Consumers track updated and new entities until consumed for a given Query */
-class Consumer<ExactComponentTypes extends defaultComponentTypes> {
-    query: Query<ExactComponentTypes>;
+class Consumer<
+    ExactComponentTypes extends defaultComponentTypes,
+    Includes extends Keys<ExactComponentTypes>[],
+    M extends Manager<ExactComponentTypes> = Manager<ExactComponentTypes>,
+    E = EntityWithComponents<ExactComponentTypes, M, Includes[number]>
+> {
+    query: Query<ExactComponentTypes, Includes, M, E>;
     updatedEntities = new Set<entityId>();
     newEntities = new Set<entityId>();
     deletedEntities = new Set<typeof this.query.manager.Entity>();
@@ -197,7 +220,7 @@ class Consumer<ExactComponentTypes extends defaultComponentTypes> {
     consumed = false;
     consumedEntities = new Set<entityId>();
 
-    constructor(query: Query<ExactComponentTypes>) {
+    constructor(query: Query<ExactComponentTypes, Includes, M, E>) {
         this.query = query;
 
         if (query.entities.size) {
@@ -227,10 +250,7 @@ class Consumer<ExactComponentTypes extends defaultComponentTypes> {
     // }
 
     forUpdated(
-        handler: (
-            entity: typeof this.query.manager.Entity,
-            delta?: number
-        ) => boolean | void,
+        handler: (entity: E, delta?: number) => boolean | void,
         delta?: number
     ) {
         this.consumed = true;
@@ -238,37 +258,31 @@ class Consumer<ExactComponentTypes extends defaultComponentTypes> {
         this.updatedEntities.forEach((id) => {
             this.updatedEntities.delete(id);
             // this.consumedEntities.add(id);
-            return handler(this.query.manager.getEntity(id, true), delta);
+            return handler(this.query.manager.getEntity(id) as E, delta);
         });
     }
 
     forNew(
-        handler: (
-            entity: typeof this.query.manager.Entity,
-            delta?: number
-        ) => boolean | void,
+        handler: (entity: E, delta?: number) => boolean | void,
         delta?: number
     ) {
         this.consumed = true;
 
         this.newEntities.forEach((id) => {
             this.newEntities.delete(id);
-            return handler(this.query.manager.getEntity(id, true), delta);
+            return handler(this.query.manager.getEntity(id) as E, delta);
         });
     }
 
     forDeleted(
-        handler: (
-            entity: typeof this.query.manager.Entity,
-            delta?: number
-        ) => boolean | void,
+        handler: (entity: E, delta?: number) => boolean | void,
         delta?: number
     ) {
         this.consumed = true;
 
         this.deletedEntities.forEach((entity) => {
             this.deletedEntities.delete(entity);
-            return handler(entity, delta);
+            return handler(entity as E, delta);
         });
     }
 

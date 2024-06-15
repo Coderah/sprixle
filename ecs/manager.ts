@@ -356,14 +356,24 @@ export class Manager<ExactComponentTypes extends defaultComponentTypes> {
         return this.state.entities.has(id);
     }
 
-    getSingletonEntity(
-        componentType: Keys<typeof this.ComponentTypes>
-    ): Entity<typeof this.ComponentTypes> {
+    getSingletonEntity<
+        K extends Keys<typeof this.ComponentTypes>,
+        E = typeof this.Entity & {
+            components: {
+                [key in K]: ExactComponentTypes[K];
+            };
+        }
+    >(componentType: K): E {
         // TODO: should we share all singleton under one roof?
-        return (
-            this.getEntities(componentType)?.first() ||
-            this.createEntity(componentType as string)
-        );
+        if (!this.entityExists(componentType as string)) {
+            const entity = this.createEntity(componentType as string);
+            this.addComponent(entity, componentType);
+            this.registerEntity(entity);
+
+            return entity as E;
+        }
+
+        return this.getEntity(componentType as string) as E;
     }
 
     setSingletonEntityComponent<K extends Keys<typeof this.ComponentTypes>>(
@@ -372,7 +382,8 @@ export class Manager<ExactComponentTypes extends defaultComponentTypes> {
     ) {
         const entity = this.getSingletonEntity(componentType);
         this.addComponent(entity, componentType, value);
-        this.registerEntity(entity);
+
+        return entity;
     }
 
     getSingletonEntityComponent<K extends Keys<typeof this.ComponentTypes>>(
@@ -453,16 +464,6 @@ export class Manager<ExactComponentTypes extends defaultComponentTypes> {
         type: K,
         value: (typeof this.ComponentTypes)[K] = this.COMPONENT_DEFAULTS[type]
     ) {
-        if (!(type in entity.components)) {
-            this.addEntityMapping(entity, type);
-
-            this.state.queries.forEach((query, queryName) => {
-                if (queryName.includes(type.toString())) {
-                    query.handleEntity(entity);
-                }
-            });
-        }
-
         entity.components[type] = value;
         return entity;
     }

@@ -10,7 +10,7 @@ import {
     QueryParametersInput,
 } from './query';
 import { ComponentTypes } from '../boilerplate/components';
-import { ConsumerSystem, QuerySystem } from './system.ts';
+import { ConsumerSystem, QuerySystem, System } from './system.ts';
 
 export type Keys<T> = keyof T;
 export type entityId = string;
@@ -159,6 +159,11 @@ export class Manager<ExactComponentTypes extends defaultComponentTypes> {
     }
 
     createSystem<Includes extends Keys<ExactComponentTypes>[]>(
+        source: Partial<
+            System<ExactComponentTypes, Manager<ExactComponentTypes>>
+        >
+    ): System<ExactComponentTypes, Manager<ExactComponentTypes>>;
+    createSystem<Includes extends Keys<ExactComponentTypes>[]>(
         source: Query<ExactComponentTypes, Includes>,
         system: Partial<QuerySystem<ExactComponentTypes, Includes>>
     ): QuerySystem<ExactComponentTypes, Includes>;
@@ -169,18 +174,24 @@ export class Manager<ExactComponentTypes extends defaultComponentTypes> {
         system: Partial<ConsumerSystem<ExactComponentTypes, Includes>>
     ): ConsumerSystem<ExactComponentTypes, Includes>;
     createSystem<Includes extends Keys<ExactComponentTypes>[]>(
-        source:
+        sourceOrSystem:
+            | Partial<System<ExactComponentTypes, Manager<ExactComponentTypes>>>
             | Query<ExactComponentTypes, Includes>
             | ReturnType<
                   Query<ExactComponentTypes, Includes>['createConsumer']
               >,
-        system:
+        system?:
             | Partial<QuerySystem<ExactComponentTypes, Includes>>
             | Partial<ConsumerSystem<ExactComponentTypes, Includes>>
     ):
+        | System<ExactComponentTypes, Manager<ExactComponentTypes>>
         | QuerySystem<ExactComponentTypes, Includes>
         | ConsumerSystem<ExactComponentTypes, Includes> {
-        return { source, ...system };
+        if (system) {
+            return { source: sourceOrSystem, ...system };
+        } else {
+            return sourceOrSystem;
+        }
     }
 
     createEntity(id = uuid()): typeof this.Entity {

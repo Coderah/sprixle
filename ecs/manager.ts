@@ -450,11 +450,18 @@ export class Manager<ExactComponentTypes extends defaultComponentTypes> {
      * Get all Entities that have a component of type
      */
     // TODO introduce forEntities (and with and of)
-    getEntities(
-        componentType: Keys<typeof this.ComponentTypes>
-    ): Set<Entity<typeof this.ComponentTypes>> {
+    getEntities<
+        K extends Keys<typeof this.ComponentTypes>,
+        E = EntityWithComponents<
+            ExactComponentTypes,
+            Manager<ExactComponentTypes>,
+            K
+        >
+    >(componentType: K): Set<E> {
         // TODO update this to handle removing component type mapping at point of lookup?
-        return this.getEntityIds(componentType).map((id) => this.getEntity(id));
+        return this.getEntityIds(componentType).map(
+            (id) => this.getEntity(id) as E
+        );
     }
 
     /** Run `handler` for every entity with `componentType` ends early if `handler` returns `true` */
@@ -468,9 +475,14 @@ export class Manager<ExactComponentTypes extends defaultComponentTypes> {
     }
 
     /** Get Entities that have these specific component types (intersection) */
-    getEntitiesWith(
-        types: Set<Keys<typeof this.ComponentTypes>>
-    ): Set<Entity<typeof this.ComponentTypes>> {
+    getEntitiesWith<
+        K extends Keys<typeof this.ComponentTypes>,
+        E = EntityWithComponents<
+            ExactComponentTypes,
+            Manager<ExactComponentTypes>,
+            K
+        >
+    >(types: Set<K>): Set<E> {
         const { state } = this;
         const entityMaps = types.map(
             (type) => state.entityMap.get(type) || new Set<string>()
@@ -480,7 +492,7 @@ export class Manager<ExactComponentTypes extends defaultComponentTypes> {
             entityMaps.first() || new Set<string>()
         ).intersect(...entityMaps);
 
-        return intersectedEntities.map((id) => this.getEntity(id));
+        return intersectedEntities.map((id) => this.getEntity(id) as E);
     }
 
     getEntityIdsOf(types: Set<Keys<typeof this.ComponentTypes>>): Set<string> {

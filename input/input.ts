@@ -69,15 +69,15 @@ export function inputTick(camera: Camera) {
     worldMousePosition.copy(intersectPoint);
 }
 
-export function initInput(renderer: Renderer) {
+export function initInput(domElement: HTMLElement) {
     const handleMouseMove = (event: MouseEvent) => {
-        screenMousePosition.set(event.clientX, event.clientY);
+        screenMousePosition.set(event.offsetX, event.offsetY);
     };
 
     const handleMouseDown = (event: MouseEvent) => {
-        if (event.currentTarget === renderer.domElement) {
+        if (event.currentTarget === domElement) {
             event.preventDefault();
-            event.stopImmediatePropagation();
+            // event.stopImmediatePropagation();
         }
         if (event.button in mouseButtons) {
             inputState['MouseButton' + mouseButtons[event.button]] = now();
@@ -87,9 +87,9 @@ export function initInput(renderer: Renderer) {
     };
 
     const handleMouseUp = (event: MouseEvent) => {
-        if (event.currentTarget === renderer.domElement) {
+        if (event.currentTarget === domElement) {
             event.preventDefault();
-            event.stopImmediatePropagation();
+            // event.stopImmediatePropagation();
         }
         if (event.button in mouseButtons) {
             inputState['MouseButton' + mouseButtons[event.button]] = null;
@@ -106,13 +106,15 @@ export function initInput(renderer: Renderer) {
         inputState[event.code] = null;
     };
 
-    document.addEventListener('contextmenu', (event) => event.preventDefault());
+    domElement.addEventListener('contextmenu', (event) =>
+        event.preventDefault()
+    );
 
     document.addEventListener('keyup', handleKeyUp);
     document.addEventListener('keydown', handleKeyDown);
-    document.addEventListener('mousedown', handleMouseDown);
-    document.addEventListener('mouseup', handleMouseUp);
-    document.addEventListener('dragend', handleMouseUp);
-    document.addEventListener('mousemove', handleMouseMove);
-    document.addEventListener('mouseleave', handleMouseMove);
+    domElement.addEventListener('mousedown', handleMouseDown);
+    domElement.addEventListener('mouseup', handleMouseUp);
+    domElement.addEventListener('dragend', handleMouseUp);
+    domElement.addEventListener('mousemove', handleMouseMove);
+    domElement.addEventListener('mouseleave', handleMouseMove);
 }

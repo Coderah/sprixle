@@ -21,15 +21,6 @@ export type QueryParametersInput<ComponentTypes, IncludeKeys> = {
     excludes?: Keys<ComponentTypes>[];
 };
 
-export type ValuesOf<T extends any[]> = T[number];
-
-type UnionFromKeys<T extends readonly string[]> = {
-    [K in T[number] as `${K}`]: string;
-};
-
-const testArray = ['test', 'fun'] as const;
-type test = UnionFromKeys<Keys<defaultComponentTypes>[]>;
-
 export class Query<
     ExactComponentTypes extends defaultComponentTypes,
     Includes extends Keys<ExactComponentTypes>[],

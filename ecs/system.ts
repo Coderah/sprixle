@@ -105,6 +105,8 @@ export class Pipeline<
 
             if (tick) tick(delta);
 
+            if (!source) return;
+
             if (source instanceof Query) {
                 if ('all' in system && system.all) {
                     source.for(system.all, delta);
@@ -131,6 +133,7 @@ export class Pipeline<
         this.systems.forEach((system) => {
             if (system.cleanup) {
                 const { source } = system;
+                if (!source) return;
 
                 if (source instanceof Query) {
                     source.for(system.cleanup);

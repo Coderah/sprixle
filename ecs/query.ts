@@ -224,7 +224,7 @@ class Consumer<
         this.query = query;
 
         if (query.entities.size) {
-            query.entities.forEach(this.add);
+            query.entities.forEach((entity) => this.add(entity));
         }
     }
 

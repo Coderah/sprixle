@@ -76,6 +76,7 @@ export interface QuerySystem<
     ) => boolean | void;
 }
 
+/** Pipelines compose Systems (and other Pipelines). They will properly run in sequence and ensure internal processing is done between each. */
 export class Pipeline<
     ExactComponentTypes extends defaultComponentTypes,
     Includes extends Keys<ExactComponentTypes>[]
@@ -101,11 +102,10 @@ export class Pipeline<
 
     tick(delta: number) {
         this.systems.forEach((system) => {
-            const { source, tick } = system;
+            if (system.tick) system.tick(delta);
 
-            if (tick) tick(delta);
-
-            if (!source) return;
+            if (!system.source) return;
+            const { source } = system;
 
             if (source instanceof Query) {
                 if ('all' in system && system.all) {

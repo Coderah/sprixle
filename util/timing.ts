@@ -4,8 +4,9 @@ export function interval(length: number) {
     return (delta: number) => {
         time += delta;
         if (time >= length) {
+            const totalDelta = time;
             time = 0;
-            return true;
+            return totalDelta;
         }
 
         return false;

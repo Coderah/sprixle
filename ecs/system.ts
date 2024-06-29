@@ -8,19 +8,26 @@ import { Query } from './query';
 
 export interface System<
     ExactComponentTypes extends defaultComponentTypes,
-    TManager extends Manager<ExactComponentTypes>
+    TManager extends Manager<ExactComponentTypes>,
+    Includes extends Keys<ExactComponentTypes>[]
 > {
     /** Runs every frame */
     tick?(delta: number): void;
     /** Runs at the end of a frame to do any cleanup necessary */
-    cleanup?(entity: TManager['Entity']): void;
+    cleanup?(
+        entity: EntityWithComponents<
+            ExactComponentTypes,
+            TManager,
+            Includes[number]
+        >
+    ): void;
 }
 
 export interface SourceSystem<
     ExactComponentTypes extends defaultComponentTypes,
     TManager extends Manager<ExactComponentTypes>,
     Includes extends Keys<ExactComponentTypes>[]
-> extends System<ExactComponentTypes, TManager> {
+> extends System<ExactComponentTypes, TManager, Includes> {
     source:
         | Query<ExactComponentTypes, Includes>
         | ReturnType<Query<ExactComponentTypes, Includes>['createConsumer']>;
@@ -83,7 +90,7 @@ export class Pipeline<
 > {
     manager: Manager<ExactComponentTypes>;
     systems: Array<
-        | System<ExactComponentTypes, Manager<ExactComponentTypes>>
+        | System<ExactComponentTypes, Manager<ExactComponentTypes>, Includes>
         | QuerySystem<ExactComponentTypes, Includes>
         | ConsumerSystem<ExactComponentTypes, Includes>
     >;
@@ -91,7 +98,11 @@ export class Pipeline<
     constructor(
         manager: Manager<ExactComponentTypes>,
         ...systems: Array<
-            | System<ExactComponentTypes, Manager<ExactComponentTypes>>
+            | System<
+                  ExactComponentTypes,
+                  Manager<ExactComponentTypes>,
+                  Includes
+              >
             | QuerySystem<ExactComponentTypes, Includes>
             | ConsumerSystem<ExactComponentTypes, Includes>
         >

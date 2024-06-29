@@ -160,9 +160,9 @@ export class Manager<ExactComponentTypes extends defaultComponentTypes> {
 
     createSystem<Includes extends Keys<ExactComponentTypes>[]>(
         source: Partial<
-            System<ExactComponentTypes, Manager<ExactComponentTypes>>
+            System<ExactComponentTypes, Manager<ExactComponentTypes>, Includes>
         >
-    ): System<ExactComponentTypes, Manager<ExactComponentTypes>>;
+    ): System<ExactComponentTypes, Manager<ExactComponentTypes>, Includes>;
     createSystem<Includes extends Keys<ExactComponentTypes>[]>(
         source: Query<ExactComponentTypes, Includes>,
         system: Partial<QuerySystem<ExactComponentTypes, Includes>>
@@ -175,7 +175,13 @@ export class Manager<ExactComponentTypes extends defaultComponentTypes> {
     ): ConsumerSystem<ExactComponentTypes, Includes>;
     createSystem<Includes extends Keys<ExactComponentTypes>[]>(
         sourceOrSystem:
-            | Partial<System<ExactComponentTypes, Manager<ExactComponentTypes>>>
+            | Partial<
+                  System<
+                      ExactComponentTypes,
+                      Manager<ExactComponentTypes>,
+                      Includes
+                  >
+              >
             | Query<ExactComponentTypes, Includes>
             | ReturnType<
                   Query<ExactComponentTypes, Includes>['createConsumer']
@@ -184,7 +190,7 @@ export class Manager<ExactComponentTypes extends defaultComponentTypes> {
             | Partial<QuerySystem<ExactComponentTypes, Includes>>
             | Partial<ConsumerSystem<ExactComponentTypes, Includes>>
     ):
-        | System<ExactComponentTypes, Manager<ExactComponentTypes>>
+        | System<ExactComponentTypes, Manager<ExactComponentTypes>, Includes>
         | QuerySystem<ExactComponentTypes, Includes>
         | ConsumerSystem<ExactComponentTypes, Includes> {
         if (system) {

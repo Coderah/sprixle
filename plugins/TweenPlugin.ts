@@ -71,13 +71,6 @@ export function applyTweenPlugin<
                                 tweenTo[i],
                                 tweenDelta
                             );
-                            console.log(
-                                '[TweenSystem]',
-                                component,
-                                i,
-                                tweenFrom[i],
-                                tweenTo[i]
-                            );
                         });
 
                         tweenTarget.flagUpdate(tweeningComponent);

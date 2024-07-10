@@ -109,6 +109,13 @@ export class Query<
         return newConsumer;
     }
 
+    resetConsumers() {
+        this.entities = new Set();
+        this.consumers.forEach((consumer) => {
+            consumer.clear();
+        });
+    }
+
     private indexEntity(entity: typeof this.manager.Entity) {
         this.entities.add(entity.id);
     }
@@ -196,6 +203,7 @@ export class Query<
     }
 }
 
+// TODO: revisit this.consumed concept
 /** Consumers track updated and new entities until consumed for a given Query */
 class Consumer<
     ExactComponentTypes extends defaultComponentTypes,
@@ -217,6 +225,14 @@ class Consumer<
         if (query.entities.size) {
             query.entities.forEach((entity) => this.add(entity));
         }
+    }
+
+    clear() {
+        this.updatedEntities = new Set();
+        this.newEntities = new Set();
+        this.deletedEntities = new Set();
+        this.consumed = false;
+        this.consumedEntities = new Set();
     }
 
     /** called by Query when adding an entity, for internal use */

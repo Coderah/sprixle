@@ -83,7 +83,6 @@ export function applyTweenPlugin<
                     }
                 }
             },
-            // cleanup(entity) {},
         }),
         tween<C extends Keys<ComponentTypes>, V extends number | number[]>(
             entity: typeof manager.Entity,

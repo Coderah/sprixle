@@ -11,6 +11,8 @@ export interface System<
     TManager extends Manager<ExactComponentTypes>,
     Includes extends Keys<ExactComponentTypes>[]
 > {
+    /** runs when initing or resetting a pipeline, can be run to explicitly init the system  */
+    init?();
     /** Runs every frame */
     tick?(delta: number): void;
     /** Runs at the end of a frame to do any cleanup necessary */
@@ -21,6 +23,9 @@ export interface System<
             Includes[number]
         >
     ): void;
+
+    /** runs when reseting (to do integration cleanup and such) */
+    reset?();
 }
 
 export interface SourceSystem<
@@ -111,6 +116,18 @@ export class Pipeline<
         this.systems = systems;
     }
 
+    init() {
+        this.systems.forEach((system) => {
+            system.init?.();
+        });
+    }
+
+    reset() {
+        this.systems.forEach((system) => {
+            system.reset?.();
+        });
+    }
+
     tick(delta: number) {
         this.systems.forEach((system) => {
             if (system.tick) system.tick(delta);
@@ -140,6 +157,7 @@ export class Pipeline<
         });
     }
 
+    /** cleanup an entity before tick finishes */
     cleanup() {
         this.systems.forEach((system) => {
             if (system.cleanup) {

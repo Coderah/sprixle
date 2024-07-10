@@ -78,6 +78,8 @@ export type EntityWithComponents<
     };
 };
 
+// TODO: add `clone` method? Handle queries being made in a singleton manner.
+// TODO: tie query/consumer and system together more meaningfully for performance and cleanup
 export class Manager<ExactComponentTypes extends defaultComponentTypes> {
     readonly ComponentTypes: Partial<ExactComponentTypes>;
     readonly State: EntityAdminState<
@@ -137,6 +139,18 @@ export class Manager<ExactComponentTypes extends defaultComponentTypes> {
         });
 
         return newState;
+    }
+
+    resetState() {
+        const oldState = this.state;
+        const newState = this.createInitialState();
+
+        oldState.queries.forEach((query) => {
+            query.resetConsumers();
+            newState.queries.set(query.queryName, query);
+        });
+
+        this.state = newState;
     }
 
     createQuery<Includes extends Keys<ExactComponentTypes>[]>(

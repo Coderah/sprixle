@@ -16,6 +16,25 @@ export type Input =
     | `Touch${number}`
     | `Gamepad${string}`;
 
+const gamepadButtons = [
+    'A',
+    'B',
+    'X',
+    'Y',
+    'L1',
+    'R1',
+    'L2',
+    'R2',
+    'Back',
+    'Start',
+    'LB',
+    'RB',
+    'DUp',
+    'DDown',
+    'DLeft',
+    'DRight',
+];
+
 const plane = new Plane(new Vector3(0, 1, 0), 1);
 export const raycaster = new Raycaster();
 const intersectPoint = new Vector3();
@@ -41,7 +60,7 @@ export type InputComponents = {
     /** the list of inputs that trigger a binding, must be paired with @inputBindName */
     inputBinds: Input[];
     /** determines activation type, defaults to press */
-    inputBindActivationType: 'release' | 'press';
+    inputBindActivationType: 'release' | 'press' | 'held';
     /** defines how long this binding must be held to repeat, does not repeat if not present */
     inputBindRepeat: number;
 
@@ -52,7 +71,7 @@ export type InputComponents = {
 
     /** used on both raw and bound inputs to indicate state and position */
     inputState: number | null;
-    inputPosition: number[];
+    inputPosition: number | number[];
 };
 
 export const INPUT_COMPONENT_DEFAULTS: InputComponents = {
@@ -75,6 +94,7 @@ export function applyInputPlugin<
     const inputBindStateQuery = manager.createQuery({
         includes: ['inputBindName', 'inputState'],
     });
+    const inputBindStateQueryConsumer = inputBindStateQuery.createConsumer();
     const rawInputQuery = manager.createQuery({
         includes: ['inputName', 'inputState'],
     });
@@ -162,6 +182,7 @@ export function applyInputPlugin<
             };
 
             const handleKeyDown = (event: KeyboardEvent) => {
+                if (event.repeat) return;
                 const key = ('Key' + event.code) as Input;
                 const entity =
                     manager.getEntity('input' + key) ||
@@ -239,6 +260,35 @@ export function applyInputPlugin<
 
                         worldMousePosition.copy(intersectPoint);
                     }
+
+                    // TODO support multiple players
+                    const gamepad = navigator.getGamepads()[0];
+
+                    if (gamepad) {
+                        gamepad.buttons.forEach((button, index) => {
+                            const key = ('Gamepad' +
+                                gamepadButtons[index]) as Input;
+                            const entity =
+                                manager.getEntity('input' + key) ||
+                                manager.createEntity('input' + key);
+                            entity.components.inputName = key;
+                            // TODO handle axis
+                            if (
+                                button.pressed &&
+                                entity.components.inputState
+                            ) {
+                                return;
+                            } else {
+                                entity.components.inputState = button.pressed
+                                    ? now()
+                                    : null;
+                            }
+                            if (button.value) {
+                                entity.components.inputPosition = button.value;
+                            }
+                            manager.registerEntity(entity);
+                        });
+                    }
                 },
 
                 updated(entity, delta) {
@@ -303,27 +353,59 @@ export function applyInputPlugin<
             return entities;
         },
         createInputBindHandlers(bindHandlers: {
-            [bindName: string]: (bindEntity: typeof manager.Entity) => void;
+            [bindName: string]: (
+                bindEntity: typeof manager.Entity,
+                delta: number
+            ) => void;
         }) {
-            return manager.createSystem(inputBindStateQuery.createConsumer(), {
-                updated(entity) {
+            // Utilizing a standard query system and internally checking consumer.updatedEntities for improved performance (fewer loops)
+            return manager.createSystem(inputBindStateQuery, {
+                all(entity, delta) {
                     const handler =
                         bindHandlers[entity.components.inputBindName];
 
                     if (!handler) return;
 
-                    if (
-                        entity.components.inputBindActivationType === 'release'
-                    ) {
-                        if (entity.components.inputState === null) {
-                            handler(entity);
+                    const wasUpdated =
+                        inputBindStateQueryConsumer.updatedEntities.has(
+                            entity.id
+                        );
+
+                    if (wasUpdated && entity.components.inputState === null) {
+                        if (
+                            entity.components.inputBindActivationType ===
+                            'release'
+                        ) {
+                            handler(entity, delta);
                         }
-                    } else {
-                        // TODO implement repeating
-                        if (entity.components.inputState) {
-                            handler(entity);
+                    } else if (entity.components.inputState) {
+                        if (
+                            entity.components.inputBindActivationType === 'held'
+                        ) {
+                            handler(entity, delta);
+                        } else if (
+                            entity.components.inputBindActivationType ===
+                            'press'
+                        ) {
+                            let handle = wasUpdated;
+
+                            if (!handle && entity.components.inputBindRepeat) {
+                                if (
+                                    now() - entity.components.inputState >
+                                    entity.components.inputBindRepeat
+                                ) {
+                                    entity.quietSet('inputState', now());
+                                    handle = true;
+                                }
+                            }
+
+                            if (handle) handler(entity, delta);
                         }
                     }
+
+                    inputBindStateQueryConsumer.updatedEntities.delete(
+                        entity.id
+                    );
                 },
             });
         },

@@ -89,27 +89,20 @@ export interface QuerySystem<
 }
 
 /** Pipelines compose Systems (and other Pipelines). They will properly run in sequence and ensure internal processing is done between each. */
-export class Pipeline<
-    ExactComponentTypes extends defaultComponentTypes,
-    Includes extends Keys<ExactComponentTypes>[]
-> {
+export class Pipeline<ExactComponentTypes extends defaultComponentTypes> {
     manager: Manager<ExactComponentTypes>;
     systems: Array<
-        | System<ExactComponentTypes, Manager<ExactComponentTypes>, Includes>
-        | QuerySystem<ExactComponentTypes, Includes>
-        | ConsumerSystem<ExactComponentTypes, Includes>
+        | System<ExactComponentTypes, Manager<ExactComponentTypes>, any>
+        | QuerySystem<ExactComponentTypes, any>
+        | ConsumerSystem<ExactComponentTypes, any>
     >;
 
     constructor(
         manager: Manager<ExactComponentTypes>,
         ...systems: Array<
-            | System<
-                  ExactComponentTypes,
-                  Manager<ExactComponentTypes>,
-                  Includes
-              >
-            | QuerySystem<ExactComponentTypes, Includes>
-            | ConsumerSystem<ExactComponentTypes, Includes>
+            | System<ExactComponentTypes, Manager<ExactComponentTypes>, any>
+            | QuerySystem<ExactComponentTypes, any>
+            | ConsumerSystem<ExactComponentTypes, any>
         >
     ) {
         this.manager = manager;

@@ -234,7 +234,11 @@ export class Manager<ExactComponentTypes extends defaultComponentTypes> {
                 set(target, componentType, value = null) {
                     const entityIsRegistered = manager.state.entities.has(id);
 
-                    if (componentType !== 'updatedAt' && entityIsRegistered) {
+                    if (
+                        componentType !== 'updatedAt' &&
+                        entityIsRegistered &&
+                        target[componentType] !== value
+                    ) {
                         flagUpdate(componentType as keyof ExactComponentTypes);
                     }
 

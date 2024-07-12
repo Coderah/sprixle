@@ -341,16 +341,11 @@ export class Manager<ExactComponentTypes extends defaultComponentTypes> {
 
     // TODO handle deserialized (no proxy or flagUpdate)
     registerEntity(entity: typeof this.Entity) {
+        if (this.entityExists(entity.id)) return;
         const { state } = this;
 
-        let firstTime = false;
-        if (!this.entityExists(entity.id)) {
-            state.newEntities.add(entity.id);
-            firstTime = true;
-        }
-
         state.entities.set(entity.id, entity);
-        this.updatedEntity(entity, firstTime, false);
+        this.updatedEntity(entity, true, false);
 
         keys(entity.components).forEach((key) => {
             this.addEntityMapping(entity, key);

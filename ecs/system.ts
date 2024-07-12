@@ -50,7 +50,7 @@ export interface ConsumerSystem<
             TManager,
             Includes[number]
         >,
-        delta?: number
+        delta: number
     ) => boolean | void;
     /** Runs for each new entity each frame */
     new?: (
@@ -59,7 +59,7 @@ export interface ConsumerSystem<
             TManager,
             Includes[number]
         >,
-        delta?: number
+        delta: number
     ) => boolean | void;
     /** Runs for each entity that was removed from EntityManager each frame */
     removed?: (
@@ -68,7 +68,7 @@ export interface ConsumerSystem<
             TManager,
             Includes[number]
         >,
-        delta?: number
+        delta: number
     ) => boolean | void;
 }
 
@@ -84,7 +84,7 @@ export interface QuerySystem<
             TManager,
             Includes[number]
         >,
-        delta?: number
+        delta: number
     ) => boolean | void;
 }
 

@@ -288,6 +288,65 @@ export function applyInputPlugin<
                             }
                             manager.registerEntity(entity);
                         });
+
+                        // TODO improve repeating code for positive and negative shortcut inputs
+                        gamepad.axes.forEach((axis, index) => {
+                            const key = ('GamepadAxis' + index) as Input;
+                            const positiveKey = (key + 'Positive') as Input;
+                            const negativeKey = (key + 'Negative') as Input;
+                            const entity =
+                                manager.getEntity('input' + key) ||
+                                manager.createEntity('input' + key);
+                            entity.components.inputName = key;
+
+                            const positiveEntity =
+                                manager.getEntity('input' + positiveKey) ||
+                                manager.createEntity('input' + positiveKey);
+                            positiveEntity.components.inputName = positiveKey;
+                            const negativeEntity =
+                                manager.getEntity('input' + negativeKey) ||
+                                manager.createEntity('input' + negativeKey);
+                            negativeEntity.components.inputName = negativeKey;
+
+                            if (
+                                Math.abs(axis) > 0.05 &&
+                                entity.components.inputState
+                            ) {
+                                // return;
+                            } else {
+                                entity.components.inputState =
+                                    Math.abs(axis) > 0.05 ? now() : null;
+                            }
+
+                            if (
+                                axis > 0.5 &&
+                                positiveEntity.components.inputState
+                            ) {
+                                // return;
+                            } else {
+                                positiveEntity.components.inputState =
+                                    axis > 0.5 ? now() : null;
+                            }
+
+                            if (
+                                axis < -0.5 &&
+                                negativeEntity.components.inputState
+                            ) {
+                                // return;
+                            } else {
+                                negativeEntity.components.inputState =
+                                    axis < -0.5 ? now() : null;
+                            }
+
+                            // improve inputPosition lookups, should map to all bindings more efficiently
+                            entity.quietSet('inputPosition', axis);
+                            positiveEntity.quietSet('inputPosition', axis);
+                            negativeEntity.quietSet('inputPosition', axis);
+
+                            manager.registerEntity(entity);
+                            manager.registerEntity(positiveEntity);
+                            manager.registerEntity(negativeEntity);
+                        });
                     }
                 },
 
@@ -298,6 +357,8 @@ export function applyInputPlugin<
                         if (bindEntity) {
                             bindEntity.components.inputState =
                                 entity.components.inputState;
+                            bindEntity.components.inputPosition =
+                                entity.components.inputPosition;
                         }
                     });
                 },

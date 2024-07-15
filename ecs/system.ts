@@ -97,6 +97,9 @@ export class Pipeline<ExactComponentTypes extends defaultComponentTypes> {
         | ConsumerSystem<ExactComponentTypes, any>
     >;
 
+    deltaPerTick: number = 0;
+    lag: number = 0;
+
     constructor(
         manager: Manager<ExactComponentTypes>,
         ...systems: Array<
@@ -122,6 +125,19 @@ export class Pipeline<ExactComponentTypes extends defaultComponentTypes> {
     }
 
     tick(delta: number) {
+        if (!this.deltaPerTick) {
+            this.realTick(delta);
+            return;
+        }
+
+        this.lag += delta;
+        while (this.lag >= this.deltaPerTick) {
+            this.realTick(this.deltaPerTick);
+            this.lag -= this.deltaPerTick;
+        }
+    }
+
+    private realTick(delta: number) {
         this.systems.forEach((system) => {
             if (system.tick) system.tick(delta);
 

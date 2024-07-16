@@ -1,9 +1,13 @@
-let timeDiff = 0;
+export let timeDiff = 0;
 
 export function setTimeSyncDiff(serverNow: number) {
-    timeDiff = now() - serverNow;
+    timeDiff = Date.now() - serverNow;
 
     console.log('serverTime diff set', timeDiff);
+}
+
+export function getTimeDiff() {
+    return timeDiff;
 }
 
 export function now(): number {

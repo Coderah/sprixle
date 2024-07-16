@@ -125,7 +125,7 @@ export class Manager<ExactComponentTypes extends defaultComponentTypes> {
     }
 
     createEntity(id = uuid()): typeof this.Entity {
-        const timestamp = Date.now();
+        const timestamp = now();
 
         return {
             id,

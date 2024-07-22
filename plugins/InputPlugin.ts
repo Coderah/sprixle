@@ -183,7 +183,7 @@ export function applyInputPlugin<
 
             const handleKeyDown = (event: KeyboardEvent) => {
                 if (event.repeat) return;
-                const key = ('Key' + event.code) as Input;
+                const key = ('Key' + event.code.replace('Key', '')) as Input;
                 const entity =
                     manager.getEntity('input' + key) ||
                     manager.createEntity('input' + key);
@@ -193,7 +193,7 @@ export function applyInputPlugin<
             };
 
             const handleKeyUp = (event: KeyboardEvent) => {
-                const key = ('Key' + event.code) as Input;
+                const key = ('Key' + event.code.replace('Key', '')) as Input;
                 const entity =
                     manager.getEntity('input' + key) ||
                     manager.createEntity('input' + key);

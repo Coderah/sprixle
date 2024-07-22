@@ -1,14 +1,25 @@
 import { memoize } from 'lodash';
+import { Pipeline } from '../ecs/system';
 
 let timeDiff = 0;
 
 export function setTimeSyncDiff(serverNow: number) {
-    now.cache.clear?.();
+    memoizedGlobalNow.cache.clear?.();
     timeDiff = now() - serverNow;
 
     console.log('serverTime diff set', timeDiff);
 }
 
-export const now = memoize((): number => {
+let activePipeline: Pipeline<any> | null = null;
+
+export function setTimeActivePipeline(pipeline: Pipeline<any> | null) {
+    activePipeline = pipeline;
+}
+
+export const memoizedGlobalNow = memoize((): number => {
     return Date.now() - timeDiff;
 });
+
+export const now = (): number => {
+    return activePipeline ? activePipeline.now : memoizedGlobalNow();
+};

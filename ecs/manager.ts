@@ -1,15 +1,9 @@
-import uuid from 'uuid-random';
 import { each } from 'lodash';
-import { keys, keySet } from './dict';
+import uuid from 'uuid-random';
+import { memoizedGlobalNow, now } from '../util/now';
+import { keys } from './dict';
 import './object.extensions.ts';
-import { now } from '../util/now';
-import {
-    Query,
-    QueryName,
-    QueryParameters,
-    QueryParametersInput,
-} from './query';
-import { ComponentTypes } from '../boilerplate/components';
+import { Query, QueryName, QueryParametersInput } from './query';
 import { ConsumerSystem, QuerySystem, System } from './system.ts';
 
 export type Keys<T> = keyof T;
@@ -239,6 +233,7 @@ export class Manager<ExactComponentTypes extends defaultComponentTypes> {
                         entityIsRegistered &&
                         target[componentType] !== value
                     ) {
+                        // TODO store previousValues as previousComponents?
                         flagUpdate(componentType as keyof ExactComponentTypes);
                     }
 
@@ -336,7 +331,7 @@ export class Manager<ExactComponentTypes extends defaultComponentTypes> {
             this.tickHandlers.delete(h);
         });
 
-        now.cache.clear?.();
+        memoizedGlobalNow.cache.clear?.();
     }
 
     // TODO handle deserialized (no proxy or flagUpdate)

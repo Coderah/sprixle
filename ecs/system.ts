@@ -1,3 +1,4 @@
+import { setTimeActivePipeline } from '../util/now';
 import {
     EntityWithComponents,
     Keys,
@@ -97,8 +98,12 @@ export class Pipeline<ExactComponentTypes extends defaultComponentTypes> {
         | ConsumerSystem<ExactComponentTypes, any>
     >;
 
+    /** if set ticks will be broken up into substeps to match delta per tick */
     deltaPerTick: number = 0;
-    lag: number = 0;
+    private lag: number = 0;
+
+    /** if set this pipeline will maintain its own simulation time and now() will use the internal clock */
+    useInternalTime: boolean = false;
 
     constructor(
         manager: Manager<ExactComponentTypes>,
@@ -113,18 +118,30 @@ export class Pipeline<ExactComponentTypes extends defaultComponentTypes> {
     }
 
     init() {
+        if (this.useInternalTime) setTimeActivePipeline(this);
+
         this.systems.forEach((system) => {
             system.init?.();
         });
+
+        if (this.useInternalTime) setTimeActivePipeline(null);
     }
 
     reset() {
+        if (this.useInternalTime) setTimeActivePipeline(this);
+
         this.systems.forEach((system) => {
             system.reset?.();
         });
+
+        if (this.useInternalTime) setTimeActivePipeline(null);
     }
 
+    now = 0;
+
     tick(delta: number) {
+        if (this.useInternalTime) setTimeActivePipeline(this);
+
         if (!this.deltaPerTick) {
             this.realTick(delta);
             return;
@@ -135,9 +152,12 @@ export class Pipeline<ExactComponentTypes extends defaultComponentTypes> {
             this.realTick(this.deltaPerTick);
             this.lag -= this.deltaPerTick;
         }
+
+        if (this.useInternalTime) setTimeActivePipeline(null);
     }
 
     private realTick(delta: number) {
+        if (this.useInternalTime) this.now += delta;
         this.systems.forEach((system) => {
             if (system.tick) system.tick(delta);
 

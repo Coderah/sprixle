@@ -1,3 +1,4 @@
+import { throttleLog } from '../util/log';
 import {
     defaultComponentTypes,
     Entity,
@@ -125,7 +126,7 @@ export class Query<
 
         if (this.entities.has(entity.id)) {
             if (!matches) {
-                console.log(
+                throttleLog(
                     '[QUERY]',
                     this.queryName,
                     'removed entity',
@@ -133,7 +134,7 @@ export class Query<
                 );
                 this.removeEntity(entity);
             } else {
-                console.log(
+                throttleLog(
                     '[QUERY]',
                     this.queryName,
                     'updated entity',
@@ -142,7 +143,7 @@ export class Query<
                 this.updatedEntity(entity);
             }
         } else if (matches) {
-            console.log('[QUERY]', this.queryName, 'added entity', entity.id);
+            throttleLog('[QUERY]', this.queryName, 'added entity', entity.id);
             this.addEntity(entity);
         }
     }

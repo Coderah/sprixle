@@ -5,6 +5,7 @@ import { keys } from './dict';
 import './object.extensions.ts';
 import { Query, QueryName, QueryParametersInput } from './query';
 import { ConsumerSystem, QuerySystem, System } from './system.ts';
+import { throttleLog } from '../util/log.ts';
 
 export type Keys<T> = keyof T;
 export type entityId = string;
@@ -293,12 +294,12 @@ export class Manager<ExactComponentTypes extends defaultComponentTypes> {
                     const query = this.state.queries.get(queryName);
                     if (query?.componentMatches(componentType)) {
                         query?.updatedEntity(entity);
-                        console.log(
-                            '[subTick] update',
-                            entityId,
-                            componentType,
-                            query.queryName
-                        );
+                        // throttleLog(
+                        //     '[subTick] update',
+                        //     entityId,
+                        //     componentType,
+                        //     query.queryName
+                        // );
                     }
                 });
             });
@@ -388,6 +389,7 @@ export class Manager<ExactComponentTypes extends defaultComponentTypes> {
         state.componentMap.get(entity.id)?.add(componentType);
     }
 
+    // TODO double check we aren't doubling removing from query with deregisterEntity
     removeEntityMapping(
         entity: typeof this.Entity,
         componentType: Keys<typeof this.ComponentTypes>

@@ -100,7 +100,7 @@ export class Pipeline<ExactComponentTypes extends defaultComponentTypes> {
 
     /** if set ticks will be broken up into substeps to match delta per tick */
     deltaPerTick: number = 0;
-    private lag: number = 0;
+    lag: number = 0;
 
     /** if set this pipeline will maintain its own simulation time and now() will use the internal clock */
     useInternalTime: boolean = false;
@@ -144,6 +144,9 @@ export class Pipeline<ExactComponentTypes extends defaultComponentTypes> {
 
         if (!this.deltaPerTick) {
             this.realTick(delta);
+
+            if (this.useInternalTime) setTimeActivePipeline(null);
+
             return;
         }
 

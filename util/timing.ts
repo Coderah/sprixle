@@ -5,7 +5,7 @@ export function interval(length: number) {
         time += delta;
         if (time >= length) {
             const totalDelta = time;
-            time = 0;
+            time = Math.max(0, time - length);
             return totalDelta;
         }
 

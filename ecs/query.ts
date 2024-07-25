@@ -199,6 +199,18 @@ export class Query<
         return foundEntity;
     }
 
+    filter(handler: (entity: E) => boolean) {
+        let foundEntities: E[] = [];
+
+        this.for((possibleEntity) => {
+            if (handler(possibleEntity)) {
+                foundEntities.push(possibleEntity);
+            }
+        });
+
+        return foundEntities;
+    }
+
     tick() {
         this.consumers.forEach((c) => c.tick());
     }

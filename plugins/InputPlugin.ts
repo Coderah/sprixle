@@ -1,5 +1,9 @@
 import { Camera, Plane, Raycaster, Vector2, Vector3 } from 'three';
-import { defaultComponentTypes, Manager } from '../ecs/manager';
+import {
+    defaultComponentTypes,
+    EntityWithComponents,
+    Manager,
+} from '../ecs/manager';
 import { now } from '../util/now';
 import { Pipeline } from '../ecs/system';
 
@@ -94,7 +98,6 @@ export function applyInputPlugin<
     const inputBindStateQuery = manager.createQuery({
         includes: ['inputBindName', 'inputState'],
     });
-    const inputBindStateQueryConsumer = inputBindStateQuery.createConsumer();
     const rawInputQuery = manager.createQuery({
         includes: ['inputName', 'inputState'],
     });
@@ -102,10 +105,18 @@ export function applyInputPlugin<
     const bindEntities = new Set<typeof manager.Entity>();
 
     return {
+        resetInput() {
+            rawInputQuery.for((entity) => {
+                entity.components.inputState = null;
+            });
+            inputBindStateQuery.for((entity) => {
+                entity.components.inputState = null;
+            });
+        },
         initInput(domElement: HTMLElement) {
             const handleMouseMove = (event: MouseEvent | TouchEvent) => {
                 if (event instanceof MouseEvent) {
-                    screenMousePosition.set(event.offsetX, event.offsetY);
+                    screenMousePosition.set(event.clientX, event.clientY);
                 } else {
                     const bounding = domElement.getBoundingClientRect();
                     screenMousePosition.set(
@@ -262,7 +273,9 @@ export function applyInputPlugin<
                     }
 
                     // TODO support multiple players
-                    const gamepad = navigator.getGamepads()[0];
+                    const gamepad = navigator
+                        .getGamepads()
+                        .find((g) => g?.connected);
 
                     if (gamepad) {
                         gamepad.buttons.forEach((button, index) => {
@@ -415,10 +428,16 @@ export function applyInputPlugin<
         },
         createInputBindHandlers(bindHandlers: {
             [bindName: string]: (
-                bindEntity: typeof manager.Entity,
+                bindEntity: EntityWithComponents<
+                    ComponentTypes,
+                    Manager<ComponentTypes>,
+                    'inputName'
+                >,
                 delta: number
             ) => void;
         }) {
+            const inputBindStateQueryConsumer =
+                inputBindStateQuery.createConsumer();
             // Utilizing a standard query system and internally checking consumer.updatedEntities for improved performance (fewer loops)
             return manager.createSystem(inputBindStateQuery, {
                 all(entity, delta) {

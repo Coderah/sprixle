@@ -6,6 +6,7 @@ import {
 } from '../ecs/manager';
 import { now } from '../util/now';
 import { Pipeline } from '../ecs/system';
+import { throttleLog } from '../util/log';
 
 const mouseButtons = {
     0: 'Left',
@@ -39,8 +40,10 @@ const gamepadButtons = [
     'DRight',
 ];
 
-const plane = new Plane(new Vector3(0, 1, 0), 1);
+// TODO allow normal to be modified
+const plane = new Plane(new Vector3(0, 0, 1), 1);
 export const raycaster = new Raycaster();
+raycaster.layers.enableAll();
 const intersectPoint = new Vector3();
 
 const worldMousePosition = new Vector3();

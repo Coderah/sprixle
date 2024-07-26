@@ -9,26 +9,29 @@ import { ConsumerSystem, Pipeline, System } from '../ecs/system';
 
 export const createUISystem = <
     ComponentTypes extends defaultComponentTypes & {
-        element: HTMLElement;
+        uiElement: HTMLElement;
     },
     M extends Manager<ComponentTypes>
 >(
     em: M,
     uiComponents: {
         [k in keyof Partial<ComponentTypes>]: {
-            element?: (
+            create?: (
                 entity: EntityWithComponents<ComponentTypes, M, k>
-            ) => HTMLElement;
+            ) => HTMLElement | undefined;
             update: (
+                uiElement: HTMLElement,
                 entity: EntityWithComponents<ComponentTypes, M, k>
             ) => void;
         };
     }
-): System<ComponentTypes, M> => {
+): System<ComponentTypes, M, any> => {
     const systems: ConsumerSystem<ComponentTypes, Keys<ComponentTypes>[], M>[] =
         [];
     for (const component in uiComponents) {
-        const { element, update } = uiComponents[component];
+        const uiComponent = uiComponents[component];
+        if (!uiComponent) continue;
+        const { create, update } = uiComponent;
 
         const componentQuery = em.createQuery({
             includes: [component],
@@ -37,11 +40,16 @@ export const createUISystem = <
         systems.push(
             em.createSystem(componentQuery.createConsumer(), {
                 new(entity) {
-                    if (!element) return;
+                    if (!create) return;
 
-                    entity.components.element = element(entity);
+                    const uiElement = create(entity);
+
+                    if (uiElement) entity.components.uiElement = uiElement;
                 },
-                updated: update,
+                updated(entity) {
+                    // TODO call create if element not existing?
+                    update(entity.components.uiElement, entity);
+                },
             }) as ConsumerSystem<ComponentTypes, Keys<ComponentTypes>[], M>
         );
     }

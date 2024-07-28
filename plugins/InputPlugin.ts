@@ -120,10 +120,7 @@ export function applyInputPlugin<
 
             binding.components.inputState = now();
         },
-        resetInput() {
-            rawInputQuery.for((entity) => {
-                entity.components.inputState = null;
-            });
+        resetInputBinds() {
             inputBindStateQuery.for((entity) => {
                 entity.components.inputState = null;
             });

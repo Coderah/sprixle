@@ -40,7 +40,7 @@ export const createUISystem = <
         systems.push(
             em.createSystem(componentQuery.createConsumer(), {
                 new(entity) {
-                    if (!create) return;
+                    if (!create || entity.components.uiElement) return;
 
                     const uiElement = create(entity);
 
@@ -49,6 +49,9 @@ export const createUISystem = <
                 updated(entity) {
                     // TODO call create if element not existing?
                     update(entity.components.uiElement, entity);
+                },
+                removed(entity) {
+                    entity.components.uiElement?.remove();
                 },
             }) as ConsumerSystem<ComponentTypes, Keys<ComponentTypes>[], M>
         );

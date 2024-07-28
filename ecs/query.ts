@@ -177,6 +177,10 @@ export class Query<
         this.manager.state.queryMap.get(entity.id)?.delete(this.queryName);
     }
 
+    get size() {
+        return this.entities.size;
+    }
+
     for(
         handler: (entity: E, delta?: number) => boolean | void,
         delta?: number

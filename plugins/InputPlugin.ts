@@ -108,6 +108,18 @@ export function applyInputPlugin<
     const bindEntities = new Set<typeof manager.Entity>();
 
     return {
+        triggerInputBind(bindName: string) {
+            const binding = manager.getEntity('bind' + bindName);
+            if (!binding) {
+                console.warn(
+                    '[InputPlugin] attempted to trigger unknown binding',
+                    bindName
+                );
+                return;
+            }
+
+            binding.components.inputState = now();
+        },
         resetInput() {
             rawInputQuery.for((entity) => {
                 entity.components.inputState = null;
@@ -373,6 +385,8 @@ export function applyInputPlugin<
                         if (bindEntity) {
                             bindEntity.components.inputState =
                                 entity.components.inputState;
+                            // ensure this is always treated as an update to avoid release binds that overlap multiple other binds
+                            bindEntity.flagUpdate('inputState');
                             bindEntity.components.inputPosition =
                                 entity.components.inputPosition;
                         }

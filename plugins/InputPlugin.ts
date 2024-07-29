@@ -286,8 +286,8 @@ export function applyInputPlugin<
 
                     // TODO support multiple players
                     const gamepad = navigator
-                        .getGamepads()
-                        .find((g) => g?.connected);
+                        .getGamepads?.()
+                        ?.find((g) => g?.connected);
 
                     if (gamepad) {
                         gamepad.buttons.forEach((button, index) => {

@@ -62,6 +62,15 @@ export interface ConsumerSystem<
         >,
         delta: number
     ) => boolean | void;
+    /** Runs for each entity that is new or was updated each frame */
+    newOrUpdated?: (
+        entity: EntityWithComponents<
+            ExactComponentTypes,
+            TManager,
+            Includes[number]
+        >,
+        delta: number
+    ) => boolean | void;
     /** Runs for each entity that was removed from EntityManager each frame */
     removed?: (
         entity: EntityWithComponents<
@@ -172,11 +181,17 @@ export class Pipeline<ExactComponentTypes extends defaultComponentTypes> {
                     source.for(system.all, delta);
                 }
             } else {
-                if ('updated' in system && system.updated) {
-                    source.forUpdated(system.updated, delta);
-                }
-                if ('new' in system && system.new) {
-                    source.forNew(system.new, delta);
+                if (
+                    ('updated' in system && system.updated) ||
+                    ('new' in system && system.new) ||
+                    ('newOrUpdated' in system && system.newOrUpdated)
+                ) {
+                    source.forNewOrUpdated(
+                        system.new,
+                        system.newOrUpdated,
+                        system.updated,
+                        delta
+                    );
                 }
                 if ('removed' in system && system.removed) {
                     source.forDeleted(system.removed, delta);

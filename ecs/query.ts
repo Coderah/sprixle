@@ -273,6 +273,38 @@ class Consumer<
     //     this.query.for(handler);
     // }
 
+    /** primarily intended to be used within pipeline as an optimization for systems */
+    forNewOrUpdated(
+        newHandler?: (entity: E, delta?: number) => boolean | void,
+        newOrUpdated?: (entity: E, delta?: number) => boolean | void,
+        updated?: (entity: E, delta?: number) => boolean | void,
+        delta?: number
+    ) {
+        const entitiesConsumed: typeof this.updatedEntities = new Set();
+
+        this.newEntities.forEach((id) => {
+            this.newEntities.delete(id);
+
+            const entity = this.query.manager.getEntity(id) as E;
+            newHandler?.(entity, delta);
+
+            entitiesConsumed.add(id);
+            newOrUpdated?.(entity, delta);
+        });
+
+        if (!updated && !newOrUpdated) return;
+
+        this.updatedEntities.forEach((id) => {
+            this.updatedEntities.delete(id);
+
+            const entity = this.query.manager.getEntity(id) as E;
+            updated?.(entity, delta);
+
+            if (entitiesConsumed.has(id)) return;
+            newOrUpdated?.(entity, delta);
+        });
+    }
+
     forUpdated(
         handler: (entity: E, delta?: number) => boolean | void,
         delta?: number

@@ -227,6 +227,8 @@ export class Manager<ExactComponentTypes extends defaultComponentTypes> {
             id,
             components: new Proxy(components, {
                 set(target, componentType, value = null) {
+                    // TODO handle setting undefined (should removeComponent)
+
                     const entityIsRegistered = manager.state.entities.has(id);
 
                     if (

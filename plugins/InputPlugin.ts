@@ -441,16 +441,23 @@ export function applyInputPlugin<
 
             return entities;
         },
-        createInputBindHandlers(bindHandlers: {
-            [bindName: string]: (
-                bindEntity: EntityWithComponents<
-                    ComponentTypes,
-                    Manager<ComponentTypes>,
-                    'inputName'
-                >,
-                delta: number
-            ) => void;
-        }) {
+        createInputBindHandlers(
+            bindHandlers: {
+                [bindName: string]: (
+                    bindEntity: EntityWithComponents<
+                        ComponentTypes,
+                        Manager<ComponentTypes>,
+                        'inputName'
+                    >,
+                    delta: number
+                ) => void;
+            },
+            // TODO this is a hacky fix, sometimes you want key bind handler isolation other times you don't... how to resolve this?!
+            uniqueConsumer: boolean = false
+        ) {
+            const consumer = uniqueConsumer
+                ? inputBindStateQuery.createConsumer()
+                : inputBindStateQueryConsumer;
             // Utilizing a standard query system and internally checking consumer.updatedEntities for improved performance (fewer loops)
             return manager.createSystem(inputBindStateQuery, {
                 all(entity, delta) {
@@ -459,10 +466,7 @@ export function applyInputPlugin<
 
                     if (!handler) return;
 
-                    const wasUpdated =
-                        inputBindStateQueryConsumer.updatedEntities.has(
-                            entity.id
-                        );
+                    const wasUpdated = consumer.updatedEntities.has(entity.id);
 
                     if (wasUpdated && entity.components.inputState === null) {
                         if (
@@ -496,9 +500,7 @@ export function applyInputPlugin<
                         }
                     }
 
-                    inputBindStateQueryConsumer.updatedEntities.delete(
-                        entity.id
-                    );
+                    consumer.updatedEntities.delete(entity.id);
                 },
             });
         },

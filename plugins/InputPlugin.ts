@@ -300,15 +300,17 @@ export function applyInputPlugin<
                             entity.components.inputName = key;
                             // TODO handle axis
                             if (
-                                button.pressed &&
-                                entity.components.inputState
+                                (button.pressed &&
+                                    entity.components.inputState) ||
+                                (!button.pressed &&
+                                    !entity.components.inputState)
                             ) {
                                 return;
-                            } else {
-                                entity.components.inputState = button.pressed
-                                    ? now()
-                                    : null;
                             }
+                            entity.components.inputState = button.pressed
+                                ? now()
+                                : null;
+
                             if (button.value) {
                                 entity.components.inputPosition = button.value;
                             }

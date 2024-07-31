@@ -1,6 +1,7 @@
 import { lerp } from 'three/src/math/MathUtils';
 import { Keys, Manager, defaultComponentTypes } from '../ecs/manager';
-import { now } from '../util/now';
+import { memoizedGlobalNow } from '../util/now';
+import * as easing from 'easing-utils';
 
 export type TweenComponents<ComponentTypes extends defaultComponentTypes> = {
     tweenTargetId: string;
@@ -9,6 +10,7 @@ export type TweenComponents<ComponentTypes extends defaultComponentTypes> = {
     tweenLength: number;
     tweenFrom: number | number[];
     tweenStart: number;
+    easeFn: keyof typeof easing;
 };
 
 export const TWEEN_COMPONENT_DEFAULTS: TweenComponents<defaultComponentTypes> =
@@ -19,6 +21,7 @@ export const TWEEN_COMPONENT_DEFAULTS: TweenComponents<defaultComponentTypes> =
         tweenLength: 0,
         tweenFrom: 0,
         tweenStart: 0,
+        easeFn: 'linear',
     };
 
 // TODO figure out typing to force only number | number[] components within tween functions
@@ -41,23 +44,25 @@ export function applyTweenPlugin<
                     tweenLength,
                     tweenFrom,
                     tweenStart,
+                    easeFn,
                 } = entity.components;
 
                 const tweenTarget = manager.getEntity(tweenTargetId);
 
                 if (
-                    !tweenTarget ||
-                    !tweenTo ||
-                    !tweenLength ||
-                    !tweenFrom ||
-                    !tweenStart ||
-                    !tweeningComponent
+                    tweenTarget === undefined ||
+                    tweenTo === undefined ||
+                    tweenLength === undefined ||
+                    tweenFrom === undefined ||
+                    tweenStart === undefined ||
+                    tweeningComponent === undefined
                 )
                     return;
 
-                const time = now();
+                const time = memoizedGlobalNow();
 
-                const tweenDelta = (time - tweenStart) / tweenLength;
+                let tweenDelta = (time - tweenStart) / tweenLength;
+                if (easeFn) tweenDelta = easing[easeFn](tweenDelta);
 
                 if (tweenDelta > 1) {
                     tweenTarget.components[tweeningComponent] = tweenTo;
@@ -89,8 +94,9 @@ export function applyTweenPlugin<
             tweeningComponent: C,
             tweenTo: V,
             tweenLength: number,
+            easeFn: keyof typeof easing | undefined = undefined,
             tweenFrom = entity.components[tweeningComponent] as any as V,
-            tweenStart = now()
+            tweenStart = memoizedGlobalNow()
         ) {
             const tweenerId =
                 entity.id + tweeningComponent.toString() + 'tween';
@@ -105,8 +111,21 @@ export function applyTweenPlugin<
             tweenEntity.components.tweenLength = tweenLength;
             tweenEntity.components.tweenFrom = tweenFrom;
             tweenEntity.components.tweenStart = tweenStart;
+            tweenEntity.components.easeFn = easeFn;
 
             return tweenEntity;
+        },
+        clearTween<C extends Keys<ComponentTypes>>(
+            entity: typeof manager.Entity,
+            tweeningComponent: C
+        ) {
+            const tweenerId =
+                entity.id + tweeningComponent.toString() + 'tween';
+
+            const tweenEntity = manager.getEntity(tweenerId);
+            if (tweenEntity) {
+                manager.deregisterEntity(tweenEntity);
+            }
         },
     };
 }

@@ -104,6 +104,7 @@ export function applyInputPlugin<
     const rawInputQuery = manager.createQuery({
         includes: ['inputName', 'inputState'],
     });
+    const inputBindStateQueryConsumer = inputBindStateQuery.createConsumer();
 
     const bindEntities = new Set<typeof manager.Entity>();
 
@@ -450,8 +451,6 @@ export function applyInputPlugin<
                 delta: number
             ) => void;
         }) {
-            const inputBindStateQueryConsumer =
-                inputBindStateQuery.createConsumer();
             // Utilizing a standard query system and internally checking consumer.updatedEntities for improved performance (fewer loops)
             return manager.createSystem(inputBindStateQuery, {
                 all(entity, delta) {

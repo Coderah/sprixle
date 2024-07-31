@@ -114,6 +114,8 @@ export class Pipeline<ExactComponentTypes extends defaultComponentTypes> {
     /** if set this pipeline will maintain its own simulation time and now() will use the internal clock */
     useInternalTime: boolean = false;
 
+    getTimeScale?: () => number;
+
     constructor(
         manager: Manager<ExactComponentTypes>,
         ...systems: Array<
@@ -169,6 +171,8 @@ export class Pipeline<ExactComponentTypes extends defaultComponentTypes> {
     }
 
     private realTick(delta: number) {
+        if (this.getTimeScale) delta = delta * this.getTimeScale();
+        if (delta <= 0) return;
         if (this.useInternalTime) this.now += delta;
         this.systems.forEach((system) => {
             if (system.tick) system.tick(delta);

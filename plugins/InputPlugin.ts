@@ -30,7 +30,7 @@ const gamepadButtons = [
     'R1',
     'L2',
     'R2',
-    'Back',
+    'Select',
     'Start',
     'LB',
     'RB',

@@ -57,11 +57,11 @@ export type defaultComponentTypes = {
     updatedAt: number;
 };
 
-export const DEFAULT_COMPONENT_DEFAULTS: defaultComponentTypes = {
-    ownerId: 'default_id',
-    createdAt: 0,
-    updatedAt: 0,
-};
+export const defaultComponentNames: Array<keyof defaultComponentTypes> = [
+    'ownerId',
+    'createdAt',
+    'updatedAt',
+];
 
 export type EntityWithComponents<
     ExactComponentTypes extends defaultComponentTypes,
@@ -82,20 +82,13 @@ export class Manager<ExactComponentTypes extends defaultComponentTypes> {
         ExactComponentTypes
     >;
     readonly Entity: Entity<typeof this.ComponentTypes>;
-    COMPONENT_DEFAULTS: ExactComponentTypes;
     componentTypesSet: Set<keyof ExactComponentTypes>;
 
     state: ReturnType<typeof this.createInitialState>;
 
-    constructor(componentDefaults: ExactComponentTypes) {
-        this.COMPONENT_DEFAULTS = {
-            ...DEFAULT_COMPONENT_DEFAULTS,
-            ...componentDefaults,
-        };
+    constructor(componentNames: Keys<ExactComponentTypes>[]) {
         this.componentTypesSet = new Set(
-            Object.keys(this.COMPONENT_DEFAULTS) as Array<
-                keyof ExactComponentTypes
-            >
+            componentNames as Array<keyof ExactComponentTypes>
         );
         this.state = this.createInitialState();
     }
@@ -429,7 +422,7 @@ export class Manager<ExactComponentTypes extends defaultComponentTypes> {
         // TODO: should we share all singleton under one roof?
         if (!this.entityExists(componentType as string)) {
             const entity = this.createEntity(componentType as string);
-            this.addComponent(entity, componentType);
+            // this.addComponent(entity, componentType);
             this.registerEntity(entity);
 
             return entity as E;
@@ -538,11 +531,7 @@ export class Manager<ExactComponentTypes extends defaultComponentTypes> {
             Manager<ExactComponentTypes>,
             K
         >
-    >(
-        entity: T,
-        type: K,
-        value: (typeof this.ComponentTypes)[K] = this.COMPONENT_DEFAULTS[type]
-    ): E {
+    >(entity: T, type: K, value: (typeof this.ComponentTypes)[K]): E {
         entity.components[type] = value;
         return entity as any as E;
     }
@@ -592,8 +581,7 @@ export class Manager<ExactComponentTypes extends defaultComponentTypes> {
         // Weird fix for typescript issue (can't use K here), and cant cast as const even with type as...
         const path = ['components', type] as const;
 
-        const currentValue =
-            entity.components[type] || this.COMPONENT_DEFAULTS[type];
+        const currentValue = entity.components[type];
 
         entity.components[type] =
             modifier instanceof Function ? modifier(currentValue) : modifier;

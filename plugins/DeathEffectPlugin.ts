@@ -15,14 +15,9 @@ export type DeathEffectComponents<
           };
 };
 
-export const DEATH_EFFECT_COMPONENT_DEFAULTS: DeathEffectComponents<defaultComponentTypes> =
-    {
-        deadAt: 0,
-        deathEffect: {
-            id: '',
-            components: {},
-        },
-    };
+export const deathEffectComponentNames: Array<
+    keyof DeathEffectComponents<defaultComponentTypes>
+> = ['deadAt', 'deathEffect'];
 
 /** Creates a system that as a side-effect of one entity dying creates an entity or applies components to another existing entity. */
 export function applyDeathEffectPlugin<

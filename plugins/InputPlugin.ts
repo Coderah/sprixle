@@ -81,16 +81,16 @@ export type InputComponents = {
     inputPosition: number | number[];
 };
 
-export const INPUT_COMPONENT_DEFAULTS: InputComponents = {
-    inputBindName: '',
-    inputBindActivationType: 'press',
-    inputBinds: [],
-    inputBindRepeat: 500,
-    inputName: 'MouseLeft',
-    inputBindIds: [],
-    inputState: null,
-    inputPosition: [],
-};
+export const inputComponentNames: Array<keyof InputComponents> = [
+    'inputBindName',
+    'inputBindActivationType',
+    'inputBinds',
+    'inputBindRepeat',
+    'inputName',
+    'inputBindIds',
+    'inputState',
+    'inputPosition',
+];
 
 export function applyInputPlugin<
     ComponentTypes extends defaultComponentTypes & InputComponents
@@ -429,7 +429,7 @@ export function applyInputPlugin<
 
                 manager.addComponents(entity, {
                     inputBindActivationType:
-                        INPUT_COMPONENT_DEFAULTS['inputBindActivationType'],
+                        inputComponentNames['inputBindActivationType'],
                     ...bind,
                     inputBindName: bindName,
                     inputState: null,

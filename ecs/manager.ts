@@ -86,10 +86,8 @@ export class Manager<ExactComponentTypes extends defaultComponentTypes> {
 
     state: ReturnType<typeof this.createInitialState>;
 
-    constructor(componentNames: Keys<ExactComponentTypes>[]) {
-        this.componentTypesSet = new Set(
-            componentNames as Array<keyof ExactComponentTypes>
-        );
+    constructor(componentNames: readonly Keys<ExactComponentTypes>[]) {
+        this.componentTypesSet = new Set(componentNames);
         this.state = this.createInitialState();
     }
 

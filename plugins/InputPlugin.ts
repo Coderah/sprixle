@@ -257,6 +257,13 @@ export function applyInputPlugin<
                             ) > -1
                         ) {
                             entity.components.inputBindIds?.push(bindEntity.id);
+
+                            bindEntity.components.inputState =
+                                entity.components.inputState;
+                            // ensure this is always treated as an update to avoid release binds that overlap multiple other binds
+                            bindEntity.flagUpdate('inputState');
+                            bindEntity.components.inputPosition =
+                                entity.components.inputPosition;
                         }
                     });
                 },

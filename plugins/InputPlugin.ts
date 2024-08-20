@@ -428,8 +428,7 @@ export function applyInputPlugin<
                     manager.createEntity(entityId);
 
                 manager.addComponents(entity, {
-                    inputBindActivationType:
-                        inputComponentNames['inputBindActivationType'],
+                    inputBindActivationType: 'press',
                     ...bind,
                     inputBindName: bindName,
                     inputState: null,

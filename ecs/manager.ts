@@ -238,7 +238,13 @@ export class Manager<ExactComponentTypes extends defaultComponentTypes> {
                     target[componentType] = value;
                     if (entityIsRegistered && newComponent) {
                         manager.state.queries.forEach((query, queryName) => {
-                            query.handleEntity(entity);
+                            if (
+                                query.componentMatches(
+                                    componentType as keyof ExactComponentTypes
+                                )
+                            ) {
+                                query.handleEntity(entity);
+                            }
                         });
                         manager.addEntityMapping(
                             entity,

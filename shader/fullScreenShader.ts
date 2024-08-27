@@ -7,6 +7,7 @@ export const fullScreenShader = {
     transparent: true,
     uniforms: {
         tDiffuse: { value: new Texture() },
+        opacity: { value: 1.0 },
     },
 
     vertexShader: glsl`
@@ -20,11 +21,13 @@ export const fullScreenShader = {
 
     fragmentShader: glsl`
     uniform sampler2D tDiffuse;
+    uniform float opacity;
     
     varying vec2 vUv;  
     void main(){
         vec4 color = texture2D(tDiffuse, vUv);
         gl_FragColor = color;
+        gl_FragColor.a *= opacity;
     }
     `,
 };

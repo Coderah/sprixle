@@ -264,6 +264,51 @@ export function applyInputPlugin<
                             bindEntity.flagUpdate('inputState');
                             bindEntity.components.inputPosition =
                                 entity.components.inputPosition;
+                            bindEntity.components.inputName =
+                                entity.components.inputName;
+                        }
+                    });
+                },
+                updated(entity, delta) {
+                    entity.components.inputBindIds?.forEach((bindId) => {
+                        const bindEntity = manager.getEntity(bindId);
+
+                        if (bindEntity) {
+                            // prevent de-triggering when another button has the bind active
+                            if (
+                                !entity.components.inputState &&
+                                bindEntity.components.inputName !==
+                                    entity.components.inputName
+                            ) {
+                                return;
+                            }
+
+                            const otherActiveInput =
+                                bindEntity.components.inputBinds?.find(
+                                    (key) =>
+                                        manager.getEntity('input' + key)
+                                            ?.components.inputState
+                                );
+
+                            if (
+                                !entity.components.inputState &&
+                                otherActiveInput
+                            ) {
+                                // Find another input that would still keep this active and allow it to take over
+                                bindEntity.components.inputName =
+                                    otherActiveInput;
+
+                                // TODO do we need to copy other components?
+                            } else {
+                                bindEntity.components.inputState =
+                                    entity.components.inputState;
+                                // ensure this is always treated as an update to avoid release binds that overlap multiple other binds
+                                bindEntity.flagUpdate('inputState');
+                                bindEntity.components.inputPosition =
+                                    entity.components.inputPosition;
+                                bindEntity.components.inputName =
+                                    entity.components.inputName;
+                            }
                         }
                     });
                 },
@@ -384,21 +429,6 @@ export function applyInputPlugin<
                         });
                     }
                 },
-
-                updated(entity, delta) {
-                    entity.components.inputBindIds?.forEach((bindId) => {
-                        const bindEntity = manager.getEntity(bindId);
-
-                        if (bindEntity) {
-                            bindEntity.components.inputState =
-                                entity.components.inputState;
-                            // ensure this is always treated as an update to avoid release binds that overlap multiple other binds
-                            bindEntity.flagUpdate('inputState');
-                            bindEntity.components.inputPosition =
-                                entity.components.inputPosition;
-                        }
-                    });
-                },
             }),
 
             // bound inputs system
@@ -460,6 +490,16 @@ export function applyInputPlugin<
                     delta: number
                 ) => void;
             },
+            releaseHandlers?: {
+                [bindName: string]: (
+                    bindEntity: EntityWithComponents<
+                        ComponentTypes,
+                        Manager<ComponentTypes>,
+                        'inputName'
+                    >,
+                    delta: number
+                ) => void;
+            },
             // TODO this is a hacky fix, sometimes you want key bind handler isolation other times you don't... how to resolve this?!
             uniqueConsumer: boolean = false
         ) {
@@ -471,6 +511,8 @@ export function applyInputPlugin<
                 all(entity, delta) {
                     const handler =
                         bindHandlers[entity.components.inputBindName];
+                    const releaseHandler =
+                        releaseHandlers?.[entity.components.inputBindName];
 
                     if (!handler) return;
 
@@ -482,6 +524,8 @@ export function applyInputPlugin<
                             'release'
                         ) {
                             handler(entity, delta);
+                        } else if (releaseHandler) {
+                            releaseHandler(entity, delta);
                         }
                     } else if (entity.components.inputState) {
                         if (

@@ -5,7 +5,7 @@ import {
     Manager,
     defaultComponentTypes,
 } from './manager';
-import { Query } from './query';
+import { Consumer, Query } from './query';
 
 export interface System<
     ExactComponentTypes extends defaultComponentTypes,
@@ -16,6 +16,7 @@ export interface System<
     init?();
     /** Runs every frame */
     tick?(delta: number): void;
+
     /** Runs at the end of a frame to do any cleanup necessary */
     cleanup?(
         entity: EntityWithComponents<
@@ -37,6 +38,16 @@ export interface SourceSystem<
     source:
         | Query<ExactComponentTypes, Includes>
         | ReturnType<Query<ExactComponentTypes, Includes>['createConsumer']>;
+
+    /** Runs for every entity every frame */
+    all?: (
+        entity: EntityWithComponents<
+            ExactComponentTypes,
+            TManager,
+            Includes[number]
+        >,
+        delta: number
+    ) => boolean | void;
 }
 
 export interface ConsumerSystem<
@@ -86,17 +97,7 @@ export interface QuerySystem<
     ExactComponentTypes extends defaultComponentTypes,
     Includes extends Keys<ExactComponentTypes>[],
     TManager extends Manager<ExactComponentTypes> = Manager<ExactComponentTypes>
-> extends SourceSystem<ExactComponentTypes, TManager, Includes> {
-    /** Runs for every entity every frame */
-    all?: (
-        entity: EntityWithComponents<
-            ExactComponentTypes,
-            TManager,
-            Includes[number]
-        >,
-        delta: number
-    ) => boolean | void;
-}
+> extends SourceSystem<ExactComponentTypes, TManager, Includes> {}
 
 /** Pipelines compose Systems (and other Pipelines). They will properly run in sequence and ensure internal processing is done between each. */
 export class Pipeline<ExactComponentTypes extends defaultComponentTypes> {
@@ -177,14 +178,17 @@ export class Pipeline<ExactComponentTypes extends defaultComponentTypes> {
         this.systems.forEach((system) => {
             if (system.tick) system.tick(delta);
 
-            if (!system.source) return;
+            if (!('source' in system)) return;
             const { source } = system;
 
             if (source instanceof Query) {
                 if ('all' in system && system.all) {
                     source.for(system.all, delta);
                 }
-            } else {
+            } else if (source instanceof Consumer) {
+                if ('all' in system && system.all) {
+                    source.query.for(system.all, delta);
+                }
                 if (
                     ('updated' in system && system.updated) ||
                     ('new' in system && system.new) ||

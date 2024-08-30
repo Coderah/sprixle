@@ -222,7 +222,7 @@ export class Query<
 
 // TODO: revisit this.consumed concept
 /** Consumers track updated and new entities until consumed for a given Query */
-class Consumer<
+export class Consumer<
     ExactComponentTypes extends defaultComponentTypes,
     Includes extends Keys<ExactComponentTypes>[],
     M extends Manager<ExactComponentTypes> = Manager<ExactComponentTypes>,

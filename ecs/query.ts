@@ -27,13 +27,20 @@ export class Query<
     Includes extends Keys<ExactComponentTypes>[],
     M extends Manager<ExactComponentTypes> = Manager<ExactComponentTypes>,
     E = EntityWithComponents<ExactComponentTypes, M, Includes[number]>
-> {
+> implements Iterable<E>
+{
     manager: M;
     queryName: QueryName;
 
     queryParameters: QueryParameters<Partial<ExactComponentTypes>, Includes>;
     entities = new Set<entityId>();
     consumers = new Array<Consumer<ExactComponentTypes, Includes, M, E>>();
+
+    *[Symbol.iterator]() {
+        for (let id of this.entities) {
+            yield this.manager.getEntity(id) as E;
+        }
+    }
 
     constructor(
         manager: M,

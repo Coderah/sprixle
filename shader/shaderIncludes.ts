@@ -1,4 +1,20 @@
-export const perlinNoise = `
+import { glsl } from './util';
+
+export const sprixleShaderCommon = glsl`
+vec3 heightblend(vec3 input1, float height1, vec3 input2, float height2, float sharpness)
+{
+    float height_start = max(height1, height2) - sharpness;
+    float b1 = max(height1 - height_start, 0.0f);
+    float b2 = max(height2 - height_start, 0.0f);
+    return ((input1 * b1) + (input2 * b2)) / (b1 + b2);
+}
+vec3 heightlerp(vec3 input1, float height1, vec3 input2, float height2, float sharpness, float lerp)
+{
+	  return heightblend(input1, height1 * (1.0f - lerp), input2, height2 * lerp, sharpness);
+}
+`;
+
+export const perlinNoise = glsl`
 vec3 mod289(vec3 x)
 {
   return x - floor(x * (1.0 / 289.0)) * 289.0;
@@ -172,9 +188,9 @@ float turbulence( vec3 p ) {
     }
     return t;
 }
-`
+`;
 
-export const simplifiedNoise = `
+export const simplifiedNoise = glsl`
 // Noise
 vec3 mod289(vec3 x) { return x - floor(x * (1.0 / 289.0)) * 289.0; }
 vec4 mod289(vec4 x) { return x - floor(x * (1.0 / 289.0)) * 289.0; }

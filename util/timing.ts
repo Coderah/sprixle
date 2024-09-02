@@ -1,7 +1,7 @@
 export function interval(length: number) {
     let time = 0;
 
-    return (delta: number) => {
+    const fn = (delta: number) => {
         time += delta;
         if (time >= length) {
             const totalDelta = time;
@@ -11,4 +11,7 @@ export function interval(length: number) {
 
         return false;
     };
+    fn.timeLength = length;
+
+    return fn;
 }

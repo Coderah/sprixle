@@ -1,13 +1,18 @@
 import assert from 'assert';
 import { vec2 } from 'gl-matrix';
-import { DEFAULT_COMPONENT_DEFAULTS, Manager } from '../ecs/manager';
+import {
+    defaultComponentNames,
+    defaultComponentTypes,
+    Manager,
+} from '../ecs/manager';
 
-const COMPONENT_DEFAULTS = {
-    ...DEFAULT_COMPONENT_DEFAULTS,
-    position: vec2.create(),
+type ComponentTypes = defaultComponentTypes & {
+    position: vec2;
 };
 
-const manager = new Manager(COMPONENT_DEFAULTS);
+const componentNames = [...defaultComponentNames, 'position'] as const;
+
+const manager = new Manager<ComponentTypes>(componentNames);
 
 const positionQuery = manager.createQuery({
     includes: ['position'],
@@ -20,18 +25,16 @@ entity.components.updatedAt; //=
 entity.components.position = vec2.create(); //?
 manager.registerEntity(entity);
 
-positionQuery.entities; //=
-positionConsumer.forUpdated((e) => {
-    e.id; //=
-});
+assert.equal(positionConsumer.newEntities.size, 1);
+assert.equal(positionConsumer.updatedEntities.size, 0);
 
-// consumer tests
-assert.equal(positionConsumer.consumedEntities.size, 1);
-assert.equal(positionConsumer.updatedEntities.size, 1);
+positionConsumer.forNew((entity) => {
+    entity.id;
+});
 
 manager.tick();
 
-assert.equal(positionConsumer.consumedEntities.size, 0);
+positionConsumer.newEntities; //=
 assert.equal(positionConsumer.updatedEntities.size, 0);
 
 entity.components.position = vec2.create(); //?

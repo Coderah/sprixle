@@ -1,17 +1,21 @@
 export function interval(length: number) {
-    let time = 0;
-
     const fn = (delta: number) => {
-        time += delta;
-        if (time >= length) {
-            const totalDelta = time;
-            time = Math.max(0, time - length);
+        fn.time += delta;
+        if (fn.time >= length) {
+            const totalDelta = fn.time;
+            if (fn.accumulative) {
+                fn.time = Math.max(0, fn.time - length);
+            } else {
+                fn.time = 0;
+            }
             return totalDelta;
         }
 
         return false;
     };
+    fn.time = 0;
     fn.timeLength = length;
+    fn.accumulative = true;
 
     return fn;
 }

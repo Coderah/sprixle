@@ -103,6 +103,7 @@ export function applyInputPlugin<
     });
     const rawInputQuery = manager.createQuery({
         includes: ['inputName', 'inputState'],
+        excludes: ['inputBindName'],
     });
     const inputBindStateQueryConsumer = inputBindStateQuery.createConsumer();
 

@@ -109,8 +109,6 @@ export function applyStateMachinePlugin<
     function changeState(
         entity: E,
         desiredState: T,
-        // TODO confirmt this isn't a horrible idea
-        /** should only be used for moveTimeoutDestination */
         ignoreValidTransition = false
     ) {
         const { [stateName]: state } = entity.components;

@@ -264,6 +264,20 @@ export class Manager<ExactComponentTypes extends defaultComponentTypes> {
         return entity;
     }
 
+    cloneEntity(
+        entity: typeof this.Entity,
+        exclude: Array<keyof ExactComponentTypes> = []
+    ) {
+        const newEntity = this.createEntity();
+
+        for (let component in entity.components) {
+            if (exclude.includes(component)) continue;
+            newEntity.components[component] = entity.components[component];
+        }
+
+        return newEntity;
+    }
+
     protected updatedEntity(
         entity: typeof this.Entity,
         firstTime = false,

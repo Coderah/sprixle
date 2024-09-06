@@ -19,7 +19,7 @@ export const createUISystem = <
             create?: (
                 entity: EntityWithComponents<ComponentTypes, M, k>
             ) => HTMLElement | undefined;
-            update: (
+            update?: (
                 uiElement: HTMLElement,
                 entity: EntityWithComponents<ComponentTypes, M, k>
             ) => void;
@@ -44,11 +44,21 @@ export const createUISystem = <
 
                     const uiElement = create(entity);
 
-                    if (uiElement) entity.components.uiElement = uiElement;
+                    if (!uiElement) return;
+                    entity.components.uiElement = uiElement;
+
+                    for (const component in uiComponents) {
+                        if (component in entity.components) {
+                            uiComponents[component]?.update?.(
+                                uiElement,
+                                entity
+                            );
+                        }
+                    }
                 },
                 updated(entity) {
                     // TODO call create if element not existing?
-                    update(entity.components.uiElement, entity);
+                    if (update) update(entity.components.uiElement, entity);
                 },
                 removed(entity) {
                     entity.components.uiElement?.remove();

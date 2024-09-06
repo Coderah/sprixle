@@ -54,7 +54,7 @@ export function applyStateMachinePlugin<
         getValidTransition: (entity: E, desiredState: T) => boolean;
     }
 ) {
-    const stateQuery = manager.createQuery({
+    const query = manager.createQuery({
         includes: [stateName],
     });
 
@@ -66,37 +66,34 @@ export function applyStateMachinePlugin<
         [state in T]?: (entity: E) => void;
     } = {};
 
-    const stateMachineSystem = manager.createSystem(
-        stateQuery.createConsumer(),
-        {
-            tick(delta) {
-                stateQuery.for((entity) => {
-                    const { [stateName]: state } = entity.components;
-
-                    // apply inStateLogic
-                    if (state in inStateLogic) {
-                        inStateLogic[state]?.(entity as E);
-                    }
-                });
-            },
-            newOrUpdated(entity) {
+    const stateMachineSystem = manager.createSystem(query.createConsumer(), {
+        tick(delta) {
+            query.for((entity) => {
                 const { [stateName]: state } = entity.components;
 
-                // TODO find some reasonable way to support this generically?
-                // if (moveState in shadowParameters?.moveModifiers) {
-                //     shadowParameters.moveModifiers[moveState]?.forEach(
-                //         (modifier) => {
-                //             enteredStateLogic[modifier]?.(entity);
-                //         }
-                //     );
-                // }
-
-                if (state in enteredStateLogic) {
-                    enteredStateLogic[state]?.(entity as E);
+                // apply inStateLogic
+                if (state in inStateLogic) {
+                    inStateLogic[state]?.(entity as E);
                 }
-            },
-        }
-    );
+            });
+        },
+        newOrUpdated(entity) {
+            const { [stateName]: state } = entity.components;
+
+            // TODO find some reasonable way to support this generically?
+            // if (moveState in shadowParameters?.moveModifiers) {
+            //     shadowParameters.moveModifiers[moveState]?.forEach(
+            //         (modifier) => {
+            //             enteredStateLogic[modifier]?.(entity);
+            //         }
+            //     );
+            // }
+
+            if (state in enteredStateLogic) {
+                enteredStateLogic[state]?.(entity as E);
+            }
+        },
+    });
 
     function isStateValid(entity: E, desiredState: T) {
         // TODO probably clean this up, seems redundant now
@@ -106,7 +103,7 @@ export function applyStateMachinePlugin<
         return true;
     }
 
-    function changeState(
+    function attemptChangeState(
         entity: E,
         desiredState: T,
         ignoreValidTransition = false
@@ -121,6 +118,8 @@ export function applyStateMachinePlugin<
         if (entity.components[stateName] !== desiredState) {
             // @ts-ignore
             entity.components[`${stateName}StartedAt`] = now();
+        } else {
+            return true;
         }
 
         console.log(
@@ -135,18 +134,25 @@ export function applyStateMachinePlugin<
         return true;
     }
 
-    function setInStateLogic(state: T, logic: (entity: E) => void) {
+    function setInStateLogic(
+        state: T,
+        logic: (entity: typeof manager.Entity) => void
+    ) {
         inStateLogic[state] = logic;
     }
 
-    function setEnteredStateLogic(state: T, logic: (entity: E) => void) {
+    function setEnteredStateLogic(
+        state: T,
+        logic: (entity: typeof manager.Entity) => void
+    ) {
         enteredStateLogic[state] = logic;
     }
 
     return {
         system: stateMachineSystem,
+        query,
         isStateValid,
-        changeState,
+        attemptChangeState,
         setInStateLogic,
         setEnteredStateLogic,
     };

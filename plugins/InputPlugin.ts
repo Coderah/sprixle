@@ -41,17 +41,20 @@ const gamepadButtons = [
 ];
 
 // TODO allow normal to be modified
-const plane = new Plane(new Vector3(0, 0, 1), 1);
+const plane = new Plane(new Vector3(0, -0.5, 0), 0.5);
 export const raycaster = new Raycaster();
 raycaster.layers.enableAll();
 const intersectPoint = new Vector3();
 
 const worldMousePosition = new Vector3();
 const screenMousePosition = new Vector2();
+const ndcMousePosition = new Vector2();
 
 export const inputState = {
     screenMousePosition,
+    ndcMousePosition,
     worldMousePosition,
+    worldMouseY: 0.5,
 };
 
 window['inputState'] = inputState;
@@ -109,9 +112,17 @@ export function applyInputPlugin<
 
     const bindEntities = new Set<typeof manager.Entity>();
 
+    function createBindEntityId(bindName: string) {
+        return 'bind' + bindName;
+    }
+
+    function createInputEntityId(inputName: string) {
+        return 'input' + inputName;
+    }
+
     return {
         triggerInputBind(bindName: string) {
-            const binding = manager.getEntity('bind' + bindName);
+            const binding = manager.getEntity(createBindEntityId(bindName));
             if (!binding) {
                 console.warn(
                     '[InputPlugin] attempted to trigger unknown binding',
@@ -121,6 +132,13 @@ export function applyInputPlugin<
             }
 
             binding.components.inputState = now();
+        },
+        getInputState(input: InputComponents['inputName']) {
+            const entity = manager.getEntity(createInputEntityId(input));
+
+            if (!entity) return null;
+
+            return entity.components.inputState;
         },
         resetInputBinds() {
             inputBindStateQuery.for((entity) => {
@@ -150,8 +168,8 @@ export function applyInputPlugin<
                         ? 'Mouse' + mouseButtons[event.button]
                         : 'Mouse' + event.button;
                 const entity =
-                    manager.getEntity('input' + mouseButton) ||
-                    manager.createEntity('input' + mouseButton);
+                    manager.getEntity(createInputEntityId(mouseButton)) ||
+                    manager.createEntity(createInputEntityId(mouseButton));
                 entity.components.inputName = mouseButton as Input;
                 entity.components.inputState = now();
                 manager.registerEntity(entity);
@@ -166,8 +184,8 @@ export function applyInputPlugin<
                         ? 'Mouse' + mouseButtons[event.button]
                         : 'Mouse' + event.button;
                 const entity =
-                    manager.getEntity('input' + mouseButton) ||
-                    manager.createEntity('input' + mouseButton);
+                    manager.getEntity(createInputEntityId(mouseButton)) ||
+                    manager.createEntity(createInputEntityId(mouseButton));
                 entity.components.inputName = mouseButton as Input;
                 entity.components.inputState = null;
                 manager.registerEntity(entity);
@@ -186,8 +204,8 @@ export function applyInputPlugin<
 
                 let touchIdentifier = 'Touch0';
                 const entity =
-                    manager.getEntity('input' + touchIdentifier) ||
-                    manager.createEntity('input' + touchIdentifier);
+                    manager.getEntity(createInputEntityId(touchIdentifier)) ||
+                    manager.createEntity(createInputEntityId(touchIdentifier));
                 entity.components.inputName = touchIdentifier as Input;
                 entity.components.inputState = now();
                 manager.registerEntity(entity);
@@ -199,8 +217,8 @@ export function applyInputPlugin<
                 }
                 let touchIdentifier = 'Touch0';
                 const entity =
-                    manager.getEntity('input' + touchIdentifier) ||
-                    manager.createEntity('input' + touchIdentifier);
+                    manager.getEntity(createInputEntityId(touchIdentifier)) ||
+                    manager.createEntity(createInputEntityId(touchIdentifier));
                 entity.components.inputName = touchIdentifier as Input;
                 entity.components.inputState = null;
                 manager.registerEntity(entity);
@@ -210,8 +228,8 @@ export function applyInputPlugin<
                 if (event.repeat) return;
                 const key = ('Key' + event.code.replace('Key', '')) as Input;
                 const entity =
-                    manager.getEntity('input' + key) ||
-                    manager.createEntity('input' + key);
+                    manager.getEntity(createInputEntityId(key)) ||
+                    manager.createEntity(createInputEntityId(key));
                 entity.components.inputName = key;
                 entity.components.inputState = now();
                 manager.registerEntity(entity);
@@ -220,8 +238,8 @@ export function applyInputPlugin<
             const handleKeyUp = (event: KeyboardEvent) => {
                 const key = ('Key' + event.code.replace('Key', '')) as Input;
                 const entity =
-                    manager.getEntity('input' + key) ||
-                    manager.createEntity('input' + key);
+                    manager.getEntity(createInputEntityId(key)) ||
+                    manager.createEntity(createInputEntityId(key));
                 entity.components.inputName = key;
                 entity.components.inputState = null;
                 manager.registerEntity(entity);
@@ -287,8 +305,9 @@ export function applyInputPlugin<
                             const otherActiveInput =
                                 bindEntity.components.inputBinds?.find(
                                     (key) =>
-                                        manager.getEntity('input' + key)
-                                            ?.components.inputState
+                                        manager.getEntity(
+                                            createInputEntityId(key)
+                                        )?.components.inputState
                                 );
 
                             if (
@@ -316,23 +335,16 @@ export function applyInputPlugin<
 
                 tick() {
                     if (options?.useThreeForWorldPosition) {
+                        ndcMousePosition.set(
+                            (screenMousePosition.x / window.innerWidth) * 2 - 1,
+                            -(screenMousePosition.y / window.innerHeight) * 2 +
+                                1
+                        );
                         raycaster.setFromCamera(
-                            {
-                                x:
-                                    (screenMousePosition.x /
-                                        window.innerWidth) *
-                                        2 -
-                                    1,
-                                y:
-                                    -(
-                                        screenMousePosition.y /
-                                        window.innerHeight
-                                    ) *
-                                        2 +
-                                    1,
-                            },
+                            ndcMousePosition,
                             options.threeCamera
                         );
+                        plane.setComponents(0, 1, 0, -inputState.worldMouseY);
                         raycaster.ray.intersectPlane(plane, intersectPoint);
 
                         worldMousePosition.copy(intersectPoint);
@@ -348,8 +360,8 @@ export function applyInputPlugin<
                             const key = ('Gamepad' +
                                 gamepadButtons[index]) as Input;
                             const entity =
-                                manager.getEntity('input' + key) ||
-                                manager.createEntity('input' + key);
+                                manager.getEntity(createInputEntityId(key)) ||
+                                manager.createEntity(createInputEntityId(key));
                             entity.components.inputName = key;
                             // TODO handle axis
                             if (
@@ -376,17 +388,25 @@ export function applyInputPlugin<
                             const positiveKey = (key + 'Positive') as Input;
                             const negativeKey = (key + 'Negative') as Input;
                             const entity =
-                                manager.getEntity('input' + key) ||
-                                manager.createEntity('input' + key);
+                                manager.getEntity(createInputEntityId(key)) ||
+                                manager.createEntity(createInputEntityId(key));
                             entity.components.inputName = key;
 
                             const positiveEntity =
-                                manager.getEntity('input' + positiveKey) ||
-                                manager.createEntity('input' + positiveKey);
+                                manager.getEntity(
+                                    createInputEntityId(positiveKey)
+                                ) ||
+                                manager.createEntity(
+                                    createInputEntityId(positiveKey)
+                                );
                             positiveEntity.components.inputName = positiveKey;
                             const negativeEntity =
-                                manager.getEntity('input' + negativeKey) ||
-                                manager.createEntity('input' + negativeKey);
+                                manager.getEntity(
+                                    createInputEntityId(negativeKey)
+                                ) ||
+                                manager.createEntity(
+                                    createInputEntityId(negativeKey)
+                                );
                             negativeEntity.components.inputName = negativeKey;
 
                             if (
@@ -460,7 +480,7 @@ export function applyInputPlugin<
             for (let bindName in bindings) {
                 const bind = bindings[bindName];
 
-                const entityId = 'bind' + bindName;
+                const entityId = createBindEntityId(bindName);
                 const entity =
                     manager.getEntity(entityId) ||
                     manager.createEntity(entityId);

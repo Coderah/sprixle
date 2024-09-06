@@ -12,6 +12,7 @@ export type entityId = string;
 
 export type Entity<ComponentTypes> = {
     id: entityId;
+    previousComponents: Readonly<ComponentTypes>;
     components: ComponentTypes;
     /** flag a deeper update to a component */
     flagUpdate: (componentType: keyof ComponentTypes) => void;
@@ -216,6 +217,7 @@ export class Manager<ExactComponentTypes extends defaultComponentTypes> {
 
         const entity = {
             id,
+            previousComponents: {},
             components: new Proxy(components, {
                 set(target, componentType, value = null) {
                     // TODO handle setting undefined (should removeComponent)
@@ -227,6 +229,8 @@ export class Manager<ExactComponentTypes extends defaultComponentTypes> {
                         entityIsRegistered &&
                         target[componentType] !== value
                     ) {
+                        entity.previousComponents[componentType] =
+                            target[componentType];
                         // TODO store previousValues as previousComponents?
                         flagUpdate(componentType as keyof ExactComponentTypes);
                     }

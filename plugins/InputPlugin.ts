@@ -140,6 +140,13 @@ export function applyInputPlugin<
 
             return entity.components.inputState;
         },
+        getBindState(bindName: string) {
+            const entity = manager.getEntity(createBindEntityId(bindName));
+
+            if (!entity) return null;
+
+            return entity.components.inputState;
+        },
         resetInputBinds() {
             inputBindStateQuery.for((entity) => {
                 entity.components.inputState = null;

@@ -99,14 +99,15 @@ export interface QuerySystem<
     TManager extends Manager<ExactComponentTypes> = Manager<ExactComponentTypes>
 > extends SourceSystem<ExactComponentTypes, TManager, Includes> {}
 
+export type AnySystem<ExactComponentTypes extends defaultComponentTypes> =
+    | System<ExactComponentTypes, Manager<ExactComponentTypes>, any>
+    | QuerySystem<ExactComponentTypes, any>
+    | ConsumerSystem<ExactComponentTypes, any>;
+
 /** Pipelines compose Systems (and other Pipelines). They will properly run in sequence and ensure internal processing is done between each. */
 export class Pipeline<ExactComponentTypes extends defaultComponentTypes> {
-    manager: Manager<ExactComponentTypes>;
-    systems: Array<
-        | System<ExactComponentTypes, Manager<ExactComponentTypes>, any>
-        | QuerySystem<ExactComponentTypes, any>
-        | ConsumerSystem<ExactComponentTypes, any>
-    >;
+    protected manager: Manager<ExactComponentTypes>;
+    systems: Set<AnySystem<ExactComponentTypes>>;
 
     /** if set ticks will be broken up into substeps to match delta per tick */
     deltaPerTick: number = 0;
@@ -119,14 +120,10 @@ export class Pipeline<ExactComponentTypes extends defaultComponentTypes> {
 
     constructor(
         manager: Manager<ExactComponentTypes>,
-        ...systems: Array<
-            | System<ExactComponentTypes, Manager<ExactComponentTypes>, any>
-            | QuerySystem<ExactComponentTypes, any>
-            | ConsumerSystem<ExactComponentTypes, any>
-        >
+        ...systems: Array<AnySystem<ExactComponentTypes>>
     ) {
         this.manager = manager;
-        this.systems = systems;
+        this.systems = new Set(systems);
     }
 
     init() {

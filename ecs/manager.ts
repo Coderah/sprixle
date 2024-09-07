@@ -240,14 +240,24 @@ export class Manager<ExactComponentTypes extends defaultComponentTypes> {
                         newComponent = true;
                     }
                     target[componentType] = value;
+
                     if (entityIsRegistered && newComponent) {
+                        const existingQueryMappings =
+                            manager.state.queryMap.get(entity.id);
+
                         manager.state.queries.forEach((query, queryName) => {
                             if (
                                 query.componentMatches(
                                     componentType as keyof ExactComponentTypes
                                 )
                             ) {
+                                query.queryName; //=
                                 query.handleEntity(entity);
+                            } else if (
+                                existingQueryMappings?.has(queryName) &&
+                                !query.entityMatches(entity)
+                            ) {
+                                query.removeEntity(entity);
                             }
                         });
                         manager.addEntityMapping(
@@ -414,6 +424,7 @@ export class Manager<ExactComponentTypes extends defaultComponentTypes> {
         const { state } = this;
         state.entityMap.get(componentType)?.delete(entity.id);
         state.componentMap.get(entity.id)?.delete(componentType);
+        // TODO add new mappings!
 
         this.state.queryMap.get(entity.id)?.forEach((queryName) => {
             const query = this.state.queries.get(queryName);
@@ -421,7 +432,15 @@ export class Manager<ExactComponentTypes extends defaultComponentTypes> {
             if (!query?.componentMatches(componentType)) return;
 
             query?.removeEntity(entity);
-            this.state.queryMap.get(entity.id)?.delete(queryName);
+        });
+
+        this.state.queries.forEach((query) => {
+            if (
+                query.queryParameters.excludes?.has(componentType) &&
+                query.entityMatches(entity)
+            ) {
+                query.addEntity(entity);
+            }
         });
     }
 

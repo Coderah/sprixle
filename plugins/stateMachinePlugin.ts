@@ -51,7 +51,10 @@ export function applyStateMachinePlugin<
     }: {
         states: STATES;
         stateName: StateName;
-        getValidTransition: (entity: E, desiredState: T) => boolean;
+        getValidTransition: (
+            entity: typeof manager.Entity,
+            desiredState: T
+        ) => boolean;
     }
 ) {
     const query = manager.createQuery({
@@ -95,7 +98,7 @@ export function applyStateMachinePlugin<
         },
     });
 
-    function isStateValid(entity: E, desiredState: T) {
+    function isStateValid(entity: typeof manager.Entity, desiredState: T) {
         // TODO probably clean this up, seems redundant now
 
         if (!getValidTransition(entity, desiredState)) return false;
@@ -104,7 +107,7 @@ export function applyStateMachinePlugin<
     }
 
     function attemptChangeState(
-        entity: E,
+        entity: typeof manager.Entity,
         desiredState: T,
         ignoreValidTransition = false
     ) {

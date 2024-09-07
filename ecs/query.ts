@@ -176,9 +176,7 @@ export class Query<
     removeEntity(entity: typeof this.manager.Entity) {
         this.entities.delete(entity.id);
         this.consumers.forEach((c) => {
-            c.newEntities.delete(entity.id);
-            c.updatedEntities.delete(entity.id);
-            c.deletedEntities.add(entity);
+            c.remove(entity);
         });
 
         this.manager.state.queryMap.get(entity.id)?.delete(this.queryName);

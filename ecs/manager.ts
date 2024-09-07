@@ -245,13 +245,13 @@ export class Manager<ExactComponentTypes extends defaultComponentTypes> {
                         const existingQueryMappings =
                             manager.state.queryMap.get(entity.id);
 
+                        // TODO should be in subTick?
                         manager.state.queries.forEach((query, queryName) => {
                             if (
                                 query.componentMatches(
                                     componentType as keyof ExactComponentTypes
                                 )
                             ) {
-                                query.queryName; //=
                                 query.handleEntity(entity);
                             } else if (
                                 existingQueryMappings?.has(queryName) &&

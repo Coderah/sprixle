@@ -58,7 +58,8 @@ export const createUISystem = <
                 },
                 updated(entity) {
                     // TODO call create if element not existing?
-                    if (update) update(entity.components.uiElement, entity);
+                    if (update && entity.components.uiElement)
+                        update(entity.components.uiElement, entity);
                 },
                 removed(entity) {
                     entity.components.uiElement?.remove();

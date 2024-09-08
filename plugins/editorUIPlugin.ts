@@ -19,7 +19,7 @@ export function applyEditorUIPlugin<
 
     type Binding = {
         system: AnySystem<ComponentTypes>;
-        blades: { [id: string]: BindingApi };
+        blades: { [id: string]: BindingApi | FolderApi };
     };
 
     const bindings: {
@@ -79,12 +79,23 @@ export function applyEditorUIPlugin<
 
                     folder.hidden = false;
 
-                    const blade = (binding.blades[entity.id] =
-                        folder.addBinding(
+                    const value = entity.components[component];
+                    if (value.constructor === Object) {
+                        const subFolder = (binding.blades[entity.id] =
+                            folder.addFolder({
+                                title: component as string,
+                                expanded: false,
+                            }));
+                        for (let key in value) {
+                            subFolder.addBinding(value, key, options);
+                        }
+                    } else {
+                        binding.blades[entity.id] = folder.addBinding(
                             entity.components,
                             component,
                             options
-                        ));
+                        );
+                    }
 
                     // blade.on('change', (event) => {
                     // console.log('change', entity.id, component, event);

@@ -370,7 +370,6 @@ export function applyInputPlugin<
                                 manager.getEntity(createInputEntityId(key)) ||
                                 manager.createEntity(createInputEntityId(key));
                             entity.components.inputName = key;
-                            // TODO handle axis
                             if (
                                 (button.pressed &&
                                     entity.components.inputState) ||
@@ -448,6 +447,16 @@ export function applyInputPlugin<
 
                             // improve inputPosition lookups, should map to all bindings more efficiently
                             entity.quietSet('inputPosition', axis);
+
+                            entity.components.inputBindIds?.forEach(
+                                (bindId) => {
+                                    const bindEntity =
+                                        manager.getEntity(bindId);
+
+                                    bindEntity?.quietSet('inputPosition', axis);
+                                }
+                            );
+
                             positiveEntity.quietSet('inputPosition', axis);
                             negativeEntity.quietSet('inputPosition', axis);
 

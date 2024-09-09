@@ -14,6 +14,17 @@ vec3 heightlerp(vec3 input1, float height1, vec3 input2, float height2, float sh
 }
 `;
 
+export const randomTest = glsl`
+float randTest(vec2 co){
+  return fract(sin(dot(co.xy ,vec2(12.9898,78.233))) * 43758.5453);
+}
+`;
+
+export const colorDistance = glsl`
+float colorDist(vec3 c1, vec3 c2) {
+  return sqrt((c2.r-c1.r) + (c2.g-c1.g) + (c2.b-c1.b));
+}`;
+
 export const perlinNoise = glsl`
 vec3 mod289(vec3 x)
 {

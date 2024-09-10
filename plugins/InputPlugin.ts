@@ -157,10 +157,10 @@ export function applyInputPlugin<
                 if (event instanceof MouseEvent) {
                     screenMousePosition.set(event.clientX, event.clientY);
                 } else {
-                    const bounding = domElement.getBoundingClientRect();
+                    // const bounding = domElement.getBoundingClientRect();
                     screenMousePosition.set(
-                        event.touches[0].clientX - bounding.left,
-                        event.touches[0].clientY - bounding.right
+                        event.touches[0].clientX,
+                        event.touches[0].clientY
                     );
                 }
             };
@@ -201,12 +201,14 @@ export function applyInputPlugin<
             const handleTouchStart = (event: TouchEvent) => {
                 if (event.currentTarget === domElement) {
                     event.preventDefault();
+                    event.stopPropagation();
+                    event.stopImmediatePropagation();
                 }
 
-                const bounding = domElement.getBoundingClientRect();
+                // const bounding = domElement.getBoundingClientRect();
                 screenMousePosition.set(
-                    event.touches[0].clientX - bounding.left,
-                    event.touches[0].clientY - bounding.right
+                    event.touches[0].clientX,
+                    event.touches[0].clientY
                 );
 
                 let touchIdentifier = 'Touch0';
@@ -221,6 +223,8 @@ export function applyInputPlugin<
             const handleTouchEnd = (event: TouchEvent) => {
                 if (event.currentTarget === domElement) {
                     event.preventDefault();
+                    event.stopPropagation();
+                    event.stopImmediatePropagation();
                 }
                 let touchIdentifier = 'Touch0';
                 const entity =

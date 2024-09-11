@@ -80,7 +80,7 @@ export function applyEditorUIPlugin<
                     folder.hidden = false;
 
                     const value = entity.components[component];
-                    if (value.constructor === Object) {
+                    if (value.constructor === Object || Array.isArray(value)) {
                         const subFolder = (binding.blades[entity.id] =
                             folder.addFolder({
                                 title: component as string,

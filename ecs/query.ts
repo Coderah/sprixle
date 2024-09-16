@@ -29,6 +29,7 @@ export class Query<
     E = EntityWithComponents<ExactComponentTypes, M, Includes[number]>
 > implements Iterable<E>
 {
+    Entity: E;
     manager: M;
     queryName: QueryName;
 

@@ -115,7 +115,8 @@ export function applyEditorUIPlugin<
                     if (blade) {
                         folder.remove(blade);
                         if (!folder.children.length) {
-                            folder.hidden = true;
+                            folder.dispose();
+                            delete folders[entity.id];
                         }
                     }
                 },

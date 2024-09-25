@@ -196,6 +196,10 @@ export class Query<
         });
     }
 
+    first() {
+        return this.manager.getEntity(this.entities.first());
+    }
+
     find(handler: (entity: E) => boolean) {
         let foundEntity: E;
 

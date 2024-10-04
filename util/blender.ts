@@ -1,12 +1,15 @@
 import { Object3D } from 'three';
 
-export function getFeaturesFromName(o: Object3D) {
+export function getFeaturesFromName(o: {
+    name: string;
+    userData?: Object3D['userData'];
+}) {
     const features: {
         [key: string]: boolean | string;
     } = {};
 
     Array.from(
-        ((o.userData.name as string) || o.name).matchAll(
+        ((o.userData?.name as string) || o.name).matchAll(
             /\+([\w]+)(?:\(([\w]+)\))?/gi
         )
     ).forEach((m) => {

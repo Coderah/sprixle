@@ -37,6 +37,8 @@ export class Query<
     entities = new Set<entityId>();
     consumers = new Array<Consumer<ExactComponentTypes, Includes, M, E>>();
 
+    private lastEntity: E | undefined;
+
     *[Symbol.iterator]() {
         for (let id of this.entities) {
             yield this.manager.getEntity(id) as E;
@@ -164,6 +166,7 @@ export class Query<
             this.manager.state.queryMap.set(entity.id, new Set());
         }
         this.manager.state.queryMap.get(entity.id)?.add(this.queryName);
+        this.lastEntity = entity as E;
     }
 
     updatedEntity(entity: typeof this.manager.Entity) {
@@ -179,6 +182,13 @@ export class Query<
         this.consumers.forEach((c) => {
             c.remove(entity);
         });
+
+        if (this.lastEntity === entity) {
+            const lastID = Array.from(this.entities).pop();
+            this.lastEntity = lastID
+                ? (this.manager.getEntity(lastID) as E)
+                : undefined;
+        }
 
         this.manager.state.queryMap.get(entity.id)?.delete(this.queryName);
     }
@@ -196,8 +206,18 @@ export class Query<
         });
     }
 
+    map<V>(handler: (entity: E) => V, delta?: number) {
+        return Array.from(this.entities).map((id) => {
+            return handler(this.manager.getEntity(id) as any as E);
+        });
+    }
+
     first() {
         return this.manager.getEntity(this.entities.first());
+    }
+
+    last() {
+        return this.lastEntity;
     }
 
     find(handler: (entity: E) => boolean) {

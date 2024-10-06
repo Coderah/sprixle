@@ -70,6 +70,8 @@ export function applyTweenPlugin<
                     manager.deregisterEntity(entity);
                 } else {
                     const component = tweenTarget.components[tweeningComponent];
+                    // TODO figure out why this happened and what to do about it...
+                    if (component === undefined) return;
                     if (component.length) {
                         (component as number[]).forEach((v, i) => {
                             component[i] = lerp(

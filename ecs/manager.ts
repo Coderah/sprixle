@@ -6,6 +6,7 @@ import './object.extensions.ts';
 import { Query, QueryName, QueryParametersInput } from './query';
 import { ConsumerSystem, QuerySystem, System } from './system.ts';
 import { throttleLog } from '../util/log.ts';
+import { ComponentTypes } from '../../game/components.ts';
 
 export type Keys<T> = keyof T;
 export type entityId = string;
@@ -274,6 +275,15 @@ export class Manager<ExactComponentTypes extends defaultComponentTypes> {
                 components[componentType] = value;
             },
         };
+
+        return entity;
+    }
+
+    /** Creates entity, add components and registers it immediately */
+    quickEntity(components: Partial<ExactComponentTypes>, id = uuid()) {
+        const entity = this.createEntity(id);
+        this.addComponents(entity, components);
+        this.registerEntity(entity);
 
         return entity;
     }

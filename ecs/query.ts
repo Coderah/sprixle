@@ -213,7 +213,7 @@ export class Query<
     }
 
     first() {
-        return this.manager.getEntity(this.entities.first());
+        return this.manager.getEntity(this.entities.first()) as E;
     }
 
     last() {

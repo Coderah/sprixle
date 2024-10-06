@@ -17,6 +17,7 @@ import {
     Camera,
     BufferGeometry,
     LinearFilter,
+    CameraHelper,
 } from 'three';
 
 export interface ReflectorOptions {
@@ -26,6 +27,7 @@ export interface ReflectorOptions {
     clipBias?: number;
     shader?: object;
     multisample?: number;
+    debug?: boolean;
 }
 
 /** A non geometry version of three-stdlib/Reflector requires geometry to be facing 0,0,1 and then the mesh rotated into place.
@@ -38,8 +40,6 @@ class Reflector extends Object3D {
 
     textureMatrix: Matrix4;
     renderTarget: WebGLRenderTarget;
-
-    render(renderer: WebGLRenderer, scene: Scene, camera: Camera) {}
 
     constructor(options: ReflectorOptions = {}) {
         super();
@@ -86,7 +86,10 @@ class Reflector extends Object3D {
             }
         ));
 
+        const cameraHelper = new CameraHelper(this.camera);
+
         this.render = function (renderer, scene, camera) {
+            if (options.debug) scene.add(cameraHelper);
             // console.log('reflector onBeforeRender');
             reflectorWorldPosition.setFromMatrixPosition(scope.matrixWorld);
             cameraWorldPosition.setFromMatrixPosition(camera.matrixWorld);
@@ -233,6 +236,8 @@ class Reflector extends Object3D {
             }
 
             scope.visible = true;
+
+            if (options.debug) cameraHelper.update();
         };
     }
     dispose() {

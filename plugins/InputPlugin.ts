@@ -41,9 +41,9 @@ const gamepadButtons = [
 ];
 
 // TODO allow normal to be modified
-const plane = new Plane(new Vector3(0, -0.5, 0), 0.5);
-export const raycaster = new Raycaster();
-raycaster.layers.enableAll();
+export const inputPlane = new Plane(new Vector3(0, -0.5, 0), 0.5);
+export const inputRaycaster = new Raycaster();
+inputRaycaster.layers.enableAll();
 const intersectPoint = new Vector3();
 
 const worldMousePosition = new Vector3();
@@ -82,6 +82,8 @@ export type InputComponents = {
     /** used on both raw and bound inputs to indicate state and position */
     inputState: number | null;
     inputPosition: number | number[];
+
+    activeInputMode: 'touch' | 'pointer' | 'keyboard' | 'gamepad';
 };
 
 export const inputComponentNames: Array<keyof InputComponents> = [
@@ -93,6 +95,7 @@ export const inputComponentNames: Array<keyof InputComponents> = [
     'inputBindIds',
     'inputState',
     'inputPosition',
+    'activeInputMode',
 ];
 
 export function applyInputPlugin<
@@ -121,6 +124,44 @@ export function applyInputPlugin<
     }
 
     return {
+        inputActiveModeSystem: manager.createSystem(
+            rawInputQuery.createConsumer(),
+            {
+                init() {
+                    manager.setSingletonEntityComponent(
+                        'activeInputMode',
+                        'pointer'
+                    );
+                },
+                updated(entity) {
+                    if (entity.components.inputName.startsWith('Mouse')) {
+                        manager.setSingletonEntityComponent(
+                            'activeInputMode',
+                            'pointer'
+                        );
+                    } else if (
+                        entity.components.inputName.startsWith('Touch')
+                    ) {
+                        manager.setSingletonEntityComponent(
+                            'activeInputMode',
+                            'touch'
+                        );
+                    } else if (
+                        entity.components.inputName.startsWith('Gamepad')
+                    ) {
+                        manager.setSingletonEntityComponent(
+                            'activeInputMode',
+                            'gamepad'
+                        );
+                    } else {
+                        manager.setSingletonEntityComponent(
+                            'activeInputMode',
+                            'keyboard'
+                        );
+                    }
+                },
+            }
+        ),
         triggerInputBind(bindName: string) {
             const binding = manager.getEntity(createBindEntityId(bindName));
             if (!binding) {
@@ -153,6 +194,10 @@ export function applyInputPlugin<
             });
         },
         initInput(domElement: HTMLElement) {
+            screenMousePosition.set(
+                window.innerWidth / 2,
+                window.innerHeight / 2
+            );
             const handleMouseMove = (event: MouseEvent | TouchEvent) => {
                 if (event instanceof MouseEvent) {
                     screenMousePosition.set(event.clientX, event.clientY);
@@ -351,12 +396,20 @@ export function applyInputPlugin<
                             -(screenMousePosition.y / window.innerHeight) * 2 +
                                 1
                         );
-                        raycaster.setFromCamera(
+                        inputRaycaster.setFromCamera(
                             ndcMousePosition,
                             options.threeCamera
                         );
-                        plane.setComponents(0, 1, 0, -inputState.worldMouseY);
-                        raycaster.ray.intersectPlane(plane, intersectPoint);
+                        inputPlane.setComponents(
+                            0,
+                            1,
+                            0,
+                            -inputState.worldMouseY
+                        );
+                        inputRaycaster.ray.intersectPlane(
+                            inputPlane,
+                            intersectPoint
+                        );
 
                         worldMousePosition.copy(intersectPoint);
                     }

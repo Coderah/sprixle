@@ -2,6 +2,8 @@
 
 import { Vector2, Vector3 } from 'three';
 
+const rand = () => Math.random() * 2 - 1;
+
 const xzVector = new Vector2();
 Object.defineProperty(Vector3.prototype, 'xz', {
     get() {
@@ -22,6 +24,15 @@ Object.defineProperty(Vector2.prototype, 'xyZ', {
         return xyzVector.set(this.x, 0, this.y);
     },
 });
+
+export function randomizeVector<V = Vector2 | Vector3>(vector: V): V {
+    if (vector instanceof Vector2) {
+        vector.set(rand(), rand());
+    } else if (vector instanceof Vector3) {
+        vector.set(rand(), rand(), rand());
+    }
+    return vector;
+}
 
 Object.defineProperty(Vector2.prototype, 'xYz', {
     get() {

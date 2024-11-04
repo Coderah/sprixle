@@ -40,20 +40,29 @@ Object.defineProperty(Vector2.prototype, 'xYz', {
     },
 });
 
-Object.defineProperty(Vector3.prototype, 'r', {
-    get() {
-        return this.x;
-    },
-});
+// Object.defineProperty(Vector3.prototype, 'r', {
+//     get() {
+//         return this.x;
+//     },
+//     set(v: number) {
+//         this.x = v;
+//     },
+// });
 
-Object.defineProperty(Vector3.prototype, 'g', {
-    get() {
-        return this.y;
-    },
-});
+// Object.defineProperty(Vector3.prototype, 'g', {
+//     get() {
+//         return this.y;
+//     },
+//     set(v: number) {
+//         this.y = v;
+//     },
+// });
 
-Object.defineProperty(Vector3.prototype, 'b', {
-    get() {
-        return this.z;
-    },
-});
+// Object.defineProperty(Vector3.prototype, 'b', {
+//     get() {
+//         return this.z;
+//     },
+//     set(v: number) {
+//         this.z = v;
+//     },
+// });

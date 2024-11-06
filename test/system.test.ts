@@ -1,14 +1,18 @@
 import assert from 'assert';
 import { vec2 } from 'gl-matrix';
-import { DEFAULT_COMPONENT_DEFAULTS, Manager } from '../ecs/manager';
+import {
+    defaultComponentNames,
+    defaultComponentTypes,
+    Manager,
+} from '../ecs/manager';
 import { Pipeline } from '../ecs/system';
 
-const COMPONENT_DEFAULTS = {
-    ...DEFAULT_COMPONENT_DEFAULTS,
-    position: vec2.create(),
-};
+interface ComponentTypes extends defaultComponentTypes {
+    position: vec2;
+}
+const componentNames = [...defaultComponentNames, 'position'] as const;
 
-const manager = new Manager(COMPONENT_DEFAULTS);
+const manager = new Manager<ComponentTypes>(componentNames);
 
 const positionQuery = manager.createQuery({
     includes: ['position'],
@@ -40,9 +44,9 @@ const positionSystem = manager.createSystem(positionConsumer, {
 
 const masterPipeline = new Pipeline(manager, positionSystem);
 
-masterPipeline.tick();
+masterPipeline.tick(0);
 manager.tick();
 
 manager.deregisterEntity(entity);
 
-masterPipeline.tick();
+masterPipeline.tick(0);

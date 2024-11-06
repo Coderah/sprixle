@@ -18,6 +18,7 @@ import {
     BufferGeometry,
     LinearFilter,
     CameraHelper,
+    LinearMipmapLinearFilter,
 } from 'three';
 
 export interface ReflectorOptions {
@@ -28,6 +29,7 @@ export interface ReflectorOptions {
     shader?: object;
     multisample?: number;
     debug?: boolean;
+    anisotropy: number;
 }
 
 /** A non geometry version of three-stdlib/Reflector requires geometry to be facing 0,0,1 and then the mesh rotated into place.
@@ -41,7 +43,7 @@ class Reflector extends Object3D {
     textureMatrix: Matrix4;
     renderTarget: WebGLRenderTarget;
 
-    constructor(options: ReflectorOptions = {}) {
+    constructor(options: ReflectorOptions = { anisotropy: 0 }) {
         super();
 
         this.camera = new PerspectiveCamera();
@@ -82,7 +84,9 @@ class Reflector extends Object3D {
                 samples: multisample,
                 type: HalfFloatType,
                 magFilter: LinearFilter,
-                minFilter: LinearFilter,
+                minFilter: LinearMipmapLinearFilter,
+                anisotropy: options.anisotropy,
+                generateMipmaps: true,
             }
         ));
 
@@ -124,6 +128,7 @@ class Reflector extends Object3D {
             virtualCamera.up.reflect(normal);
             virtualCamera.lookAt(target);
 
+            virtualCamera.near = camera.near;
             virtualCamera.far = camera.far; // Used in WebGLBackground
 
             virtualCamera.updateMatrixWorld();
@@ -216,7 +221,6 @@ class Reflector extends Object3D {
 
             if (renderer.autoClear === false) renderer.clear();
             renderer.render(scene, virtualCamera);
-
             renderer.xr.enabled = currentXrEnabled;
             renderer.shadowMap.autoUpdate = currentShadowAutoUpdate;
             renderer.toneMapping = currentToneMapping;

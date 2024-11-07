@@ -5,7 +5,7 @@ import * as easing from 'easing-utils';
 
 export type TweenComponents<ComponentTypes extends defaultComponentTypes> = {
     tweenTargetId: string;
-    tweeningComponent: Keys<ComponentTypes>;
+    tweeningComponent: keyof ComponentTypes;
     tweenTo: number | number[];
     tweenLength: number;
     tweenFrom: number | number[];

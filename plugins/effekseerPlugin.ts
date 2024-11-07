@@ -141,7 +141,7 @@ export default async function applyEffekseerPlugin<
             if (fastMode) renderer.resetState();
         },
         system: em.createSystem(effectQuery.createConsumer(), {
-            async new(entity) {
+            async forNew(entity) {
                 if (entity.components.effectHandle) return;
                 const { position, effectName } = entity.components;
 

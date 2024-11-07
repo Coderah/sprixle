@@ -2,23 +2,20 @@ import { Manager, defaultComponentTypes } from '../ecs/manager';
 import { now } from '../util/now';
 
 export type DeathEffectComponents<
-    ComponentTypes extends defaultComponentTypes,
-    M extends Manager<ComponentTypes> = Manager<ComponentTypes>
+    ComponentTypes extends defaultComponentTypes
 > = {
     deadAt: number;
-    deathEffect:
-        | M['Entity']
-        | {
-              id: string;
-              components: Partial<ComponentTypes>;
-          };
+    deathEffect: {
+        id: string;
+        components: Partial<ComponentTypes>;
+    };
 };
 
 /** Creates a system that as a side-effect of one entity dying creates an entity or applies components to another existing entity. */
 export function applyDeathEffectPlugin<
     M extends Manager<ComponentTypes>,
     ComponentTypes extends defaultComponentTypes &
-        DeathEffectComponents<ComponentTypes, M>
+        DeathEffectComponents<ComponentTypes>
 >(manager: M) {
     const deathEffectQuery = manager.createQuery({
         includes: ['deathEffect'],

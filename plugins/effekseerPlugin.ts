@@ -7,12 +7,15 @@ import {
     Object3D,
     PerspectiveCamera,
     Scene,
+    Vector2,
     Vector3,
     WebGLRenderer,
 } from 'three';
 import { defaultComponentTypes, Manager } from '../ecs/manager';
 import { throttleLog } from '../util/log';
 import { Pass } from 'three/examples/jsm/postprocessing/Pass.js';
+
+Cache.enabled = true;
 
 /**
  * 1. add effekseer.min.js and effekseer.wasm to /assets
@@ -51,17 +54,11 @@ class EffekseerLoader extends Loader {
         const cached = Cache.get(url) as effekseer.EffekseerEffect;
 
         if (cached !== undefined) {
-            scope.manager.itemStart(url);
-
-            setTimeout(function () {
-                if (onLoad) onLoad(cached);
-
-                scope.manager.itemEnd(url);
-            }, 0);
-
+            if (onLoad) onLoad(cached);
             return cached;
         }
 
+        scope.manager.itemStart(url);
         const effect = scope.context.loadEffect(
             url,
             1.0,
@@ -74,8 +71,6 @@ class EffekseerLoader extends Loader {
             },
             onError
         );
-
-        scope.manager.itemStart(url);
 
         return effect;
     }
@@ -94,6 +89,7 @@ export const effekseerComponentNames = [
 ];
 
 const tempObject3D = new Object3D();
+// TODO preload effects api
 // TODO move loadingManager up to sprixle
 export default async function applyEffekseerPlugin<
     ComponentTypes extends defaultComponentTypes & effekseerComponents
@@ -103,19 +99,28 @@ export default async function applyEffekseerPlugin<
     loadingManager: LoadingManager,
     { fastMode }: { fastMode: boolean } = { fastMode: false }
 ) {
+    loadingManager.itemStart('effekseer wasm initialization');
     await new Promise<void>((resolve, reject) => {
         effekseer.initRuntime('assets/effekseer.wasm', resolve, reject);
     });
+    loadingManager.itemEnd('effekseer wasm initialization');
+    effekseer.setLogEnabled(true);
 
     const effekseerContext = effekseer.createContext();
+    // console.log('renderer context attributes', renderer.);
+
     effekseerContext.init(renderer.getContext(), {
-        enableTimerQuery: true, // enable GPU timer query
-        onTimerQueryReport: (nanoTime) => {
-            // called when GPU timer query is reported
-            throttleLog(`Effekseer timer query report: ${nanoTime} ns`);
-        },
-        timerQueryReportIntervalCount: 60, // interval dray count to report GPU timer query
+        premultipliedAlpha: true,
+        // enableTimerQuery: true, // enable GPU timer query
+        // onTimerQueryReport: (nanoTime) => {
+        //     // called when GPU timer query is reported
+        //     console.log(`Effekseer timer query report: ${nanoTime} ns`);
+        // },
+        // timerQueryReportIntervalCount: 60, // interval dray count to report GPU timer query
     });
+
+    // NOTE: has to be called outside of any real rendering loop to be initialized the first time, otherwise it will error out.
+    // effekseerContext.captureDepth();
 
     const effectLoader = new EffekseerLoader(loadingManager, effekseerContext);
 
@@ -128,6 +133,32 @@ export default async function applyEffekseerPlugin<
         includes: ['effectName', 'position'],
     });
 
+    function positionEffect(entity: typeof effectQuery.Entity) {
+        const { position, effectHandle, effectTarget } = entity.components;
+
+        if (!effectHandle) return;
+
+        if (!effectHandle.exists) {
+            // em.removeComponent(entity, 'effectHandle');
+            em.deregisterEntity(entity);
+            return;
+        }
+
+        if (effectTarget) {
+            tempObject3D.position.copy(effectTarget.position);
+            tempObject3D.rotation.copy(effectTarget.rotation);
+
+            tempObject3D.translateX(position.x);
+            tempObject3D.translateY(position.y);
+            tempObject3D.translateZ(position.z);
+
+            tempObject3D.updateMatrixWorld();
+            effectHandle.setMatrix(tempObject3D.matrixWorld.elements);
+        } else {
+            effectHandle.setLocation(position.x, position.y, position.z);
+        }
+    }
+
     return {
         effekseerContext,
         render: (camera: PerspectiveCamera) => {
@@ -137,6 +168,16 @@ export default async function applyEffekseerPlugin<
             effekseerContext.setCameraMatrix(
                 camera.matrixWorldInverse.elements
             );
+            // const size = new Vector2();
+            // const target = renderer.getRenderTarget();
+            // if (target) {
+            //     size.set(target.width, target.height);
+            // } else {
+            //     renderer.getSize(size);
+            // }
+            // renderer.getContext().viewport(0, 0, size.width, size.height);
+            // effekseerContext.captureBackground(0, 0, size.x, size.y);
+            // effekseerContext.captureDepth(size.width, size.height);
             effekseerContext.draw();
             if (fastMode) renderer.resetState();
         },
@@ -147,8 +188,13 @@ export default async function applyEffekseerPlugin<
 
                 const effect = await effectLoader.loadAsync(effectName);
 
-                const effectHandle = (entity.components.effectHandle =
-                    effekseerContext.play(effect, 0, 0, 0));
+                entity.components.effectHandle = effekseerContext.play(
+                    effect,
+                    0,
+                    0,
+                    0
+                );
+                positionEffect(entity);
                 // effectHandle.setScale(0.3, 0.3, 0.3);
             },
 
@@ -157,34 +203,7 @@ export default async function applyEffekseerPlugin<
             },
 
             all(entity) {
-                const { position, effectHandle, effectTarget } =
-                    entity.components;
-
-                if (!effectHandle) return;
-
-                if (!effectHandle.exists) {
-                    // em.removeComponent(entity, 'effectHandle');
-                    em.deregisterEntity(entity);
-                    return;
-                }
-
-                if (effectTarget) {
-                    tempObject3D.rotation.copy(effectTarget.rotation);
-                    tempObject3D.position.copy(effectTarget.position);
-
-                    tempObject3D.translateX(position.x);
-                    tempObject3D.translateY(position.y);
-                    tempObject3D.translateZ(position.z);
-
-                    tempObject3D.updateMatrixWorld();
-                    effectHandle.setMatrix(tempObject3D.matrixWorld.elements);
-                } else {
-                    effectHandle.setLocation(
-                        position.x,
-                        position.y,
-                        position.z
-                    );
-                }
+                positionEffect(entity);
             },
         }),
     };
@@ -205,11 +224,15 @@ export class EffekseerRenderPass extends Pass {
         this.camera = camera;
         this.context = context;
         this.needsSwap = false;
+        this.clear = false;
     }
     render(renderer, writeBuffer, readBuffer /*, deltaTime, maskActive */) {
         renderer.setRenderTarget(this.renderToScreen ? null : readBuffer);
         this.context.setProjectionMatrix(this.camera.projectionMatrix.elements);
         this.context.setCameraMatrix(this.camera.matrixWorldInverse.elements);
+        // const size = renderer.getSize(new Vector2());
+        // renderer.getContext().viewport(0, 0, size.width, size.height);
+        // this.context.captureBackground(0, 0, size.x, size.y);
         this.context.draw();
     }
 }

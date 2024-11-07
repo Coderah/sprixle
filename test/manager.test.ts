@@ -10,9 +10,7 @@ type ComponentTypes = defaultComponentTypes & {
     position: vec2;
 };
 
-const componentNames = [...defaultComponentNames, 'position'] as const;
-
-const manager = new Manager<ComponentTypes>(componentNames);
+const manager = new Manager<ComponentTypes>();
 
 const positionQuery = manager.createQuery({
     includes: ['position'],

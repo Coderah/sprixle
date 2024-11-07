@@ -23,12 +23,7 @@ enum STATES {
 type ComponentTypes = defaultComponentTypes &
     StateMachineComponents<STATES, 'state'>;
 
-const componentNames = [
-    ...defaultComponentNames,
-    ...getStateMachineComponentNames('state'),
-] as const;
-
-const manager = new Manager<ComponentTypes>(componentNames);
+const manager = new Manager<ComponentTypes>();
 
 const stateMachine = applyStateMachinePlugin<ComponentTypes, STATES>(manager, {
     states: STATES,
@@ -55,7 +50,7 @@ manager.addComponents(entity, {
 });
 manager.registerEntity(entity);
 
-stateMachine.changeState(entity, STATES.movement);
+stateMachine.attemptChangeState(entity, STATES.movement);
 
 pipeline.tick(50);
 

@@ -4,9 +4,14 @@ import { memoizedGlobalNow, now } from '../util/now';
 import { keys } from './dict';
 import './object.extensions.ts';
 import { Query, QueryName, QueryParametersInput } from './query';
-import { ConsumerSystem, QuerySystem, System } from './system.ts';
-import { throttleLog } from '../util/log.ts';
-import { ComponentTypes } from '../../game/components.ts';
+import { ConsumerSystem, QuerySystem, System } from './system';
+import { throttleLog } from '../util/log';
+import { ComponentTypes } from '../../game/components';
+import {
+    ReceiveType,
+    ReflectionClass,
+    resolveReceiveType,
+} from '@deepkit/type';
 
 export type Keys<T> = keyof T;
 export type entityId = string;
@@ -84,12 +89,38 @@ export class Manager<ExactComponentTypes extends defaultComponentTypes> {
         ExactComponentTypes
     >;
     readonly Entity: Entity<typeof this.ComponentTypes>;
-    componentTypesSet: Set<keyof ExactComponentTypes>;
+    componentTypesSet: Readonly<Set<keyof ExactComponentTypes>>;
+    componentNames: readonly Keys<ExactComponentTypes>[];
 
     state: ReturnType<typeof this.createInitialState>;
 
-    constructor(componentNames: readonly Keys<ExactComponentTypes>[]) {
-        this.componentTypesSet = new Set(componentNames);
+    /**
+     *
+     * @param componentNames [DO NOT PASS] This is dynamic now and can be accessed at `new Manager<*>().componentNames` if needed
+     */
+    constructor(componentNames?: ReceiveType<ExactComponentTypes>) {
+        if (
+            componentNames instanceof Array &&
+            typeof componentNames[0] === 'string'
+        ) {
+            console.warn(
+                '[new Manager()] componentNames parameter is deprecated and should not be passed, instead its dynamically created from types. If you still need access to it you can get it from `new Manager<*>().componentNames`'
+            );
+            console.error(
+                'Do not pass componentNames to new Manager() to resolve this:'
+            );
+        }
+        const type = resolveReceiveType(componentNames);
+
+        const reflection = ReflectionClass.from(type);
+
+        const extractedComponentNames = reflection
+            .getProperties()
+            .map((p) => p.name) as readonly Keys<ExactComponentTypes>[];
+
+        this.componentNames = extractedComponentNames;
+        this.componentTypesSet = new Set(extractedComponentNames);
+
         this.state = this.createInitialState();
     }
 
@@ -274,7 +305,7 @@ export class Manager<ExactComponentTypes extends defaultComponentTypes> {
             quietSet(componentType, value) {
                 components[componentType] = value;
             },
-        };
+        } as typeof this.Entity;
 
         return entity;
     }

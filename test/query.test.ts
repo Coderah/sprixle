@@ -11,13 +11,7 @@ type ComponentTypes = defaultComponentTypes & {
     inactive: true;
 };
 
-const componentNames = [
-    ...defaultComponentNames,
-    'position',
-    'inactive',
-] as const;
-
-const manager = new Manager<ComponentTypes>(componentNames);
+const manager = new Manager<ComponentTypes>();
 
 const positionQuery = manager.createQuery({
     includes: ['position'],

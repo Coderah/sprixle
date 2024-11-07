@@ -69,7 +69,7 @@ export function applyEditorUIPlugin<
             folder?: string
         ) {
             const system = manager.createSystem(query.createConsumer(), {
-                new(entity) {
+                forNew(entity) {
                     const folder = (folders[entity.id] =
                         folders[entity.id] ||
                         primaryPane.addFolder({
@@ -160,7 +160,7 @@ export function applyEditorUIPlugin<
             options.interval = 0;
 
             const system = manager.createSystem(consumer, {
-                new(entity, delta) {
+                forNew(entity, delta) {
                     state.count = query.entities.size;
                     if (options.interval === 0 || updateInterval(delta))
                         folder.refresh();

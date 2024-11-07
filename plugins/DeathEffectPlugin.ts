@@ -1,4 +1,3 @@
-import { lerp } from 'three/src/math/MathUtils';
 import { Manager, defaultComponentTypes } from '../ecs/manager';
 import { now } from '../util/now';
 
@@ -14,10 +13,6 @@ export type DeathEffectComponents<
               components: Partial<ComponentTypes>;
           };
 };
-
-export const deathEffectComponentNames: Array<
-    keyof DeathEffectComponents<defaultComponentTypes>
-> = ['deadAt', 'deathEffect'];
 
 /** Creates a system that as a side-effect of one entity dying creates an entity or applies components to another existing entity. */
 export function applyDeathEffectPlugin<

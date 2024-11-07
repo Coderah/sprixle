@@ -39,7 +39,7 @@ export const createUISystem = <
 
         systems.push(
             em.createSystem(componentQuery.createConsumer(), {
-                new(entity) {
+                forNew(entity) {
                     if (!create || entity.components.uiElement) return;
 
                     const uiElement = create(entity);

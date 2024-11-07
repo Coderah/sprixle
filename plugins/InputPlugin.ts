@@ -86,18 +86,6 @@ export type InputComponents = {
     activeInputMode: 'touch' | 'pointer' | 'keyboard' | 'gamepad';
 };
 
-export const inputComponentNames: Array<keyof InputComponents> = [
-    'inputBindName',
-    'inputBindActivationType',
-    'inputBinds',
-    'inputBindRepeat',
-    'inputName',
-    'inputBindIds',
-    'inputState',
-    'inputPosition',
-    'activeInputMode',
-];
-
 export function applyInputPlugin<
     ComponentTypes extends defaultComponentTypes & InputComponents
 >(manager: Manager<ComponentTypes>, options?: InputPluginOptions) {
@@ -322,7 +310,7 @@ export function applyInputPlugin<
             manager,
             // raw input system
             manager.createSystem(rawInputQuery.createConsumer(), {
-                new(entity) {
+                forNew(entity) {
                     entity.components.inputBindIds = [];
                     // TODO map raw input to binds
                     manager.getEntities('inputBinds').forEach((bindEntity) => {
@@ -532,7 +520,7 @@ export function applyInputPlugin<
                         manager.registerEntity(entity)
                     );
                 },
-                new(entity) {
+                forNew(entity) {
                     // TODO update existing raw inputs to include bind if necessary
                 },
                 updated(entity) {

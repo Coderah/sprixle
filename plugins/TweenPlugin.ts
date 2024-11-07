@@ -13,18 +13,6 @@ export type TweenComponents<ComponentTypes extends defaultComponentTypes> = {
     easeFn: keyof typeof easing;
 };
 
-export const tweenComponentNames: Array<
-    keyof TweenComponents<defaultComponentTypes>
-> = [
-    'tweenTargetId',
-    'tweeningComponent',
-    'tweenTo',
-    'tweenLength',
-    'tweenFrom',
-    'tweenStart',
-    'easeFn',
-];
-
 // TODO figure out typing to force only number | number[] components within tween functions
 export function applyTweenPlugin<
     ComponentTypes extends defaultComponentTypes &

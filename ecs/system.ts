@@ -64,8 +64,13 @@ export interface ConsumerSystem<
         >,
         delta: number
     ) => boolean | void;
+    /**
+     * Please replace with forNew otherwise your build will error. This is an unfortunate consequence of introducing type reflection in build steps
+     * @deprecated
+     */
+    new?: (error: Error) => {};
     /** Runs for each new entity each frame */
-    new?: (
+    forNew?: (
         entity: EntityWithComponents<
             ExactComponentTypes,
             TManager,
@@ -188,11 +193,11 @@ export class Pipeline<ExactComponentTypes extends defaultComponentTypes> {
                 }
                 if (
                     ('updated' in system && system.updated) ||
-                    ('new' in system && system.new) ||
+                    ('forNew' in system && system.forNew) ||
                     ('newOrUpdated' in system && system.newOrUpdated)
                 ) {
                     source.forNewOrUpdated(
-                        system.new,
+                        system.forNew,
                         system.newOrUpdated,
                         system.updated,
                         delta

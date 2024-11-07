@@ -30,7 +30,7 @@ positionConsumer.forUpdated((e) => {
 });
 
 const positionSystem = manager.createSystem(positionConsumer, {
-    new(entity) {
+    forNew(entity) {
         console.log('new', entity);
     },
     updated(entity) {

@@ -64,12 +64,6 @@ export type defaultComponentTypes = {
     updatedAt: number;
 };
 
-export const defaultComponentNames: Array<keyof defaultComponentTypes> = [
-    'ownerId',
-    'createdAt',
-    'updatedAt',
-];
-
 export type EntityWithComponents<
     ExactComponentTypes extends defaultComponentTypes,
     M extends Manager<ExactComponentTypes>,

@@ -20,12 +20,6 @@ export type StateMachineComponents<
     [key in `${StateName}StartedAt`]: number;
 };
 
-export function getStateMachineComponentNames<
-    StateName extends string = 'state'
->(stateName: StateName) {
-    return [stateName, `${stateName}StartedAt`] as const;
-}
-
 export function applyStateMachinePlugin<
     ComponentTypes extends defaultComponentTypes &
         StateMachineComponents<T, StateName>,

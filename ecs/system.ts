@@ -1,4 +1,5 @@
 import { setTimeActivePipeline } from '../util/now';
+import { interval } from '../util/timing';
 import {
     EntityWithComponents,
     Keys,
@@ -12,6 +13,8 @@ export interface System<
     TManager extends Manager<ExactComponentTypes>,
     Includes extends Keys<ExactComponentTypes>[]
 > {
+    /** holds all updates and only runs when this interval passes */
+    interval?: ReturnType<typeof interval>;
     /** runs when initing or resetting a pipeline, can be run to explicitly init the system  */
     init?();
     /** Runs every frame */
@@ -178,18 +181,24 @@ export class Pipeline<ExactComponentTypes extends defaultComponentTypes> {
         if (delta <= 0) return;
         if (this.useInternalTime) this.now += delta;
         this.systems.forEach((system) => {
-            if (system.tick) system.tick(delta);
+            let systemDelta = delta;
+            if (system.interval) {
+                const intervalDelta = system.interval(delta);
+                if (!intervalDelta) return;
+                systemDelta = intervalDelta;
+            }
+            if (system.tick) system.tick(systemDelta);
 
             if (!('source' in system)) return;
             const { source } = system;
 
             if (source instanceof Query) {
                 if ('all' in system && system.all) {
-                    source.for(system.all, delta);
+                    source.for(system.all, systemDelta);
                 }
             } else if (source instanceof Consumer) {
                 if ('all' in system && system.all) {
-                    source.query.for(system.all, delta);
+                    source.query.for(system.all, systemDelta);
                 }
                 if (
                     ('updated' in system && system.updated) ||
@@ -200,11 +209,11 @@ export class Pipeline<ExactComponentTypes extends defaultComponentTypes> {
                         system.forNew,
                         system.newOrUpdated,
                         system.updated,
-                        delta
+                        systemDelta
                     );
                 }
                 if ('removed' in system && system.removed) {
-                    source.forDeleted(system.removed, delta);
+                    source.forDeleted(system.removed, systemDelta);
                 } else {
                     // TODO could be cleaner.
                     source.deletedEntities.clear();

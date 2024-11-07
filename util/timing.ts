@@ -1,3 +1,4 @@
+/** functional way to conditionally run code at a regular interval, can be accumulative to guarantee all time passed is accounted for. */
 export function interval(length: number) {
     const fn = (delta: number) => {
         fn.time += delta;
@@ -13,6 +14,7 @@ export function interval(length: number) {
 
         return false;
     };
+
     fn.time = 0;
     fn.timeLength = length;
     fn.accumulative = true;

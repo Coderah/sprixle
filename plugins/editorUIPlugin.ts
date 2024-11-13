@@ -1,10 +1,9 @@
-import { BindingParams, BladeApi, FolderApi, Pane } from 'tweakpane';
+import { BindingApi, TabPageApi } from '@tweakpane/core';
+import { BindingParams, FolderApi, Pane } from 'tweakpane';
 import { defaultComponentTypes, Manager } from '../ecs/manager';
-import { AnySystem, Pipeline, System } from '../ecs/system';
 import { Query } from '../ecs/query';
+import { AnySystem, Pipeline } from '../ecs/system';
 import { interval } from '../util/timing';
-import { throttleLog } from '../util/log';
-import { BindingApi } from '@tweakpane/core';
 
 export function applyEditorUIPlugin<
     ComponentTypes extends defaultComponentTypes
@@ -65,14 +64,13 @@ export function applyEditorUIPlugin<
             query: Query<ComponentTypes, any> = manager.createQuery({
                 includes: [component],
             }),
-            // TODO allow overriding folder? how to handle different entities having component in same folder?
-            folder?: string
+            parent: Pane | FolderApi | TabPageApi = primaryPane
         ) {
             const system = manager.createSystem(query.createConsumer(), {
                 forNew(entity) {
                     const folder = (folders[entity.id] =
                         folders[entity.id] ||
-                        primaryPane.addFolder({
+                        parent.addFolder({
                             title: '[Entity] ' + entity.id,
                             expanded: true,
                         }));
@@ -135,7 +133,8 @@ export function applyEditorUIPlugin<
             query: Query<ComponentTypes, any>,
             options: Partial<BindingParams> = { interval: 0 },
             folderTitle = query.queryName,
-            include = ['count', 'updated', 'removed']
+            include = ['count', 'updated', 'removed'],
+            parent: Pane | FolderApi | TabPageApi = primaryPane
         ) {
             options.readonly = true;
 
@@ -143,7 +142,7 @@ export function applyEditorUIPlugin<
 
             const folder = (folders[folderTitle] =
                 folders[folderTitle] ||
-                primaryPane.addFolder({
+                parent.addFolder({
                     title: '[Query] ' + folderTitle,
                     expanded: true,
                 }));

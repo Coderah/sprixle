@@ -250,15 +250,14 @@ export class Manager<ExactComponentTypes extends defaultComponentTypes> {
 
                     const entityIsRegistered = manager.state.entities.has(id);
 
-                    if (
-                        componentType !== 'updatedAt' &&
-                        entityIsRegistered &&
-                        target[componentType] !== value
-                    ) {
+                    if (componentType !== 'updatedAt' && entityIsRegistered) {
                         entity.previousComponents[componentType] =
                             target[componentType];
-                        // TODO store previousValues as previousComponents?
-                        flagUpdate(componentType as keyof ExactComponentTypes);
+                        if (target[componentType] !== value) {
+                            flagUpdate(
+                                componentType as keyof ExactComponentTypes
+                            );
+                        }
                     }
 
                     let newComponent = false;
@@ -306,7 +305,7 @@ export class Manager<ExactComponentTypes extends defaultComponentTypes> {
 
     /** Creates entity, add components and registers it immediately */
     quickEntity(components: Partial<ExactComponentTypes>, id = uuid()) {
-        const entity = this.createEntity(id);
+        const entity = this.getEntity(id) || this.createEntity(id);
         this.addComponents(entity, components);
         this.registerEntity(entity);
 

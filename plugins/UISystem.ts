@@ -6,6 +6,7 @@ import {
     defaultComponentTypes,
 } from '../ecs/manager';
 import { ConsumerSystem, Pipeline, System } from '../ecs/system';
+import { Query } from '../ecs/query';
 
 export const createUISystem = <
     ComponentTypes extends defaultComponentTypes & {
@@ -14,7 +15,7 @@ export const createUISystem = <
     M extends Manager<ComponentTypes>
 >(
     em: M,
-    uiComponents: {
+    uiComponents?: {
         [k in keyof Partial<ComponentTypes>]: {
             create?: (
                 entity: EntityWithComponents<ComponentTypes, M, k>
@@ -23,22 +24,30 @@ export const createUISystem = <
                 uiElement: HTMLElement,
                 entity: EntityWithComponents<ComponentTypes, M, k>
             ) => void;
+            removed?: (
+                uiElement: HTMLElement,
+                entity: EntityWithComponents<ComponentTypes, M, k>
+            ) => void;
         };
     }
-): System<ComponentTypes, M, any> => {
-    const systems: ConsumerSystem<ComponentTypes, Keys<ComponentTypes>[], M>[] =
-        [];
-    for (const component in uiComponents) {
-        const uiComponent = uiComponents[component];
-        if (!uiComponent) continue;
-        const { create, update } = uiComponent;
+) => {
+    const pipeline = new Pipeline(em);
 
-        const componentQuery = em.createQuery({
-            includes: [component],
-        });
+    function add<
+        Includes extends Keys<ComponentTypes>[],
+        Q extends Query<ComponentTypes, Includes>
+    >(
+        query: Q & Query<ComponentTypes, Includes>,
+        handlers: {
+            create?: (entity: Q['Entity']) => HTMLElement | undefined;
+            update?: (uiElement: HTMLElement, entity: Q['Entity']) => void;
+            removed?: (uiElement: HTMLElement, entity: Q['Entity']) => void;
+        }
+    ) {
+        const { create, update } = handlers;
 
-        systems.push(
-            em.createSystem(componentQuery.createConsumer(), {
+        pipeline.systems.add(
+            em.createSystem(query.createConsumer(), {
                 forNew(entity) {
                     if (!create || entity.components.uiElement) return;
 
@@ -63,10 +72,24 @@ export const createUISystem = <
                 },
                 removed(entity) {
                     entity.components.uiElement?.remove();
+
+                    if (handlers.removed)
+                        handlers.removed(entity.components.uiElement, entity);
                 },
             }) as ConsumerSystem<ComponentTypes, Keys<ComponentTypes>[], M>
         );
     }
 
-    return new Pipeline(em, ...systems);
+    for (const component in uiComponents) {
+        const uiComponent = uiComponents[component];
+        if (!uiComponent) continue;
+
+        const componentQuery = em.createQuery({
+            includes: [component],
+        });
+
+        add(componentQuery, uiComponent);
+    }
+
+    return { add, pipeline };
 };

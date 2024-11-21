@@ -197,9 +197,6 @@ export class Pipeline<ExactComponentTypes extends defaultComponentTypes> {
                     source.for(system.all, systemDelta);
                 }
             } else if (source instanceof Consumer) {
-                if ('all' in system && system.all) {
-                    source.query.for(system.all, systemDelta);
-                }
                 if (
                     ('updated' in system && system.updated) ||
                     ('forNew' in system && system.forNew) ||
@@ -211,6 +208,9 @@ export class Pipeline<ExactComponentTypes extends defaultComponentTypes> {
                         system.updated,
                         systemDelta
                     );
+                }
+                if ('all' in system && system.all) {
+                    source.query.for(system.all, systemDelta);
                 }
                 if ('removed' in system && system.removed) {
                     source.forDeleted(system.removed, systemDelta);

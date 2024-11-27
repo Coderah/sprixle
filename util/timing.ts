@@ -2,10 +2,10 @@
 export function interval(length: number) {
     const fn = (delta: number) => {
         fn.time += delta;
-        if (fn.time >= length) {
+        if (fn.time >= fn.timeLength) {
             const totalDelta = fn.time;
             if (fn.accumulative) {
-                fn.time = Math.max(0, fn.time - length);
+                fn.time = Math.max(0, fn.time - fn.timeLength);
             } else {
                 fn.time = 0;
             }

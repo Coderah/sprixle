@@ -39,14 +39,17 @@ export type LogicTreeComponentTypes = {
     mesh: Object3D;
     logicTree: LogicTree;
     compiledLogicTree: (methods: LogicMethods, Geometry: Object3D) => void;
+    logicTreeCache: {};
 };
 
 function getNext(tree: LogicTree, n: LogicTree[keyof LogicTree]) {
     const field = n.outputs.Next || n.outputs.Geometry;
 
+    if (!field) return [];
+
     return field.links
-        .filter((l) => l.socket === 'Trigger')
-        .map((l) => tree[l.node]);
+        ?.filter((l) => l.socket === 'Trigger')
+        ?.map((l) => tree[l.node]);
 }
 
 interface LogicMethods {
@@ -63,6 +66,7 @@ export function applyLogicTreePlugin<
 
     const logicTreeQuery = em.createQuery({
         includes: ['logicTree'],
+        excludes: ['compiledLogicTree'],
     });
 
     const compiledLogicTreeQuery = em.createQuery({
@@ -154,6 +158,7 @@ export function applyLogicTreePlugin<
                         'input'
                     );
 
+                    // TODO if input is a float we should reduce precision for performance?
                     compiledParameters.push(compiledInput.value.toString());
                 } else if (output) {
                     const compiledOutput = compileNodeSocket(
@@ -179,11 +184,13 @@ export function applyLogicTreePlugin<
                                 compiledOutput.compiled.reduce(
                                     (o, c) =>
                                         o
-                                            ? o + '; \n' + c.compiled
-                                            : c.compiled,
+                                            ? o +
+                                              '; \n' +
+                                              c.compiled.replace(/^/gm, '    ')
+                                            : c.compiled.replace(/^/gm, '    '),
                                     ''
                                 ) +
-                                '}'
+                                '\n}'
                         );
                     }
 
@@ -205,15 +212,17 @@ export function applyLogicTreePlugin<
                     //         'output'
                     //     ).compiled.replace(/$    /m, '    $1')
                     // );
+                } else if (p.name === 'delta') {
+                    compiledParameters.push('delta');
                 }
             });
 
             // TODO provide cache object to method calls
             return [
                 {
-                    compiled: `${n.name}.call(this, ${compiledParameters.join(
-                        ', '
-                    )})`,
+                    compiled: `${n.name}.call(this['${n.id}'] = this['${
+                        n.id
+                    }'] || {}, ${compiledParameters.join(', ')});`,
                     defines,
                 },
             ];
@@ -233,7 +242,27 @@ export function applyLogicTreePlugin<
         const initialNode =
             logicTree['Group Input'] ||
             Object.values(logicTree).find((n) => n.type === 'GROUP_INPUT');
-        return compileLogicNode(logicTree, initialNode);
+
+        const transpiled = compileLogicNode(logicTree, initialNode);
+
+        const fn = Function(
+            'delta',
+            'methods',
+            'Geometry',
+            `const { ${Array.from(
+                new Set<string>(
+                    transpiled.reduce(
+                        (defines, c) => [...defines, ...c.defines],
+                        []
+                    )
+                )
+            ).join(', ')} } = methods;\n${transpiled.reduce(
+                (r, c) => r + '\n' + c.compiled,
+                ''
+            )}`
+        ) as C['compiledLogicTree'];
+
+        return { transpiled, fn };
     }
 
     const logicTreeSystem = em.createSystem(logicTreeQuery.createConsumer(), {
@@ -242,30 +271,22 @@ export function applyLogicTreePlugin<
             const { logicTree } = entity.components;
 
             const compiledLogicTree = compileLogicTree(logicTree);
-            const cache = {};
             console.log('[transpiledLogicNode]', compiledLogicTree);
-            entity.components.compiledLogicTree = Function(
-                'methods',
-                'Geometry',
-                `const { ${compiledLogicTree
-                    .reduce((defines, c) => [...defines, c.defines], [])
-                    .join(', ')} } = methods;\n${compiledLogicTree.reduce(
-                    (r, c) => r + '\n' + c.compiled,
-                    ''
-                )}`
-            ).bind(cache) as C['compiledLogicTree'];
-            console.log(entity.components.compiledLogicTree);
+            entity.components.compiledLogicTree = compiledLogicTree.fn;
+            entity.components.logicTreeCache = {};
+            // console.log(entity.components.compiledLogicTree);
         },
     });
 
     const compiledLogicTreeSystem = em.createSystem(compiledLogicTreeQuery, {
         interval: interval(1000 / 30),
         all(entity, delta) {
-            const { compiledLogicTree, mesh } = entity.components;
+            const { compiledLogicTree, logicTreeCache, mesh } =
+                entity.components;
 
             // //@ts-ignore
             // with (compiler) {
-            compiledLogicTree(methods, mesh);
+            compiledLogicTree.call(logicTreeCache, delta, methods, mesh);
             // }
         },
     });
@@ -276,5 +297,68 @@ export function applyLogicTreePlugin<
         compiledLogicTreeSystem
     );
 
-    return { logicTreePipeline };
+    let ws: WebSocket | null = null;
+    function enableLogicTreeBlenderConnection() {
+        if (ws) return;
+
+        ws = new WebSocket('ws://localhost:9001');
+
+        let pingInterval: NodeJS.Timeout | null = null;
+
+        ws.addEventListener('open', () => {
+            console.log('[LogicTreeBlenderConnection] Connected to server');
+            // ws.send('Hello, server!');
+            pingInterval = setInterval(() => {
+                ws.send('ping');
+            }, 5000);
+        });
+
+        ws.addEventListener('message', (event: MessageEvent) => {
+            const { data, name } = JSON.parse(event.data);
+
+            const existingEntity = em.getEntity(name);
+
+            const compiledLogicTree = compileLogicTree(data as LogicTree);
+
+            console.log(
+                `[LogicTreeBlenderConnection] compiled from Blender`,
+                compiledLogicTree.fn,
+                compiledLogicTree.transpiled,
+                { data, name }
+            );
+
+            if (existingEntity) {
+                console.log(
+                    '[LogicTreeBlenderConnection] applied compiled logicTree to existing entity'
+                );
+
+                existingEntity.components.compiledLogicTree =
+                    compiledLogicTree.fn;
+                // TODO transfer cache?
+            } else {
+                console.warn(
+                    '[LogicTreeBlenderConnection] compiled logicTree does not map to an existing entity'
+                );
+            }
+        });
+
+        ws.addEventListener('close', () => {
+            console.log('[LogicTreeBlenderConnection] Connection closed');
+
+            clearInterval(pingInterval);
+
+            ws = null;
+
+            setTimeout(() => enableLogicTreeBlenderConnection(), 1000);
+        });
+
+        ws.addEventListener('error', (error) => {
+            console.error(
+                '[LogicTreeBlenderConnection] WebSocket error:',
+                error
+            );
+        });
+    }
+
+    return { logicTreePipeline, enableLogicTreeBlenderConnection };
 }

@@ -41,6 +41,8 @@ license = [
 # https://docs.blender.org/manual/en/dev/advanced/extensions/python_wheels.html
 wheels = [
   "./wheels/websocket_server-0.6.4-py3-none-any.whl",
+  "./wheels/deepdiff-8.0.1-py3-none-any.whl",
+  "./wheels/orderly_set-5.2.2-py3-none-any.whl"
 ]
 
 # Optional: add-ons can list which resources they will require:

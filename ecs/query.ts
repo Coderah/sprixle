@@ -288,6 +288,18 @@ export class Consumer<
         // this.updated(id);
     }
 
+    *New() {
+        for (let id of this.newEntities) {
+            yield this.query.manager.getEntity(id) as E;
+        }
+    }
+
+    *Updated() {
+        for (let id of this.updatedEntities) {
+            yield this.query.manager.getEntity(id) as E;
+        }
+    }
+
     /** called by Query when updating an entity, for internal use */
     updated(id: entityId) {
         this.updatedEntities.add(id);

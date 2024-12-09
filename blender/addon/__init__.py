@@ -12,7 +12,8 @@
 # along with this program. If not, see <http://www.gnu.org/licenses/>.
 
 from . import auto_load
-from . import logic_trees
+from . import node_trees
+from deepdiff import DeepDiff
 import bpy
 from bpy.app.handlers import persistent
 from websocket_server import WebsocketServer
@@ -20,9 +21,22 @@ import json
 
 auto_load.init()
 
+last_serialized_trees = {}
+
 @persistent
 def handleDepsGraphUpdate(scene, graph):
     graphs_serialized = []
+    for update in graph.updates:
+        print(update)
+        if isinstance(update.id, bpy.types.Material):
+            print('shading', update.is_updated_shading)
+            data = node_trees.serialize(bpy.data.materials[update.id.name])
+
+            # TODO define and send update types?
+            # if update.id.name in last_serialized_trees:
+                # print(DeepDiff(last_serialized_trees[update.id.name], data))
+
+            # last_serialized_trees[update.id.name] = data
     for object in graph.objects:
         object = bpy.data.objects[object.name]
         if not hasattr(object, 'modifiers'): continue
@@ -38,13 +52,15 @@ def handleDepsGraphUpdate(scene, graph):
         print(object)
         
         # print(json)
-        data = logic_trees.export_geometry_nodes_to_json(object)
+        data = node_trees.serialize(object)
+
+        # last_serialized_trees[object.name]
 
         global server
         if data and server:
             graphs_serialized.append(modifier)
             server.send_message_to_all(json.dumps({
-                 "name": object.name,
+                 "name": object.name.replace('.', ''),
                  "data": data
             }, indent=0))
 
@@ -53,11 +69,11 @@ def handleDepsGraphUpdate(scene, graph):
 def new_client(client, server):
     print("New client connected and was given id %d" % client['id'])
     for object in bpy.data.objects:
-        data = logic_trees.export_geometry_nodes_to_json(object)
+        data = node_trees.serialize(object)
 
         if data and server:
             server.send_message_to_all(json.dumps({
-                "name": object.name,
+                "name": object.name.replace('.', ''),
                 "data": data
             }, indent=0))
 
@@ -76,11 +92,9 @@ def message_received(client, server, message):
 
 PORT=9001
 server = False
-        
 
 def register():
     auto_load.register()
-    # bpy.types.Object.logicTree = bpy.props.StringProperty(name="logicTree", default='')
     bpy.app.handlers.depsgraph_update_post.append(handleDepsGraphUpdate)
 
     global server

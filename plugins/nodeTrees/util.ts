@@ -1,8 +1,13 @@
 import { camelCase } from 'lodash';
 import { Node } from './createCompiler';
-import { ReflectionKind, ReflectionMethod, Type } from '@deepkit/type';
+import {
+    ReflectionKind,
+    ReflectionMethod,
+    Type,
+    TypeMethod,
+} from '@deepkit/type';
 
-const reservedWords = new Set(['mix']);
+const reservedWords = new Set(['mix', 'attribute']);
 export function getReference(n: Node): string;
 export function getReference(n: string): string;
 export function getReference(n: string | Node): string {
@@ -11,14 +16,22 @@ export function getReference(n: string | Node): string {
     let reference = camelCase(n);
 
     if (reservedWords.has(reference)) {
-        reference = camelCase('v' + n);
+        reference = '_' + camelCase(n);
     }
 
     return reference;
 }
 
-export function getReturnType(type: ReflectionMethod, parameters: any[]) {
-    const baseReturn = type.getReturnType();
+export function getStructReference(name: string) {
+    return getReference('s' + name[0].toUpperCase() + name.substring(1));
+}
+
+export function getParameterReference(name: string) {
+    return name.replace(/[^\d\w]/g, '');
+}
+
+export function getReturnType(type: TypeMethod, parameters: any[]) {
+    const baseReturn = type.return;
 
     if (baseReturn.typeName !== 'If') return baseReturn;
 
@@ -31,8 +44,8 @@ export function getReturnType(type: ReflectionMethod, parameters: any[]) {
     const conditionalParameterName = baseReturn.typeArguments[0]
         .literal as string;
 
-    const parameterIndex = type
-        .getParameterNames()
+    const parameterIndex = type.parameters
+        .map((p) => p.name)
         .indexOf(conditionalParameterName);
 
     const parameter = parameters[parameterIndex];

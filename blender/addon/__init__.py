@@ -25,12 +25,22 @@ last_serialized_trees = {}
 
 @persistent
 def handleDepsGraphUpdate(scene, graph):
+    global server
     graphs_serialized = []
     for update in graph.updates:
         print(update)
         if isinstance(update.id, bpy.types.Material):
             print('shading', update.is_updated_shading)
-            data = node_trees.serialize(bpy.data.materials[update.id.name])
+            material = bpy.data.materials[update.id.name]
+            data = node_trees.serialize(material)
+
+            if data and server:
+                graphs_serialized.append(material)
+                server.send_message_to_all(json.dumps({
+                    "name": update.id.name.replace('.', ''),
+                    "type": 'shaderTree',
+                    "data": data
+                }, indent=0))
 
             # TODO define and send update types?
             # if update.id.name in last_serialized_trees:
@@ -56,11 +66,11 @@ def handleDepsGraphUpdate(scene, graph):
 
         # last_serialized_trees[object.name]
 
-        global server
         if data and server:
             graphs_serialized.append(modifier)
             server.send_message_to_all(json.dumps({
                  "name": object.name.replace('.', ''),
+                 "type": 'logicTree',
                  "data": data
             }, indent=0))
 
@@ -68,12 +78,23 @@ def handleDepsGraphUpdate(scene, graph):
 # Called for every client connecting (after handshake)
 def new_client(client, server):
     print("New client connected and was given id %d" % client['id'])
+    for material in bpy.data.materials:
+        data = node_trees.serialize(material)
+
+        if data and server:
+            server.send_message_to_all(json.dumps({
+                "name": material.name.replace('.', ''),
+                "type": 'shaderTree',
+                "data": data
+            }, indent=0))
+
     for object in bpy.data.objects:
         data = node_trees.serialize(object)
 
         if data and server:
             server.send_message_to_all(json.dumps({
                 "name": object.name.replace('.', ''),
+                "type": 'logicTree',
                 "data": data
             }, indent=0))
 

@@ -21,7 +21,7 @@ const staticNodeTranspilers: {
         const reference = camelCase(node.id);
         compilationCache.compiledInputs[
             reference
-        ] = `float ${reference} = ${node.properties.value};`;
+        ] = `float ${reference} = ${node.properties.value.toFixed(4)};`;
 
         return [];
     },

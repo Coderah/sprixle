@@ -1,796 +1,47 @@
-import { ReflectionClass } from '@deepkit/type';
-import {
-    createNodeTreeCompiler,
-    NodeTree,
-} from '../plugins/nodeTrees/createCompiler';
+import * as Stats from 'stats.js';
 import {
     AgXToneMapping,
+    AmbientLight,
+    BufferAttribute,
+    BufferGeometry,
     CanvasTexture,
+    Color,
     ColorManagement,
     DoubleSide,
     FloatType,
     HalfFloatType,
+    InstancedBufferAttribute,
+    InstancedMesh,
     LinearFilter,
     Mesh,
-    MeshBasicMaterial,
-    OrthographicCamera,
-    PlaneGeometry,
+    NoToneMapping,
+    PerspectiveCamera,
+    ReinhardToneMapping,
     RenderTargetOptions,
     RGBAFormat,
     Scene,
     ShaderMaterial,
     SRGBColorSpace,
+    Vector2,
     WebGLRenderer,
     WebGLRenderTarget,
 } from 'three';
-import { glsl } from '../shader/util';
-import { EffectComposer, RenderPass } from 'three-stdlib';
+import {
+    EffectComposer,
+    GLTFLoader,
+    OrbitControls,
+    RenderPass,
+    Sky,
+} from 'three-stdlib';
 import { OutputPass } from 'three/examples/jsm/postprocessing/OutputPass';
-import { now } from '../util/now';
-
-const colorRampTest: NodeTree = {
-    'Material Output': {
-        id: 'Material Output',
-        type: 'OUTPUT_MATERIAL',
-        name: 'OUTPUT_MATERIAL',
-        inputs: {
-            Surface: {
-                type: 'linked',
-                links: [
-                    {
-                        node: 'Mix.001',
-                        socket: 'Result',
-                    },
-                ],
-            },
-            Volume: {
-                value: null,
-                type: 'SHADER',
-            },
-            Displacement: {
-                value: [0.0, 0.0, 0.0],
-                type: 'VECTOR',
-            },
-            Thickness: {
-                value: 0.0,
-                type: 'VALUE',
-            },
-        },
-        outputs: {},
-        properties: {
-            is_active_output: true,
-            target: 'ALL',
-        },
-    },
-    'Color Ramp': {
-        id: 'Color Ramp',
-        type: 'VALTORGB',
-        name: 'VALTORGB',
-        inputs: {
-            Fac: {
-                type: 'linked',
-                links: [
-                    {
-                        node: 'Reroute.003',
-                        socket: 'Output',
-                    },
-                ],
-            },
-        },
-        outputs: {
-            Color: {
-                type: 'linked',
-                links: [
-                    {
-                        node: 'Mix.001',
-                        socket: 'A',
-                    },
-                ],
-            },
-            Alpha: 0.0,
-        },
-        properties: {
-            elements: [
-                {
-                    position: 0.5490908026695251,
-                    color: [0.0, 0.0, 0.0, 1.0],
-                },
-                {
-                    position: 1.0,
-                    color: [1.0, 0.0018079797737300396, 0.0, 1.0],
-                },
-            ],
-            color_mode: 'RGB',
-            interpolation: 'LINEAR',
-            hue_interpolation: 'NEAR',
-        },
-    },
-    'Texture Coordinate': {
-        id: 'Texture Coordinate',
-        type: 'TEX_COORD',
-        name: 'TEX_COORD',
-        inputs: {},
-        outputs: {
-            Generated: null,
-            Normal: null,
-            UV: {
-                type: 'linked',
-                links: [
-                    {
-                        node: 'Mapping',
-                        socket: 'Vector',
-                    },
-                    {
-                        node: 'Separate XYZ.001',
-                        socket: 'Vector',
-                    },
-                ],
-            },
-            Object: null,
-            Camera: null,
-            Window: null,
-            Reflection: null,
-        },
-        properties: {
-            from_instancer: false,
-        },
-    },
-    'Color Ramp.001': {
-        id: 'Color Ramp.001',
-        type: 'VALTORGB',
-        name: 'VALTORGB',
-        inputs: {
-            Fac: {
-                type: 'linked',
-                links: [
-                    {
-                        node: 'Reroute.003',
-                        socket: 'Output',
-                    },
-                ],
-            },
-        },
-        outputs: {
-            Color: {
-                type: 'linked',
-                links: [
-                    {
-                        node: 'Mix.001',
-                        socket: 'B',
-                    },
-                ],
-            },
-            Alpha: 0.0,
-        },
-        properties: {
-            elements: [
-                {
-                    position: 0.29100000858306885,
-                    color: [0.0, 0.0, 0.0, 1.0],
-                },
-                {
-                    position: 1.0,
-                    color: [1.0, 1.0, 1.0, 1.0],
-                },
-            ],
-            color_mode: 'RGB',
-            interpolation: 'LINEAR',
-            hue_interpolation: 'NEAR',
-        },
-    },
-    'Mix.001': {
-        id: 'Mix.001',
-        type: 'MIX',
-        name: 'MIX',
-        inputs: {
-            Factor: {
-                type: 'linked',
-                links: [
-                    {
-                        node: 'Map Range',
-                        socket: 'Result',
-                    },
-                ],
-            },
-            A: {
-                type: 'linked',
-                links: [
-                    {
-                        node: 'Color Ramp',
-                        socket: 'Color',
-                    },
-                ],
-            },
-            B: {
-                type: 'linked',
-                links: [
-                    {
-                        node: 'Color Ramp.001',
-                        socket: 'Color',
-                    },
-                ],
-            },
-        },
-        outputs: {
-            Result: [0.0, 0.0, 0.0],
-        },
-        properties: {
-            data_type: 'RGBA',
-            factor_mode: 'UNIFORM',
-            blend_type: 'MIX',
-            clamp_factor: true,
-            clamp_result: false,
-        },
-    },
-    'Math.001': {
-        id: 'Math.001',
-        type: 'MATH',
-        name: 'MATH',
-        inputs: {
-            Value: {
-                type: 'linked',
-                links: [
-                    {
-                        node: 'Math.002',
-                        socket: 'Value',
-                    },
-                ],
-            },
-        },
-        outputs: {
-            Value: {
-                type: 'linked',
-                links: [
-                    {
-                        node: 'Map Range',
-                        socket: 'Value',
-                    },
-                ],
-            },
-        },
-        properties: {
-            operation: 'SINE',
-            use_clamp: false,
-        },
-    },
-    'Map Range': {
-        id: 'Map Range',
-        type: 'MAP_RANGE',
-        name: 'MAP_RANGE',
-        inputs: {
-            Value: {
-                type: 'linked',
-                links: [
-                    {
-                        node: 'Math.001',
-                        socket: 'Value',
-                    },
-                ],
-            },
-            'From Min': {
-                value: -1.0,
-                type: 'VALUE',
-            },
-            'From Max': {
-                value: 1.0,
-                type: 'VALUE',
-            },
-            'To Min': {
-                value: 0.0,
-                type: 'VALUE',
-            },
-            'To Max': {
-                value: 1.0,
-                type: 'VALUE',
-            },
-        },
-        outputs: {
-            Result: {
-                type: 'linked',
-                links: [
-                    {
-                        node: 'Mix.001',
-                        socket: 'Factor',
-                    },
-                ],
-            },
-            Vector: null,
-        },
-        properties: {
-            clamp: true,
-            interpolation_type: 'LINEAR',
-            data_type: 'FLOAT',
-        },
-    },
-    Group: {
-        id: 'Group',
-        type: 'GROUP',
-        name: 'Time',
-        inputs: {},
-        outputs: {
-            Seconds: {
-                type: 'linked',
-                links: [
-                    {
-                        node: 'Math.005',
-                        socket: 'Value',
-                    },
-                    {
-                        node: 'Reroute',
-                        socket: 'Input',
-                    },
-                ],
-            },
-        },
-        properties: {
-            containsLogicTree: true,
-        },
-        internalLogicTree: {
-            'Group Output': {
-                id: 'Group Output',
-                type: 'GROUP_OUTPUT',
-                name: 'GROUP_OUTPUT',
-                inputs: {
-                    Seconds: {
-                        type: 'linked',
-                        links: [
-                            {
-                                node: 'Math.002',
-                                socket: 'Value',
-                            },
-                        ],
-                    },
-                    '': {
-                        value: null,
-                        type: 'CUSTOM',
-                    },
-                },
-                outputs: {},
-                properties: {
-                    is_active_output: true,
-                },
-            },
-            'Group Input': {
-                id: 'Group Input',
-                type: 'GROUP_INPUT',
-                name: 'GROUP_INPUT',
-                inputs: {},
-                outputs: {
-                    '': null,
-                },
-                properties: {},
-            },
-            Value: {
-                id: 'Value',
-                type: 'VALUE',
-                name: 'VALUE',
-                inputs: {},
-                outputs: {
-                    Value: {
-                        type: 'linked',
-                        links: [
-                            {
-                                node: 'Math.002',
-                                socket: 'Value',
-                            },
-                        ],
-                    },
-                },
-                properties: {
-                    drivers: [
-                        {
-                            socket: 'Value',
-                            expression: 'frame',
-                        },
-                    ],
-                    value: 45.0,
-                },
-            },
-            'Math.002': {
-                id: 'Math.002',
-                type: 'MATH',
-                name: 'MATH',
-                inputs: {
-                    Value: [
-                        {
-                            type: 'linked',
-                            links: [
-                                {
-                                    node: 'Value',
-                                    socket: 'Value',
-                                },
-                            ],
-                        },
-                        {
-                            value: 60.0,
-                            type: 'VALUE',
-                        },
-                    ],
-                },
-                outputs: {
-                    Value: {
-                        type: 'linked',
-                        links: [
-                            {
-                                node: 'Group Output',
-                                socket: 'Seconds',
-                            },
-                        ],
-                    },
-                },
-                properties: {
-                    operation: 'DIVIDE',
-                    use_clamp: false,
-                    drivers: [
-                        {
-                            socket: 'Value',
-                            expression: 'bpy.context.scene.render.fps',
-                        },
-                    ],
-                },
-            },
-        },
-    },
-    'Math.002': {
-        id: 'Math.002',
-        type: 'MATH',
-        name: 'MATH',
-        inputs: {
-            Value: [
-                {
-                    type: 'linked',
-                    links: [
-                        {
-                            node: 'Reroute',
-                            socket: 'Output',
-                        },
-                    ],
-                },
-                {
-                    value: 3.0,
-                    type: 'VALUE',
-                },
-            ],
-        },
-        outputs: {
-            Value: {
-                type: 'linked',
-                links: [
-                    {
-                        node: 'Math.001',
-                        socket: 'Value',
-                    },
-                ],
-            },
-        },
-        properties: {
-            operation: 'MULTIPLY',
-            use_clamp: false,
-        },
-    },
-    Mapping: {
-        id: 'Mapping',
-        type: 'MAPPING',
-        name: 'MAPPING',
-        inputs: {
-            Vector: {
-                type: 'linked',
-                links: [
-                    {
-                        node: 'Texture Coordinate',
-                        socket: 'UV',
-                    },
-                ],
-            },
-            Location: {
-                type: 'linked',
-                links: [
-                    {
-                        node: 'Combine XYZ',
-                        socket: 'Vector',
-                    },
-                ],
-            },
-            Rotation: {
-                value: [0.0, 1.0157816410064697, 0.0],
-                type: 'VECTOR',
-            },
-            Scale: {
-                value: [1.0, 1.0, 1.0],
-                type: 'VECTOR',
-            },
-        },
-        outputs: {
-            Vector: {
-                type: 'linked',
-                links: [
-                    {
-                        node: 'Noise Texture',
-                        socket: 'Vector',
-                    },
-                ],
-            },
-        },
-        properties: {
-            vector_type: 'POINT',
-        },
-    },
-    'Noise Texture': {
-        id: 'Noise Texture',
-        type: 'TEX_NOISE',
-        name: 'TEX_NOISE',
-        inputs: {
-            Vector: {
-                type: 'linked',
-                links: [
-                    {
-                        node: 'Mapping',
-                        socket: 'Vector',
-                    },
-                ],
-            },
-            Scale: {
-                value: 0.7,
-                type: 'VALUE',
-            },
-            Detail: {
-                value: 2.2,
-                type: 'VALUE',
-            },
-            Roughness: {
-                value: 1.0,
-                type: 'VALUE',
-            },
-            Lacunarity: {
-                value: 2.0,
-                type: 'VALUE',
-            },
-            Distortion: {
-                value: 0.0,
-                type: 'VALUE',
-            },
-        },
-        outputs: {
-            Fac: {
-                type: 'linked',
-                links: [
-                    {
-                        node: 'Reroute.003',
-                        socket: 'Input',
-                    },
-                ],
-            },
-            Color: null,
-        },
-        properties: {
-            noise_dimensions: '2D',
-            noise_type: 'FBM',
-            normalize: false,
-        },
-    },
-    'Reroute.003': {
-        id: 'Reroute.003',
-        type: 'REROUTE',
-        name: 'REROUTE',
-        inputs: {
-            Input: {
-                type: 'linked',
-                links: [
-                    {
-                        node: 'Noise Texture',
-                        socket: 'Fac',
-                    },
-                ],
-            },
-        },
-        outputs: {
-            Output: {
-                type: 'linked',
-                links: [
-                    {
-                        node: 'Color Ramp.001',
-                        socket: 'Fac',
-                    },
-                    {
-                        node: 'Color Ramp',
-                        socket: 'Fac',
-                    },
-                ],
-            },
-        },
-        properties: {
-            socket_idname: 'NodeSocketFloat',
-        },
-    },
-    'Math.005': {
-        id: 'Math.005',
-        type: 'MATH',
-        name: 'MATH',
-        inputs: {
-            Value: [
-                {
-                    type: 'linked',
-                    links: [
-                        {
-                            node: 'Group',
-                            socket: 'Seconds',
-                        },
-                    ],
-                },
-                {
-                    value: 0.2,
-                    type: 'VALUE',
-                },
-            ],
-        },
-        outputs: {
-            Value: {
-                type: 'linked',
-                links: [
-                    {
-                        node: 'Math.006',
-                        socket: 'Value',
-                    },
-                ],
-            },
-        },
-        properties: {
-            operation: 'MULTIPLY',
-            use_clamp: false,
-        },
-    },
-    'Combine XYZ': {
-        id: 'Combine XYZ',
-        type: 'COMBXYZ',
-        name: 'COMBXYZ',
-        inputs: {
-            X: {
-                type: 'linked',
-                links: [
-                    {
-                        node: 'Math.006',
-                        socket: 'Value',
-                    },
-                ],
-            },
-            Y: {
-                type: 'linked',
-                links: [
-                    {
-                        node: 'Separate XYZ.001',
-                        socket: 'Y',
-                    },
-                ],
-            },
-            Z: {
-                value: 0.0,
-                type: 'VALUE',
-            },
-        },
-        outputs: {
-            Vector: {
-                type: 'linked',
-                links: [
-                    {
-                        node: 'Mapping',
-                        socket: 'Location',
-                    },
-                ],
-            },
-        },
-        properties: {},
-    },
-    'Separate XYZ.001': {
-        id: 'Separate XYZ.001',
-        type: 'SEPXYZ',
-        name: 'SEPXYZ',
-        inputs: {
-            Vector: {
-                type: 'linked',
-                links: [
-                    {
-                        node: 'Texture Coordinate',
-                        socket: 'UV',
-                    },
-                ],
-            },
-        },
-        outputs: {
-            X: {
-                type: 'linked',
-                links: [
-                    {
-                        node: 'Math.006',
-                        socket: 'Value',
-                    },
-                ],
-            },
-            Y: {
-                type: 'linked',
-                links: [
-                    {
-                        node: 'Combine XYZ',
-                        socket: 'Y',
-                    },
-                ],
-            },
-            Z: 0.0,
-        },
-        properties: {},
-    },
-    'Math.006': {
-        id: 'Math.006',
-        type: 'MATH',
-        name: 'MATH',
-        inputs: {
-            Value: [
-                {
-                    type: 'linked',
-                    links: [
-                        {
-                            node: 'Math.005',
-                            socket: 'Value',
-                        },
-                    ],
-                },
-                {
-                    type: 'linked',
-                    links: [
-                        {
-                            node: 'Separate XYZ.001',
-                            socket: 'X',
-                        },
-                    ],
-                },
-            ],
-        },
-        outputs: {
-            Value: {
-                type: 'linked',
-                links: [
-                    {
-                        node: 'Combine XYZ',
-                        socket: 'X',
-                    },
-                ],
-            },
-        },
-        properties: {
-            operation: 'ADD',
-            use_clamp: false,
-        },
-    },
-    Reroute: {
-        id: 'Reroute',
-        type: 'REROUTE',
-        name: 'REROUTE',
-        inputs: {
-            Input: {
-                type: 'linked',
-                links: [
-                    {
-                        node: 'Group',
-                        socket: 'Seconds',
-                    },
-                ],
-            },
-        },
-        outputs: {
-            Output: {
-                type: 'linked',
-                links: [
-                    {
-                        node: 'Math.002',
-                        socket: 'Value',
-                    },
-                ],
-            },
-        },
-        properties: {
-            socket_idname: 'NodeSocketFloat',
-        },
-    },
-};
+import {
+    createNodeTreeCompiler,
+    NodeTree,
+} from '../plugins/nodeTrees/createCompiler';
+import blenderNoise from '../plugins/nodeTrees/shader/blenderNoise';
+import { getFeaturesFromName } from '../util/blender';
+import { interval } from '../util/timing';
+import { uniformTime } from '../render/const';
 
 // console.log(treeTest);
 
@@ -806,68 +57,282 @@ const colorRampTest: NodeTree = {
     mix nodes will need to handle varying vector sizes?
     minify / prettify (dev mode) output?
 */
+ColorManagement.enabled = true;
+const renderer = new WebGLRenderer({
+    antialias: true,
+    premultipliedAlpha: true,
+    precision: 'highp',
+});
+renderer.toneMapping = AgXToneMapping;
+renderer.toneMappingExposure = 0.73;
+renderer.outputColorSpace = SRGBColorSpace;
+const renderSize = new Vector2(1280, 720);
+renderer.setSize(renderSize.x, renderSize.y);
+
+window.renderer = renderer;
+
+document.body.append(renderer.domElement);
+
+let material: ShaderMaterial | null = null;
+
+let mesh: Mesh | null = null;
+
 const compileShaderTree = createNodeTreeCompiler({
     type: 'ShaderTree',
 });
 
-const transpiledShader = compileShaderTree(colorRampTest);
-console.log(transpiledShader);
+const uniformsElement = document.createElement('div');
+uniformsElement.style.display = 'inline-grid';
+uniformsElement.style.width = 'auto';
+uniformsElement.style.gridTemplateColumns = 'auto auto';
+uniformsElement.style.marginTop = '6px';
+uniformsElement.style.columnGap = uniformsElement.style.rowGap = '6px';
+uniformsElement.style.color = 'white';
+document.body.append(uniformsElement);
 
-ColorManagement.enabled = true;
-const renderer = new WebGLRenderer({
-    precision: 'highp',
-});
-renderer.toneMapping = AgXToneMapping;
-renderer.toneMappingExposure = 1;
-renderer.outputColorSpace = SRGBColorSpace;
-renderer.setSize(256, 256);
+function compile(tree: NodeTree, name = '') {
+    const transpiledShader = compileShaderTree(tree);
+    // console.log(transpiledShader);
+    console.groupCollapsed('Shader ' + name);
+    console.groupCollapsed('Tree');
+    console.log(tree);
+    console.groupEnd();
 
-const plane = new Mesh(
-    new PlaneGeometry(4, 4),
-    // new MeshBasicMaterial({
-    //     color: 'red',
-    // })
-    new ShaderMaterial({
+    if (material) material.dispose();
+    material = new ShaderMaterial({
+        lights: transpiledShader.compilationCache.features.has('lights'),
         side: DoubleSide,
         transparent: true,
+        alphaTest: 0.1,
+        // dithering: true,
+        // depthWrite: false,
+
         uniforms: transpiledShader.compilationCache.uniforms,
-        vertexShader: glsl`
-varying vec2 vUv;
+        defines: Array.from(transpiledShader.compilationCache.defines).reduce(
+            (defines, v) => {
+                defines[v] = '';
+                return defines;
+            },
+            {}
+        ),
+        vertexShader: transpiledShader.vertexShader,
+        fragmentShader: transpiledShader.fragmentShader,
+    });
+    material.name = name;
 
-void main() {
-    vUv = uv;
-    gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.);
+    material.onBeforeRender = (
+        renderer,
+        scene,
+        camera,
+        geometry,
+        object,
+        group
+    ) => {
+        if ('USE_OBJECT_INFO' in material.defines) {
+            material.uniforms.objectLocation.value = object.position;
+            material.uniformsNeedUpdate = true;
+        }
+
+        if (object instanceof InstancedMesh) {
+            material.defines['USE_INSTANCING'] = '';
+        } else if ('USE_INSTANCING' in material.defines) {
+            delete material.defines['USE_INSTANCING'];
+        }
+    };
+
+    console.groupCollapsed('uniforms');
+    console.log(material.uniforms);
+    console.groupEnd();
+
+    console.groupCollapsed('vertexShader');
+    console.log(material.vertexShader);
+    console.groupEnd();
+
+    console.groupCollapsed('fragmentShader');
+    console.log(
+        material.fragmentShader.replace(
+            blenderNoise,
+            '//shortened for log\n#include <blenderNoise>'
+        )
+    );
+    console.groupEnd();
+    // if (mesh) mesh.material = material;
+
+    uniformsElement.innerHTML = '';
+    if (transpiledShader.compilationCache.uniforms) {
+        for (let key of Object.keys(
+            transpiledShader.compilationCache.uniforms
+        )) {
+            const uniform = transpiledShader.compilationCache.uniforms[key];
+            if (uniform.value instanceof CanvasTexture) {
+                const canvas = uniform.value.source.data;
+                canvas.style.border = '2px solid #ACACAC';
+                if (canvas.height === 1) {
+                    canvas.style.width = '128px';
+                    canvas.style.height = '16px';
+                } else {
+                    canvas.style.maxWidth = `${renderSize.x}px`;
+                }
+                canvas.style.aspectRatio = 'unset';
+                uniformsElement.append(canvas);
+                uniformsElement.append(key);
+            }
+        }
+    }
+    console.groupEnd();
+    return material;
 }
-    `,
 
-        fragmentShader: glsl`
-varying vec2 vUv;
-${Array.from(transpiledShader.compilationCache.defines).join('\n')}
-${Array.from(transpiledShader.compilationCache.shaderIncludes.fragment).join(
-    '\n'
-)}
+// compile();
 
-void main() {
-    ${Object.values(transpiledShader.compilationCache.compiledInputs).join(
-        '\n'
-    )}
-    ${transpiledShader.transpiled.join('\n')}
-}
-    `,
-    })
-);
-plane.rotateX(-Math.PI / 2);
-plane.rotateY(Math.PI);
-console.log(plane.material.vertexShader);
-console.log(plane.material.fragmentShader);
+// const plane = new Mesh(
+//     new BoxGeometry(2, 2, 2),
+//     new ShaderMaterial({
+//         lights: transpiledShader.compilationCache.features.has('lights'),
+//         side: DoubleSide,
+//         transparent: true,
+//         uniforms: transpiledShader.compilationCache.uniforms,
+//         defines: Array.from(transpiledShader.compilationCache.defines).reduce(
+//             (defines, v) => {
+//                 defines[v] = '';
+//                 return defines;
+//             },
+//             {}
+//         ),
+//         vertexShader: transpiledShader.vertexShader,
+//         fragmentShader: transpiledShader.fragmentShader,
+//     })
+// );
+// plane.rotateX(-Math.PI / 4);
+// plane.rotateY(Math.PI / 4);
+// plane.material.onBeforeCompile = (parameters) => {
+//     console.log('beforeCompile', parameters);
+// };
+
+let controls: OrbitControls;
+new GLTFLoader().load('assets/shader-compile-test.glb', (gltf) => {
+    console.log(gltf.scene);
+    gltf.scene.traverse((o) => {
+        // console.log(o);
+        if (o instanceof Mesh) {
+            // mesh = o;
+            if (controls) {
+                controls.target = o.position.clone().setY(camera.position.y);
+                controls.update();
+            }
+
+            // o.material = material;
+        } else if (o instanceof PerspectiveCamera) {
+            console.log('camera?', o);
+            camera = o;
+            camera.far = 10000;
+            // scene.add(camera);
+            // controls.object = camera;
+
+            controls = new OrbitControls(camera, renderer.domElement);
+            // controls.target =
+
+            composer = new EffectComposer(renderer, renderTarget);
+
+            composer.addPass(new RenderPass(scene, camera));
+            composer.addPass(new OutputPass());
+            // controls.target =
+        }
+
+        // if (o.userData.name.startsWith('GN_Instance'))
+        const features = getFeaturesFromName(o);
+        if (features.instances) {
+            if (!(o.children[0] instanceof Mesh)) return;
+            const geometry = o.children[0].geometry as BufferGeometry;
+            // console.log(o.children[0].geometry);
+            const shaderTree = JSON.parse(
+                o.children[0].material.userData.shaderTree
+            );
+
+            for (let key in o.userData) {
+                const dataFeatures = getFeaturesFromName(key);
+                const data = o.userData[key];
+
+                if (dataFeatures.attribute) {
+                    console.log(
+                        'creating attribute',
+                        dataFeatures.reference,
+                        data
+                    );
+
+                    const parsedData = JSON.parse(data);
+
+                    if (parsedData instanceof Array) {
+                        const itemSize = Array.isArray(parsedData[0])
+                            ? parsedData[0].length
+                            : 1;
+                        const attribute = new InstancedBufferAttribute(
+                            new Float32Array(parsedData.flat()),
+                            itemSize,
+                            false,
+                            1
+                        );
+
+                        geometry.setAttribute(
+                            dataFeatures.reference as string,
+                            attribute
+                        );
+                    }
+                }
+            }
+
+            // console.log('SEARCH FOR NORMAL', o, o.children, geometry);
+
+            // console.log(JSON.parse(o.children[0].material.userData.shaderTree));
+            const instancedMesh = new InstancedMesh(
+                geometry,
+                compile(shaderTree, o.children[0].material.name),
+                o.children.length
+            );
+            mesh = instancedMesh;
+            instancedMesh.position.copy(o.position);
+            instancedMesh.rotation.copy(o.rotation);
+            instancedMesh.scale.copy(o.scale);
+
+            o.children.forEach((c, i) => {
+                // console.log(c);
+                instancedMesh.setMatrixAt(i, c.matrix);
+            });
+
+            o.children = [];
+
+            scene.add(instancedMesh);
+        }
+    });
+
+    scene.add(...gltf.scene.children);
+    console.log(scene.children);
+
+    enableNodeTreeBlenderConnection();
+});
 
 const scene = new Scene();
-scene.add(plane);
+// scene.add(plane);
 
-const camera = new OrthographicCamera(2, -2, 2, -2, -1, 1000);
-camera.position.set(0, 3, 0);
+// const camera = new OrthographicCamera(2, -2, 2, -2, -1, 1000);
+let camera = new PerspectiveCamera(50);
+camera.position.set(3, 3, 3);
 camera.lookAt(0, 0, 0);
-scene.add(camera);
+// scene.add(camera);
+
+// const orbitControls = new OrbitControls(camera, renderer.domElement);
+// controls = new OrbitControls(camera, renderer.domElement);
+
+const ambientLight = new AmbientLight(new Color('#FFF'), 0.2);
+scene.add(ambientLight);
+
+// scene.environment = new Sky
+
+// const light = new DirectionalLight(new Color('#fff'), 6);
+// light.position.set(-1, -5, 0);
+// light.lookAt(0, 0, 0);
+// scene.add(light);
+// scene.add(new DirectionalLightHelper(light));
 
 export const rendererContext = renderer.getContext() as WebGLRenderingContext;
 export const canRenderToFloatType =
@@ -881,18 +346,26 @@ const parameters: RenderTargetOptions = {
     type: canRenderToFloatType ? FloatType : HalfFloatType,
 };
 
-const renderTarget = new WebGLRenderTarget(256, 256, parameters);
+const renderTarget = new WebGLRenderTarget(
+    renderSize.x,
+    renderSize.y,
+    parameters
+);
 
 renderer.initRenderTarget(renderTarget);
 
-const composer = new EffectComposer(renderer, renderTarget);
+let composer: EffectComposer; // = new EffectComposer(renderer, renderTarget);
 
-composer.addPass(new RenderPass(scene, camera));
-composer.addPass(new OutputPass());
-
-window['transpiledShader'] = transpiledShader;
+// composer.addPass(new RenderPass(scene, camera));
+// composer.addPass(new OutputPass());
 
 let time = Date.now();
+
+const stats = new Stats();
+document.body.append(stats.dom);
+
+const shaderInterval = interval(1000 / 60);
+shaderInterval.accumulative = false;
 
 function tick() {
     const newTime = Date.now();
@@ -900,41 +373,80 @@ function tick() {
     const deltaSeconds = delta / 1000;
     time = newTime;
 
-    transpiledShader.compilationCache.uniforms.time.value += deltaSeconds;
+    stats.begin();
 
-    composer.render();
+    // TODO genericise this concept
+    if (shaderInterval(delta)) {
+        uniformTime.value += shaderInterval.timeLength / 1000;
+    }
+
+    if (composer) {
+        composer.render();
+    } else {
+        renderer.render(scene, camera);
+    }
+
+    stats.end();
 
     requestAnimationFrame(tick);
 }
 // composer.render();
-document.body.append(renderer.domElement);
-
-if (transpiledShader.compilationCache.uniforms) {
-    const uniformsElement = document.createElement('div');
-    uniformsElement.style.display = 'inline-grid';
-    uniformsElement.style.width = 'auto';
-    uniformsElement.style.gridTemplateColumns = 'auto auto';
-    uniformsElement.style.marginTop = '6px';
-    uniformsElement.style.columnGap = uniformsElement.style.rowGap = '6px';
-    uniformsElement.style.color = 'white';
-
-    for (let key of Object.keys(transpiledShader.compilationCache.uniforms)) {
-        const uniform = transpiledShader.compilationCache.uniforms[key];
-        if (uniform.value instanceof CanvasTexture) {
-            const canvas = uniform.value.source.data;
-            if (canvas.height === 1) {
-                canvas.style.width = '128px';
-                canvas.style.height = '16px';
-            } else {
-                canvas.style.maxWidth = '256px';
-            }
-            canvas.style.aspectRatio = 'unset';
-            uniformsElement.append(canvas);
-            uniformsElement.append(key);
-        }
-    }
-
-    document.body.append(uniformsElement);
-}
 
 tick();
+
+let ws: WebSocket | null = null;
+function enableNodeTreeBlenderConnection() {
+    if (ws) return;
+
+    ws = new WebSocket('ws://localhost:9001');
+
+    let pingInterval: NodeJS.Timeout | null = null;
+
+    ws.addEventListener('open', () => {
+        console.log('[nodeTreeBlenderConnection] Connected to server');
+        // ws.send('Hello, server!');
+        pingInterval = setInterval(() => {
+            ws.send('ping');
+        }, 5000);
+    });
+
+    ws.addEventListener('message', (event: MessageEvent) => {
+        const { data, type, name } = JSON.parse(event.data);
+
+        if (type === 'shaderTree') {
+            console.log('[nodeTreeBlenderConnection] received data', {
+                name,
+                data,
+            });
+            if (name.endsWith('+compile')) {
+                // mesh.material = compile(data as NodeTree);
+                const newMaterial = compile(data as NodeTree, name);
+                scene.traverse((o) => {
+                    if (o instanceof Mesh || o instanceof InstancedMesh) {
+                        if (o.material.name === name) {
+                            o.material = newMaterial;
+                        }
+                    }
+                });
+            }
+            // compile(data as NodeTree);
+        }
+
+        // const compiledLogicTree = compileLogicTree(data as NodeTree);
+        // const transpiledShader =
+    });
+
+    ws.addEventListener('close', () => {
+        console.log('[nodeTreeBlenderConnection] Connection closed');
+
+        clearInterval(pingInterval);
+
+        ws = null;
+
+        setTimeout(() => enableNodeTreeBlenderConnection(), 1000);
+    });
+
+    ws.addEventListener('error', (error) => {
+        console.error('[nodeTreeBlenderConnection] WebSocket error:', error);
+    });
+}

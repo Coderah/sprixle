@@ -2,7 +2,7 @@ const modules = require.context('./', true, /\.ts$/);
 
 console.log(modules);
 
-document.body.style.background = '#000';
+document.body.style.background = '#1d1d1d';
 document.body.style.fontFamily = 'Fira Code';
 
 const select = document.createElement('select');

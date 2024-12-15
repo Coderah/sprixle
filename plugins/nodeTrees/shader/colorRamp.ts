@@ -41,7 +41,10 @@ export function createColorRampLUT(
         }
 
         const startStop = colorRampData[currentStopIndex];
-        const endStop = colorRampData[currentStopIndex + 1];
+        const endStop = colorRampData[currentStopIndex + 1] || {
+            position: 1,
+            color: startStop.color,
+        };
 
         let r: number,
             g: number,

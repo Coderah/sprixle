@@ -41,7 +41,7 @@ def serialize(target):
             "properties": {}
         }
         
-        if node.type == 'GROUP':
+        if node.type == 'GROUP' and not node.node_tree == None:
             node_data['name'] = node.node_tree.name
 
             if len(node.node_tree.nodes) > 2:
@@ -81,6 +81,9 @@ def serialize(target):
                     "position": element.position,
                     "color": list(element.color)
                 })
+
+        if node.type == 'TEX_IMAGE' and not node.image == None:
+            node_data['properties']['image'] = node.image.name
         
         # TODO handle vectors
         for input in node.inputs:
@@ -109,7 +112,7 @@ def serialize(target):
                         "socket": link.from_socket.name
                     })
 
-                value = {"type": 'linked', "links": links}
+                value = {"type": 'linked', "links": links, "intended_type": f"{input.type}"}
             else:
                 if hasattr(input, 'default_value'):
                     value = input.default_value
@@ -117,13 +120,15 @@ def serialize(target):
                 if isinstance(value, (bpy.types.Object, bpy.types.Material)):
                     value = f"{value.name}"
                 elif input.type == 'VECTOR' or isinstance(value, (mathutils.Vector, mathutils.Euler)):
+                    value = [value[0], value[2], value[1]]
+                elif input.type == 'RGBA':
                     value = list(value)
                 elif isinstance(value, float):
                     value = round(value, 6)
                 elif is_struct(value):
                     value = None
 
-                value = {"value": value, "type": f"{input.type}"}
+                value = {"value": value, "type": f"{input.type}", "input_hidden": input.hide_value}
                 
             if input.label:
                 value['label'] = input.label
@@ -156,7 +161,7 @@ def serialize(target):
                         "socket": link.to_socket.name
                     })
 
-                value = {"type": 'linked', "links": links}
+                value = {"type": 'linked', "links": links, "intended_type": f"{output.type}"}
             else:
                 if hasattr(output, 'default_value'):
                     value = output.default_value
@@ -164,7 +169,8 @@ def serialize(target):
                 if isinstance(value, (bpy.types.Object, bpy.types.Material)):
                     value = f"{value.name}"
                 elif isinstance(value, (mathutils.Vector, mathutils.Euler)):
-                    value = list(value)
+                    # value = list(value)
+                    value = [value[0], value[2], value[1]]
                 elif isinstance(value, float):
                     value = round(value, 6)
                 if is_struct(value):
@@ -173,14 +179,17 @@ def serialize(target):
             if node.type == 'VALUE':
                 node_data['properties']['value'] = output.default_value
                 
-            node_data['outputs'][output.name] = value
+            node_data['outputs'][output.name] = {"value": value, "type": f"{output.type}"}
 
         return node_data
         
     serialized_tree = serialize_tree(node_group)
 
     output = json.dumps(serialized_tree, indent=0)
-    bpy.context.scene[name] = output
+    if isinstance(target, bpy.types.Material):
+        target['shaderTree'] = output
+    else:
+        bpy.context.scene[name] = output
     # print('set custom attrib?')
 
     return serialized_tree

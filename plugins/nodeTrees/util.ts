@@ -33,11 +33,13 @@ export function getParameterReference(name: string) {
 export function getReturnType(type: TypeMethod, parameters: any[]) {
     const baseReturn = type.return;
 
+    if (!baseReturn) return baseReturn;
+
     if (baseReturn.typeName !== 'If') return baseReturn;
 
     if (
-        baseReturn.typeArguments[0].kind !== ReflectionKind.literal ||
-        baseReturn.typeArguments[1].kind !== ReflectionKind.objectLiteral
+        baseReturn.typeArguments?.[0]?.kind !== ReflectionKind.literal ||
+        baseReturn.typeArguments?.[1]?.kind !== ReflectionKind.objectLiteral
     )
         return;
 

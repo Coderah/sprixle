@@ -126,7 +126,7 @@ function getNext(tree: NodeTree, n: NodeTree[keyof NodeTree]) {
         n.outputs.Trigger ||
         n.outputs.Output;
 
-    if (!field) return [];
+    if (!field || field.type !== 'linked') return [];
 
     return field.links
         ?.filter((l) => l.socket === 'Trigger' || l.socket === 'Input')
@@ -194,7 +194,7 @@ export function createNodeTreeCompiler<M extends LogicTreeMethods>(
             if (socket instanceof Array) {
                 return;
             }
-            if (socket.type === 'linked') {
+            if (socket?.type === 'linked') {
                 const outputLinks = socket.links.filter(
                     (l) =>
                         l.socket === 'Trigger' ||
@@ -215,7 +215,11 @@ export function createNodeTreeCompiler<M extends LogicTreeMethods>(
             }
 
             console.warn('[compileNodeSocket] failed to compile input');
-            return { compiled: null, reference: null, value: null };
+            return {
+                compiled: null,
+                reference: null,
+                value: null,
+            };
         }
 
         let internalValue: any = null;
@@ -284,6 +288,7 @@ export function createNodeTreeCompiler<M extends LogicTreeMethods>(
             ) {
                 value = 'delta';
             } else if (
+                parameters.type !== 'LogicTree' &&
                 inputNode.type === 'GROUP' &&
                 inputNode.name === 'Time'
             ) {
@@ -526,6 +531,8 @@ export function createNodeTreeCompiler<M extends LogicTreeMethods>(
                     );
                 }
                 // TODO logicTree hold onto a static vector?
+            } else {
+                value = value.toString();
             }
         }
         // console.log('[compileNodeSocket]', n, p, ReflectionKind[p.type.kind]);
@@ -576,7 +583,10 @@ export function createNodeTreeCompiler<M extends LogicTreeMethods>(
                 parameters.type === 'LogicTree' && !isMethodTranspiler
                     ? parameters.reflection?.getMethod(n.name)
                     : transpilerReflection.types.find((t) => t.name === n.name);
-        } else if (n.type === 'GROUP_OUTPUT' || n.type === 'GROUP') {
+        } else if (
+            parameters.type !== 'LogicTree' &&
+            (n.type === 'GROUP_OUTPUT' || n.type === 'GROUP')
+        ) {
             methodReflection = dynamicNodeToType(n) as TypeMethod;
             isMethodTranspiler = true;
             // debugger;
@@ -872,7 +882,9 @@ export function createNodeTreeCompiler<M extends LogicTreeMethods>(
                         compiledOutput.forEach(handleOutput);
                     } else {
                         // TODO should we even be here? MAP_RANGE for FLOAT triggered
-                        compiledParameters.push(undefined);
+                        compiledParameters.push(
+                            isMethodTranspiler ? undefined : 'undefined'
+                        );
                     }
                 } else if (p.name === 'delta') {
                     compiledParameters.push('delta');
@@ -892,7 +904,9 @@ export function createNodeTreeCompiler<M extends LogicTreeMethods>(
                         );
                     }
                 } else {
-                    compiledParameters.push(undefined);
+                    compiledParameters.push(
+                        isMethodTranspiler ? undefined : 'undefined'
+                    );
                 }
             });
 

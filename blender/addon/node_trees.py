@@ -175,11 +175,13 @@ def serialize(target):
                     value = round(value, 6)
                 if is_struct(value):
                     value = None
+                
+                value = {"value": value, "type": f"{output.type}"}
 
             if node.type == 'VALUE':
                 node_data['properties']['value'] = output.default_value
                 
-            node_data['outputs'][output.name] = {"value": value, "type": f"{output.type}"}
+            node_data['outputs'][output.name] = value
 
         return node_data
         

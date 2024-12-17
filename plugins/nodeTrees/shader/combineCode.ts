@@ -41,16 +41,26 @@ varying vec3 vViewPosition;
 #endif
 
 #include <common>
-#include <batching_pars_vertex>
 
-#include <uv_pars_vertex>
-#include <displacementmap_pars_vertex>
+#ifndef USE_POINTS
+    #include <uv_pars_vertex>
+    #include <batching_pars_vertex>
+    #include <normal_pars_vertex>
+    #include <displacementmap_pars_vertex>
+    #include <skinning_pars_vertex>
+#endif
+
+#ifdef USE_POINTS
+    uniform float size;
+    uniform float scale;
+#endif
+
 // TODO vertex colors defines
 #include <color_pars_vertex>
 #include <fog_pars_vertex>
-#include <normal_pars_vertex>
+
 #include <morphtarget_pars_vertex>
-#include <skinning_pars_vertex>
+
 #include <shadowmap_pars_vertex>
 #include <logdepthbuf_pars_vertex>
 #include <clipping_planes_pars_vertex>
@@ -67,10 +77,14 @@ ${Array.from(compilationCache.shader.vertexIncludes).join('\n')}
 
 void main() {
 
-	#include <uv_vertex>
+    #ifndef USE_POINTS
+        #include <uv_vertex>
+    #endif
 	#include <color_vertex>
 	#include <morphinstance_vertex>
 	#include <morphcolor_vertex>
+
+    #ifndef USE_POINTS
 	#include <batching_vertex>
 
 	#include <beginnormal_vertex>
@@ -79,12 +93,29 @@ void main() {
 	#include <skinnormal_vertex>
 	#include <defaultnormal_vertex>
 	#include <normal_vertex>
+    #endif
 
 	#include <begin_vertex>
 	#include <morphtarget_vertex>
-	#include <skinning_vertex>
-	#include <displacementmap_vertex>
-	#include <project_vertex>
+    #ifndef USE_POINTS
+        #include <skinning_vertex>
+        #include <displacementmap_vertex>
+    #endif
+
+    #include <project_vertex>
+
+    #ifdef USE_POINTS
+        gl_PointSize = size;
+
+        #ifdef USE_SIZEATTENUATION
+
+            bool isPerspective = isPerspectiveMatrix( projectionMatrix );
+
+            if ( isPerspective ) gl_PointSize *= ( scale / - mvPosition.z );
+
+        #endif
+    #endif
+
 	#include <logdepthbuf_vertex>
 	#include <clipping_planes_vertex>
 
@@ -95,15 +126,22 @@ void main() {
     
         #ifdef USE_INSTANCING
         
-        vObjectLocation = vObjectLocation + (instanceMatrix * vec4(1.)).xyz;
+        vObjectLocation = (instanceMatrix * vec4(vObjectLocation, 1.)).xyz;
         
         #endif
 
+        #ifdef USE_POINTS
+        vObjectLocation = position;
+        #endif
         vObjectLocation = (modelMatrix * vec4(vObjectLocation, 1.)).xyz;
+
+
     #endif
 
 	#include <worldpos_vertex>
-	#include <shadowmap_vertex>
+	#ifndef USE_POINTS
+        #include <shadowmap_vertex>
+    #endif
 	#include <fog_vertex>
 
     ${compilationCache.shader.vertex.join('\n')}
@@ -127,7 +165,9 @@ export function combineFragmentShader(
     #include <packing>
     #include <dithering_pars_fragment>
     #include <color_pars_fragment>
+    // #ifdef USE_POINTS
     #include <uv_pars_fragment>
+    // #endif
     // #include <map_pars_fragment>
     #include <alphamap_pars_fragment>
     #include <alphatest_pars_fragment>
@@ -179,6 +219,10 @@ export function combineFragmentShader(
     ${f('diffuseBSDF', diffuseBSDF)}
 
     void main() {
+        #ifdef USE_POINTS
+        vec3 vNormal = vec3(0.);
+        vec2 vUv = vec2(gl_PointCoord.x, gl_PointCoord.y);
+        #endif
         // TODO
         // #include <clipping_planes_fragment>
         #include <logdepthbuf_fragment>

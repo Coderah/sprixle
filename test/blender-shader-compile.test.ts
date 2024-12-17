@@ -16,6 +16,7 @@ import {
     Mesh,
     NoToneMapping,
     PerspectiveCamera,
+    Points,
     ReinhardToneMapping,
     RenderTargetOptions,
     RGBAFormat,
@@ -46,15 +47,7 @@ import { uniformTime } from '../render/const';
 // console.log(treeTest);
 
 /* TODO internally we need to
-    identify and track uniforms
-    identify and track includes
-    work out how to base things on existing material nodes?
-        maybe this is done by including the original shader with main renamed and using it as a fn?
     handle the "no shadows" light path trick...
-    decide how to handle noise nodes
-    swap priority of internal nodes to favor code implementation
-    hamdle image texture nodes...
-    mix nodes will need to handle varying vector sizes?
     minify / prettify (dev mode) output?
 */
 ColorManagement.enabled = true;
@@ -63,6 +56,7 @@ const renderer = new WebGLRenderer({
     premultipliedAlpha: true,
     precision: 'highp',
 });
+renderer.setPixelRatio(0.4);
 renderer.toneMapping = AgXToneMapping;
 renderer.toneMappingExposure = 0.73;
 renderer.outputColorSpace = SRGBColorSpace;
@@ -106,14 +100,21 @@ function compile(tree: NodeTree, name = '') {
         alphaTest: 0.1,
         // dithering: true,
         // depthWrite: false,
+        // depthTest: false,
 
-        uniforms: transpiledShader.compilationCache.uniforms,
+        uniforms: {
+            ...transpiledShader.compilationCache.uniforms,
+            // TODO get from geometry bounding box
+            // size: { value: 90 },
+            // scale: { value: 1 },
+        },
         defines: Array.from(transpiledShader.compilationCache.defines).reduce(
             (defines, v) => {
                 defines[v] = '';
                 return defines;
             },
             {}
+            // { USE_POINTS: '', USE_POINTS_UV: '' }
         ),
         vertexShader: transpiledShader.vertexShader,
         fragmentShader: transpiledShader.fragmentShader,
@@ -243,11 +244,52 @@ new GLTFLoader().load('assets/shader-compile-test.glb', (gltf) => {
         const features = getFeaturesFromName(o);
         if (features.instances) {
             if (!(o.children[0] instanceof Mesh)) return;
-            const geometry = o.children[0].geometry as BufferGeometry;
             // console.log(o.children[0].geometry);
             const shaderTree = JSON.parse(
                 o.children[0].material.userData.shaderTree
             );
+
+            // console.log('SEARCH FOR NORMAL', o, o.children, geometry);
+
+            // console.log(JSON.parse(o.children[0].material.userData.shaderTree));
+            const geometry = o.children[0].geometry as BufferGeometry;
+            const instancedMesh = new InstancedMesh(
+                geometry,
+                compile(shaderTree, o.children[0].material.name),
+                o.children.length
+            );
+            mesh = instancedMesh;
+            instancedMesh.position.copy(o.position);
+            instancedMesh.rotation.copy(o.rotation);
+            instancedMesh.scale.copy(o.scale);
+
+            o.children.forEach((c, i) => {
+                // console.log(c);
+                instancedMesh.setMatrixAt(i, c.matrix);
+            });
+
+            // const geometry = new BufferGeometry();
+
+            // const instancedMesh = new Points(
+            //     geometry,
+            //     compile(shaderTree, o.children[0].material.name)
+            // );
+            // mesh = instancedMesh;
+
+            // const positionAttribute = new BufferAttribute(
+            //     new Float32Array(o.children.length * 3),
+            //     3
+            // );
+            // instancedMesh.geometry.setAttribute('position', positionAttribute);
+            // instancedMesh.position.copy(o.position);
+            // instancedMesh.rotation.copy(o.rotation);
+            // instancedMesh.scale.copy(o.scale);
+
+            // o.children.forEach((c, i) => {
+            //     // console.log(c);
+            //     // if (c)
+            //     positionAttribute.set(c.position.toArray(), i * 3);
+            // });
 
             for (let key in o.userData) {
                 const dataFeatures = getFeaturesFromName(key);
@@ -280,24 +322,6 @@ new GLTFLoader().load('assets/shader-compile-test.glb', (gltf) => {
                     }
                 }
             }
-
-            // console.log('SEARCH FOR NORMAL', o, o.children, geometry);
-
-            // console.log(JSON.parse(o.children[0].material.userData.shaderTree));
-            const instancedMesh = new InstancedMesh(
-                geometry,
-                compile(shaderTree, o.children[0].material.name),
-                o.children.length
-            );
-            mesh = instancedMesh;
-            instancedMesh.position.copy(o.position);
-            instancedMesh.rotation.copy(o.rotation);
-            instancedMesh.scale.copy(o.scale);
-
-            o.children.forEach((c, i) => {
-                // console.log(c);
-                instancedMesh.setMatrixAt(i, c.matrix);
-            });
 
             o.children = [];
 
@@ -364,8 +388,9 @@ let time = Date.now();
 const stats = new Stats();
 document.body.append(stats.dom);
 
-const shaderInterval = interval(1000 / 60);
+const shaderInterval = interval(1000 / 30);
 shaderInterval.accumulative = false;
+// shaderInterval.
 
 function tick() {
     const newTime = Date.now();
@@ -377,7 +402,7 @@ function tick() {
 
     // TODO genericise this concept
     if (shaderInterval(delta)) {
-        uniformTime.value += shaderInterval.timeLength / 1000;
+        uniformTime.value += deltaSeconds;
     }
 
     if (composer) {

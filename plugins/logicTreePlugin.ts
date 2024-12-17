@@ -147,12 +147,14 @@ ${transpiled.reduce((r, c) => (c ? r + '\n' + c : r), '')}
         });
 
         ws.addEventListener('message', (event: MessageEvent) => {
-            const { data, name } = JSON.parse(event.data);
+            const { data, name, type } = JSON.parse(event.data);
 
-            console.log(
-                '[LogicTreeBlenderConnection] received logicTree data',
-                { name, data }
-            );
+            if (type !== 'logicTree') return;
+            console.log('[LogicTreeBlenderConnection] received nodeTree data', {
+                name,
+                data,
+                type,
+            });
 
             const existingEntity = em.getEntity(name);
 

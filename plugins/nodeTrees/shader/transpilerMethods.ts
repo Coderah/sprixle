@@ -37,7 +37,9 @@ const mathFunctions = {
     ARCTAN2: 'atan2($1, $2)',
     ABSOLUTE: 'abs($1)',
     SQRT: 'sqrt($1)',
-    FLOORED_MODULO: ' ($2 != 0.0) ? $1 - floor($1 / $2) * $2 : 0.0',
+    FLOORED_MODULO: '($2 != 0.0) ? $1 - floor($1 / $2) * $2 : 0.0',
+    PINGPONG:
+        '($2 != 0.0) ? abs(fract(($1 - $2) / ($2 * 2.0)) * $2 * 2.0 - $2) : 0.0',
 };
 
 type If<T, V> = any;

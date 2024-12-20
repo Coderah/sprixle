@@ -12,13 +12,14 @@ def serialize(target):
     if hasattr(target, 'modifiers'):
         modifier = next((m for m in target.modifiers if m.type == 'NODES' and '+logic' in m.node_group.name), None)
         if modifier is None:
-            return None
+            return
         node_group = modifier.node_group
         name = node_group.name
     elif isinstance(target, bpy.types.Material):
+        if not '+compile' in target.name: return
         modifier = target
         node_group = modifier.node_tree
-        name = target.name + '+material'
+        name = target.name
 
     if not modifier or not node_group: return
 

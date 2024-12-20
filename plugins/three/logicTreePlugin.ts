@@ -4,16 +4,17 @@ import {
     resolveReceiveType,
 } from '@deepkit/type';
 import { Object3D, Vector3 } from 'three';
-import { defaultComponentTypes, Entity, Manager } from '../ecs/manager';
-import { Pipeline } from '../ecs/system';
-import { interval } from '../util/timing';
-import { transpilerMethods } from './nodeTrees/logic/transpilerMethods';
+import { defaultComponentTypes, Entity, Manager } from '../../ecs/manager';
+import { Pipeline } from '../../ecs/system';
+import { interval } from '../../util/timing';
+import { transpilerMethods } from '../nodeTrees/logic/transpilerMethods';
 import {
     CompilationCache,
     createNodeTreeCompiler,
     LogicTreeMethods,
     NodeTree,
-} from './nodeTrees/createCompiler';
+} from '../nodeTrees/createCompiler';
+import { blenderEvents } from '../../blender/realtime';
 
 export type LogicTreeComponentTypes<ComponentTypes> = {
     mesh: Object3D;
@@ -130,88 +131,52 @@ ${transpiled.reduce((r, c) => (c ? r + '\n' + c : r), '')}
         compiledLogicTreeSystem
     );
 
-    let ws: WebSocket | null = null;
-    function enableLogicTreeBlenderConnection() {
-        if (ws) return;
+    // TODO
+    blenderEvents.addEventListener('logicTree', (event) => {
+        const { tree, name } = event.detail;
 
-        ws = new WebSocket('ws://localhost:9001');
-
-        let pingInterval: NodeJS.Timeout | null = null;
-
-        ws.addEventListener('open', () => {
-            console.log('[LogicTreeBlenderConnection] Connected to server');
-            // ws.send('Hello, server!');
-            pingInterval = setInterval(() => {
-                ws.send('ping');
-            }, 5000);
+        console.log('[LogicTreeBlenderConnection] received nodeTree data', {
+            name,
+            tree,
         });
 
-        ws.addEventListener('message', (event: MessageEvent) => {
-            const { data, name, type } = JSON.parse(event.data);
+        const existingEntity = em.getEntity(name);
 
-            if (type !== 'logicTree') return;
-            console.log('[LogicTreeBlenderConnection] received nodeTree data', {
-                name,
-                data,
-                type,
-            });
+        const compiledLogicTree = compileLogicTree(tree);
 
-            const existingEntity = em.getEntity(name);
+        console.log(
+            `[LogicTreeBlenderConnection] compiled from Blender`,
+            compiledLogicTree.fn,
+            compiledLogicTree.transpiled
+        );
 
-            const compiledLogicTree = compileLogicTree(data as NodeTree);
-
+        if (existingEntity) {
             console.log(
-                `[LogicTreeBlenderConnection] compiled from Blender`,
-                compiledLogicTree.fn,
-                compiledLogicTree.transpiled
+                '[LogicTreeBlenderConnection] applied compiled logicTree to existing entity'
             );
 
-            if (existingEntity) {
+            if (compiledLogicTree.initFn) {
                 console.log(
-                    '[LogicTreeBlenderConnection] applied compiled logicTree to existing entity'
+                    '[LogicTreeBlenderConnection] calling initFn',
+                    compiledLogicTree.initFn
                 );
-
-                if (compiledLogicTree.initFn) {
-                    console.log(
-                        '[LogicTreeBlenderConnection] calling initFn',
-                        compiledLogicTree.initFn
-                    );
-                    compiledLogicTree.initFn.call(
-                        existingEntity.components.logicTreeCache,
-                        0,
-                        methods,
-                        existingEntity,
-                        {
-                            Geometry: existingEntity.components.mesh,
-                        }
-                    );
-                }
-                existingEntity.components.compiledLogicTree =
-                    compiledLogicTree.fn;
-            } else {
-                console.warn(
-                    '[LogicTreeBlenderConnection] compiled logicTree does not map to an existing entity'
+                compiledLogicTree.initFn.call(
+                    existingEntity.components.logicTreeCache,
+                    0,
+                    methods,
+                    existingEntity,
+                    {
+                        Geometry: existingEntity.components.mesh,
+                    }
                 );
             }
-        });
-
-        ws.addEventListener('close', () => {
-            console.log('[LogicTreeBlenderConnection] Connection closed');
-
-            clearInterval(pingInterval);
-
-            ws = null;
-
-            setTimeout(() => enableLogicTreeBlenderConnection(), 1000);
-        });
-
-        ws.addEventListener('error', (error) => {
-            console.error(
-                '[LogicTreeBlenderConnection] WebSocket error:',
-                error
+            existingEntity.components.compiledLogicTree = compiledLogicTree.fn;
+        } else {
+            console.warn(
+                '[LogicTreeBlenderConnection] compiled logicTree does not map to an existing entity'
             );
-        });
-    }
+        }
+    });
 
-    return { logicTreePipeline, enableLogicTreeBlenderConnection };
+    return { logicTreePipeline };
 }

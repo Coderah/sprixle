@@ -202,8 +202,8 @@ export const transpilerMethods = {
             `texture2D(${reference}, vec2(compute_color_map_coordinate(clamp(${Fac}, 0.0, 1.0)), 0.5))`,
         ];
     },
-    BSDF_TRANSPARENT(): GLSL['vec4'] {
-        return ['vec4(0.,0.,0.,0.)'];
+    BSDF_TRANSPARENT(Color: GLSL['vec3']): GLSL['vec4'] {
+        return [`vec4(0.,0.,0.,1. - clamp(length(${Color}), 0., 1.))`];
     },
     BSDF_DIFFUSE(
         Color: GLSL['vec3'],

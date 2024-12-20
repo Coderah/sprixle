@@ -14,6 +14,8 @@ import {
     InstancedMesh,
     LinearFilter,
     Mesh,
+    MeshLambertMaterial,
+    MeshPhongMaterial,
     NoToneMapping,
     PerspectiveCamera,
     Points,
@@ -23,6 +25,7 @@ import {
     Scene,
     ShaderMaterial,
     SRGBColorSpace,
+    TextureLoader,
     Vector2,
     WebGLRenderer,
     WebGLRenderTarget,
@@ -43,6 +46,10 @@ import blenderNoise from '../plugins/nodeTrees/shader/blenderNoise';
 import { getFeaturesFromName } from '../util/blender';
 import { interval } from '../util/timing';
 import { uniformTime } from '../render/const';
+import {
+    blenderEvents,
+    enableNodeTreeBlenderConnection,
+} from '../blender/realtime';
 
 // console.log(treeTest);
 
@@ -93,6 +100,9 @@ function compile(tree: NodeTree, name = '') {
     console.groupEnd();
 
     if (material) material.dispose();
+    // return new MeshLambertMaterial({
+    //     map:
+    // })
     material = new ShaderMaterial({
         lights: transpiledShader.compilationCache.features.has('lights'),
         side: DoubleSide,
@@ -255,6 +265,15 @@ new GLTFLoader().load('assets/shader-compile-test.glb', (gltf) => {
             const geometry = o.children[0].geometry as BufferGeometry;
             const instancedMesh = new InstancedMesh(
                 geometry,
+                // new MeshLambertMaterial({
+                //     map: new TextureLoader().load(
+                //         'assets/spritesheet-leaf-1.webp'
+                //     ),
+                //     transparent: true,
+                //     alphaTest: 0.5,
+                //     side: DoubleSide,
+                // }),
+                // o.children[0].material,
                 compile(shaderTree, o.children[0].material.name),
                 o.children.length
             );
@@ -419,59 +438,14 @@ function tick() {
 
 tick();
 
-let ws: WebSocket | null = null;
-function enableNodeTreeBlenderConnection() {
-    if (ws) return;
-
-    ws = new WebSocket('ws://localhost:9001');
-
-    let pingInterval: NodeJS.Timeout | null = null;
-
-    ws.addEventListener('open', () => {
-        console.log('[nodeTreeBlenderConnection] Connected to server');
-        // ws.send('Hello, server!');
-        pingInterval = setInterval(() => {
-            ws.send('ping');
-        }, 5000);
-    });
-
-    ws.addEventListener('message', (event: MessageEvent) => {
-        const { data, type, name } = JSON.parse(event.data);
-
-        if (type === 'shaderTree') {
-            console.log('[nodeTreeBlenderConnection] received data', {
-                name,
-                data,
-            });
-            if (name.endsWith('+compile')) {
-                // mesh.material = compile(data as NodeTree);
-                const newMaterial = compile(data as NodeTree, name);
-                scene.traverse((o) => {
-                    if (o instanceof Mesh || o instanceof InstancedMesh) {
-                        if (o.material.name === name) {
-                            o.material = newMaterial;
-                        }
-                    }
-                });
+blenderEvents.addEventListener('shaderTree', (e) => {
+    const { name, tree } = e.detail;
+    const newMaterial = compile(tree, name);
+    scene.traverse((o) => {
+        if (o instanceof Mesh || o instanceof InstancedMesh) {
+            if (o.material.name === name) {
+                o.material = newMaterial;
             }
-            // compile(data as NodeTree);
         }
-
-        // const compiledLogicTree = compileLogicTree(data as NodeTree);
-        // const transpiledShader =
     });
-
-    ws.addEventListener('close', () => {
-        console.log('[nodeTreeBlenderConnection] Connection closed');
-
-        clearInterval(pingInterval);
-
-        ws = null;
-
-        setTimeout(() => enableNodeTreeBlenderConnection(), 1000);
-    });
-
-    ws.addEventListener('error', (error) => {
-        console.error('[nodeTreeBlenderConnection] WebSocket error:', error);
-    });
-}
+});

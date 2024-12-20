@@ -13,6 +13,7 @@
 
 from . import auto_load
 from . import node_trees
+from . import exporter
 from deepdiff import DeepDiff
 import bpy
 from bpy.app.handlers import persistent
@@ -30,11 +31,11 @@ def handleDepsGraphUpdate(scene, graph):
     for update in graph.updates:
         print(update)
         if isinstance(update.id, bpy.types.Material):
-            print('shading', update.is_updated_shading)
             material = bpy.data.materials[update.id.name]
             data = node_trees.serialize(material)
 
             if data and server:
+                print('sending shaderTree', update.id.name)
                 graphs_serialized.append(material)
                 server.send_message_to_all(json.dumps({
                     "name": update.id.name.replace('.', ''),
@@ -82,6 +83,7 @@ def new_client(client, server):
         data = node_trees.serialize(material)
 
         if data and server:
+            print('sending shaderTree', material.name)
             server.send_message_to_all(json.dumps({
                 "name": material.name.replace('.', ''),
                 "type": 'shaderTree',
@@ -117,9 +119,10 @@ server = False
 def register():
     auto_load.register()
     bpy.app.handlers.depsgraph_update_post.append(handleDepsGraphUpdate)
+    # exporter.register()
 
     global server
-    server = WebsocketServer(port = PORT)
+    server = WebsocketServer(host = '0.0.0.0', port = PORT)
     server.set_fn_new_client(new_client)
     server.set_fn_client_left(client_left)
     server.set_fn_message_received(message_received)
@@ -128,6 +131,7 @@ def register():
 
 def unregister():
     auto_load.unregister()
+    # exporter.unregister()
     bpy.app.handlers.depsgraph_update_post.remove(handleDepsGraphUpdate)
 
     global server

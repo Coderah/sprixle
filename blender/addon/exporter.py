@@ -67,30 +67,3 @@ def export(sceneKey):
         
 #        export_texture_dir=bpy.path.abspath('//textures')
     )
-        
-
-
-class SprixleExport(bpy.types.Operator):
-    """Uses Sprixle addon's export for the current scene"""      # Use this as a tooltip for menu items and buttons.
-    bl_idname = "export.sprixle_export"        # Unique identifier for buttons and menu items to reference.
-    bl_label = "Sprixle: Export"         # Display name in the interface.
-
-    def execute(self, context):        # execute() is called when running the operator.
-
-        export(bpy.context.scene.name)
-
-        return {'FINISHED'}            # Lets Blender know the operator finished successfully.
-
-
-def menu_func_export(self, context):
-    self.layout.operator(SprixleExport.bl_idname, text="Sprixle Export (.glb)")
-
-def register():
-    print('SprixleExport registering')
-    # bpy.utils.unregister_class(SprixleExport)
-    # bpy.utils.register_class(SprixleExport)
-    bpy.types.TOPBAR_MT_file_export.append(menu_func_export)
-
-def unregister():
-    bpy.types.TOPBAR_MT_file_export.remove(menu_func_export)
-    # bpy.utils.unregister_class(SprixleExport)

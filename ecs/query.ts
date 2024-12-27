@@ -325,25 +325,26 @@ export class Consumer<
         const entitiesConsumed: typeof this.updatedEntities = new Set();
 
         this.newEntities.forEach((id) => {
-            this.newEntities.delete(id);
-
             const entity = this.query.manager.getEntity(id) as E;
             newHandler?.(entity, delta);
 
             entitiesConsumed.add(id);
             newOrUpdated?.(entity, delta);
+            this.newEntities.delete(id);
         });
 
         if (!updated && !newOrUpdated) return;
 
         this.updatedEntities.forEach((id) => {
-            this.updatedEntities.delete(id);
-
             const entity = this.query.manager.getEntity(id) as E;
             updated?.(entity, delta);
 
-            if (entitiesConsumed.has(id)) return;
+            if (entitiesConsumed.has(id)) {
+                this.updatedEntities.delete(id);
+                return;
+            }
             newOrUpdated?.(entity, delta);
+            this.updatedEntities.delete(id);
         });
     }
 

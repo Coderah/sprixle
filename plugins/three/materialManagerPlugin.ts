@@ -45,6 +45,7 @@ export function applyMaterialManagerPlugin<
 
         if (!material) return;
 
+        // TODO: use query indexing and lookup
         const existingMaterial = materialQuery.find(
             (e) => e.components.materialName === material.name
         );
@@ -95,6 +96,10 @@ export function applyMaterialManagerPlugin<
             const { materialName, material } = materialEntity.components;
 
             if (!inUseMaterials.has(materialName)) {
+                console.log(
+                    '[MaterialManager] releasing material',
+                    materialName
+                );
                 em.deregisterEntity(materialEntity);
             }
         }
@@ -112,7 +117,8 @@ export function applyMaterialManagerPlugin<
         },
     });
 
-    const materialSystem = em.createSystem(materialQuery.createConsumer(), {
+    const materialConsumer = materialQuery.createConsumer();
+    const materialSystem = em.createSystem(materialConsumer, {
         newOrUpdated(entity) {
             const { material, materialName } = entity.components;
 
@@ -122,6 +128,13 @@ export function applyMaterialManagerPlugin<
                     materialEntity !== entity &&
                     materialEntity.components.materialName === materialName
                 ) {
+                    if (
+                        materialConsumer.newEntities.has(materialEntity.id) ||
+                        materialConsumer.updatedEntities.has(materialEntity.id)
+                    ) {
+                        // Ensures newest entity wins
+                        return;
+                    }
                     em.deregisterEntity(materialEntity);
                 }
             }

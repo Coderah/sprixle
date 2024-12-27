@@ -5,6 +5,7 @@ import {
 } from '@deepkit/type';
 import {
     DoubleSide,
+    FrontSide,
     InstancedMesh,
     Material,
     Object3D,
@@ -58,7 +59,7 @@ export function applyShaderTreePlugin<
         // TODO: allow passing in things like side, etc.
         const material = new ShaderMaterial({
             lights: transpiledShader.compilationCache.features.has('lights'),
-            side: DoubleSide,
+            side: FrontSide,
             transparent: true,
             alphaTest: 0.1,
             // dithering: true,
@@ -114,10 +115,16 @@ export function applyShaderTreePlugin<
     const shaderTreeSystem = em.createSystem(shaderTreeQuery.createConsumer(), {
         forNew(entity, delta) {
             // TODO add loading manager
-            const { shaderTree } = entity.components;
+            const { shaderTree, materialName } = entity.components;
+
+            console.log(
+                '[shaderTreeSystem] compiling',
+                materialName,
+                shaderTree
+            );
 
             const compiledShaderTree = compileShaderTree(shaderTree);
-            console.log('[transpiledLogicNode]', compiledShaderTree);
+            console.log('[transpiledShaderTree]', compiledShaderTree);
 
             // if (compiledShaderTree.initFn) {
             //     compiledShaderTree.initFn.call(entity.components.ShaderTreeCache, delta, methods, entity, {

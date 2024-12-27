@@ -974,7 +974,7 @@ export function createNodeTreeCompiler<M extends LogicTreeMethods>(
 
                 if (result.length) result[result.length - 1] += ';';
                 console.log(
-                    '[logicTree.isMethodTranspiler]',
+                    '[nodeTree.isMethodTranspiler]',
                     result,
                     compiledParameters
                 );

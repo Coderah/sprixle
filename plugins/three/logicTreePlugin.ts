@@ -19,6 +19,7 @@ import { blenderEvents } from '../../blender/realtime';
 export type LogicTreeComponentTypes<ComponentTypes> = {
     mesh: Object3D;
     logicTree: NodeTree;
+    logicTreeName: string;
     compiledLogicTree: (
         delta: number,
         methods: LogicTreeMethods,
@@ -44,12 +45,17 @@ export function applyLogicTreePlugin<
     }
 
     const logicTreeQuery = em.createQuery({
-        includes: ['logicTree'],
+        includes: ['logicTree', 'logicTreeName'],
         excludes: ['compiledLogicTree'],
     });
 
     const compiledLogicTreeQuery = em.createQuery({
         includes: ['compiledLogicTree'],
+    });
+
+    const logicTreeRunnersQuery = em.createQuery({
+        includes: ['mesh', 'logicTreeName'],
+        excludes: ['logicTree', 'compiledLogicTree'],
     });
 
     const dependencies = { em, Vector3 };
@@ -94,27 +100,58 @@ ${transpiled.reduce((r, c) => (c ? r + '\n' + c : r), '')}
     const logicTreeSystem = em.createSystem(logicTreeQuery.createConsumer(), {
         forNew(entity, delta) {
             // TODO add loading manager
-            const { logicTree, mesh } = entity.components;
+            const { logicTree, logicTreeName } = entity.components;
+            if (
+                logicTreeQuery.find(
+                    (e) =>
+                        e.components.logicTreeName === logicTreeName &&
+                        e !== entity
+                ) ||
+                compiledLogicTreeQuery.find(
+                    (e) => e.components.logicTreeName === logicTreeName
+                )
+            ) {
+                console.warn(
+                    '[LogicTree] found duplicate logicTree skipping compilation',
+                    entity
+                );
+                em.deregisterEntity(entity);
+                return;
+            }
 
+            console.log('[logicTree] compiling', logicTreeName);
             const compiledLogicTree = compileLogicTree(logicTree);
             console.log('[transpiledLogicNode]', compiledLogicTree);
 
-            entity.components.logicTreeCache = {};
+            // entity.components.logicTreeCache = {};
+            // TODO init on each relevant entity in forNew of runners
             // if (compiledLogicTree.initFn) {
             //     compiledLogicTree.initFn.call(entity.components.logicTreeCache, delta, methods, entity, {
             //         Geometry: mesh
             //     })
             // }
-            // entity.components.compiledLogicTree = compiledLogicTree.fn;
+
+            em.removeComponent(entity, 'logicTree');
+            entity.components.compiledLogicTree = compiledLogicTree.fn;
             // console.log(entity.components.compiledLogicTree);
         },
     });
 
-    const compiledLogicTreeSystem = em.createSystem(compiledLogicTreeQuery, {
+    const logicTreeRunnerSystem = em.createSystem(logicTreeRunnersQuery, {
+        // TODO remove in favor of interval node within logicTrees
         interval: interval(1000 / 30),
         all(entity, delta) {
-            const { compiledLogicTree, logicTreeCache, mesh } =
-                entity.components;
+            let { logicTreeName, logicTreeCache, mesh } = entity.components;
+
+            if (!logicTreeCache) {
+                logicTreeCache = entity.components.logicTreeCache = {};
+            }
+
+            const compiledLogicTree = compiledLogicTreeQuery.find(
+                (e) => e.components.logicTreeName === logicTreeName
+            )?.components.compiledLogicTree;
+
+            if (!compiledLogicTree) return;
 
             // //@ts-ignore
             // with (compiler) {
@@ -128,7 +165,7 @@ ${transpiled.reduce((r, c) => (c ? r + '\n' + c : r), '')}
     const logicTreePipeline = new Pipeline(
         em,
         logicTreeSystem,
-        compiledLogicTreeSystem
+        logicTreeRunnerSystem
     );
 
     // TODO
@@ -140,24 +177,39 @@ ${transpiled.reduce((r, c) => (c ? r + '\n' + c : r), '')}
             tree,
         });
 
-        const existingEntity = em.getEntity(name);
+        const existingUncompiledEntity = logicTreeQuery.find(
+            (e) => e.components.logicTreeName === name
+        );
+
+        if (existingUncompiledEntity) {
+            existingUncompiledEntity.components.logicTree = tree;
+            console.log(
+                '[LogicTree realtime] logicTree intercepted uncompiled',
+                name
+            );
+            return;
+        }
+
+        const existingEntity = compiledLogicTreeQuery.find(
+            (e) => e.components.logicTreeName === name
+        );
 
         const compiledLogicTree = compileLogicTree(tree);
 
         console.log(
-            `[LogicTreeBlenderConnection] compiled from Blender`,
+            `[LogicTree realtime] compiled from Blender`,
             compiledLogicTree.fn,
             compiledLogicTree.transpiled
         );
 
         if (existingEntity) {
             console.log(
-                '[LogicTreeBlenderConnection] applied compiled logicTree to existing entity'
+                '[LogicTree realtime] applied compiled logicTree to existing entity'
             );
 
             if (compiledLogicTree.initFn) {
                 console.log(
-                    '[LogicTreeBlenderConnection] calling initFn',
+                    '[LogicTree realtime] calling initFn',
                     compiledLogicTree.initFn
                 );
                 compiledLogicTree.initFn.call(
@@ -170,11 +222,18 @@ ${transpiled.reduce((r, c) => (c ? r + '\n' + c : r), '')}
                     }
                 );
             }
+            //@ts-ignore
             existingEntity.components.compiledLogicTree = compiledLogicTree.fn;
         } else {
-            console.warn(
-                '[LogicTreeBlenderConnection] compiled logicTree does not map to an existing entity'
-            );
+            //@ts-ignore
+            em.quickEntity({
+                compiledLogicTree: compiledLogicTree.fn,
+                logicTreeName: name,
+            });
+            // console.warn(
+            //     '[LogicTree realtime] compiled logicTree does not map to an existing entity',
+            //     name
+            // );
         }
     });
 

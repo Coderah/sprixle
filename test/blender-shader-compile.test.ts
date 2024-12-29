@@ -42,7 +42,7 @@ import {
     createNodeTreeCompiler,
     NodeTree,
 } from '../plugins/nodeTrees/createCompiler';
-import blenderNoise from '../plugins/nodeTrees/shader/blenderNoise';
+import blenderNoise from '../plugins/nodeTrees/shader/blender/noise';
 import { getFeaturesFromName } from '../util/blender';
 import { interval } from '../util/timing';
 import { uniformTime } from '../render/const';

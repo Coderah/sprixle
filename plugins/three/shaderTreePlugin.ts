@@ -59,8 +59,8 @@ export function applyShaderTreePlugin<
         // TODO: allow passing in things like side, etc.
         const material = new ShaderMaterial({
             lights: transpiledShader.compilationCache.features.has('lights'),
-            side: FrontSide,
-            transparent: true,
+            side: DoubleSide,
+            transparent: false,
             alphaTest: 0.1,
             // dithering: true,
             // depthWrite: false,

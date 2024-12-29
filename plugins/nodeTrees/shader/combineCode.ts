@@ -73,6 +73,19 @@ varying vec3 vObjectLocation;
 
 #endif
 
+#ifdef USE_GEOMETRY
+
+	varying vec3 vWorldPosition;
+    varying vec3 vWorldNormal;
+
+#endif
+
+#ifdef USE_OBJECT_NORMAL
+
+	varying vec3 vObjectNormal;
+
+#endif
+
 ${Array.from(compilationCache.shader.vertexIncludes).join('\n')}
 
 void main() {
@@ -93,6 +106,33 @@ void main() {
 	#include <skinnormal_vertex>
 	#include <defaultnormal_vertex>
 	#include <normal_vertex>
+    #endif
+
+    #ifdef USE_GEOMETRY
+
+    vWorldNormal = objectNormal;
+
+    // #ifdef USE_BATCHING
+
+	// 	vWorldNormal = batchingMatrix * vWorldNormal;
+
+	// #endif
+
+	// #ifdef USE_INSTANCING
+
+	// 	vWorldNormal = instanceMatrix * vWorldNormal;
+
+	// #endif
+    
+    // TODO it seems likely this does not match blenders implementation
+    vWorldNormal =  normalize(mat3(modelMatrix) * vWorldNormal);
+
+    #endif
+
+    #ifdef USE_OBJECT_NORMAL
+
+    vObjectNormal = objectNormal;
+
     #endif
 
 	#include <begin_vertex>
@@ -138,7 +178,26 @@ void main() {
 
     #endif
 
-	#include <worldpos_vertex>
+	// #include <worldpos_vertex>
+    #if defined(USE_GEOMETRY) || defined( USE_ENVMAP ) || defined( DISTANCE ) || defined ( USE_SHADOWMAP ) || defined ( USE_TRANSMISSION ) || NUM_SPOT_LIGHT_COORDS > 0
+
+        vec4 worldPosition = vec4( transformed, 1.0 );
+
+        #ifdef USE_BATCHING
+
+            worldPosition = batchingMatrix * worldPosition;
+
+        #endif
+
+        #ifdef USE_INSTANCING
+
+            worldPosition = instanceMatrix * worldPosition;
+
+        #endif
+
+        worldPosition = modelMatrix * worldPosition;
+
+    #endif
 	#ifndef USE_POINTS
         #include <shadowmap_vertex>
     #endif
@@ -147,7 +206,7 @@ void main() {
     ${compilationCache.shader.vertex.join('\n')}
 
     // TODO
-#ifdef USE_TRANSMISSION
+#if defined(USE_TRANSMISSION) || defined(USE_GEOMETRY)
 
 	vWorldPosition = worldPosition.xyz;
 
@@ -175,6 +234,19 @@ export function combineFragmentShader(
     // #include <aomap_pars_fragment>
     // #include <lightmap_pars_fragment>
     // #include <emissivemap_pars_fragment>
+
+    #ifdef USE_GEOMETRY
+
+	varying vec3 vWorldPosition;
+    varying vec3 vWorldNormal;
+
+    #endif
+
+    #ifdef USE_OBJECT_NORMAL
+
+    varying vec3 vObjectNormal;
+
+    #endif
 
     #ifdef USE_OBJECT_INFO
 

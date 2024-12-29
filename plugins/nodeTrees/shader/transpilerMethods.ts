@@ -80,15 +80,6 @@ export const transpilerMethods = {
 
         return [varyingReference];
     },
-
-    TEX_COORD(compilationCache: CompilationCache): GLSL<{
-        UV: GLSL['vec2'];
-        Normal: GLSL['vec3'];
-    }> {
-        compilationCache.defines?.add('USE_UV');
-
-        return ['vec2(vUv.x, 1. - vUv.y), vNormal'] as any;
-    },
     TEX_IMAGE(
         Vector: GLSL['vec2'],
         image: string,
@@ -270,6 +261,27 @@ export const transpilerMethods = {
     },
     'Camera Position'(): GLSL['vec3'] {
         return ['cameraPosition'];
+    },
+    TEX_COORD(compilationCache: CompilationCache): GLSL<{
+        UV: GLSL['vec2'];
+        Normal: GLSL['vec3'];
+        Object: GLSL['vec3'];
+    }> {
+        compilationCache.defines.add('USE_OBJECT_NORMAL');
+        compilationCache.defines?.add('USE_UV');
+        compilationCache.defines.add('USE_ALPHAHASH');
+
+        return ['vec2(vUv.x, 1. - vUv.y), vObjectNormal, vPosition'] as any;
+    },
+    NEW_GEOMETRY(compilationCache: CompilationCache): GLSL<{
+        Position: GLSL['vec3'];
+        Normal: GLSL['vec3'];
+        Backfacing: GLSL['float'];
+    }> {
+        compilationCache.defines.add('USE_GEOMETRY');
+        return [
+            'vWorldPosition, vWorldNormal, gl_FrontFacing ? 0.0 : 1.0',
+        ] as any;
     },
     VECT_MATH(
         operation: string,

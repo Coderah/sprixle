@@ -318,17 +318,23 @@ export function createNodeTreeCompiler<M extends LogicTreeMethods>(
                     );
 
                     socketReference = socketReference.toLowerCase();
-                    // TODO get more refined? based on vector type?
-                    // if (parameters.type === 'LogicTree') {
-                    //     socketReference =
-                    //         socketReference === 'y'
-                    //             ? 'z'
-                    //             : socketReference === 'z'
-                    //             ? 'y'
-                    //             : socketReference;
-                    // }
+                    // TODO happen at point of export??
+                    socketReference =
+                        socketReference === 'y'
+                            ? 'z'
+                            : socketReference === 'z'
+                            ? 'y'
+                            : socketReference;
 
                     passthroughCompile.value += '.' + socketReference;
+
+                    if (parameters.type === 'ShaderTree') {
+                        passthroughCompile.value = convertVecSize(
+                            passthroughCompile.value.toString(),
+                            typeOf<GLSL['float']>(),
+                            parameterReflection.type
+                        );
+                    }
                     return passthroughCompile;
                     // return {value: '', compiled: null, reference: null};
                 }

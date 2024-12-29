@@ -16,6 +16,7 @@ import {
 import { addBlenderDependency } from './blender';
 import noise from './blender/noise';
 import hue_sat_val from './blender/hue_sat_val';
+import fresnel from './blender/fresnel';
 
 const mathOperationSymbols = {
     MULTIPLY: '*',
@@ -233,6 +234,20 @@ export const transpilerMethods = {
         addDiffuseBSDF(compilationCache);
 
         return [`DiffuseBSDF(${Color}, ${Roughness}, ${Normal})`];
+    },
+    FRESNEL(
+        IOR: GLSL['float'],
+        Normal: GLSL['vec3'] = 'vNormal',
+        node: Node,
+        compilationCache: CompilationCache
+    ): GLSL['float'] {
+        const reference = camelCase(node.id);
+        addBlenderDependency(fresnel, compilationCache);
+        return [
+            `float ${reference}Calc = 0.0;`,
+            `node_fresnel(${IOR}, ${Normal}, ${reference}Calc);`,
+            `${reference}Calc`,
+        ];
     },
     SHADERTORGB(Shader: GLSL['vec4']): GLSL['vec4'] {
         return [Shader];

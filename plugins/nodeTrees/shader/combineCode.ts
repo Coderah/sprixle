@@ -12,6 +12,15 @@ function makeF(compilationCache: CompilationCache) {
         return '';
     };
 }
+function makeNF(compilationCache: CompilationCache) {
+    return function f(feature: string, code: string) {
+        if (!compilationCache.features.has(feature)) {
+            return code;
+        }
+
+        return '';
+    };
+}
 
 export function combineVertexShader(
     transpiled: string[],
@@ -219,6 +228,7 @@ export function combineFragmentShader(
     compilationCache: CompilationCache
 ) {
     const f = makeF(compilationCache);
+    const nF = makeNF(compilationCache);
     return glsl`
     #include <common>
     #include <packing>
@@ -263,6 +273,7 @@ export function combineFragmentShader(
     #include <lights_pars_begin>
     #include <normal_pars_fragment>
     // TODO dedupe varying vec3 vViewPosition
+    ${nF('diffuseBSDF', 'varying vec3 vViewPosition;')}
     ${f('diffuseBSDF', '#include <lights_lambert_pars_fragment>')}
     #include <shadowmap_pars_fragment>
     #include <bumpmap_pars_fragment>

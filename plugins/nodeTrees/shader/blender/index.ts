@@ -1,4 +1,5 @@
 import { CompilationCache } from '../../createCompiler';
+import fresnel from './fresnel';
 import gpu_shader_common_color_utils from './gpu_shader_common_color_utils';
 import gpu_shader_common_hash from './gpu_shader_common_hash';
 import hue_sat_val from './hue_sat_val';
@@ -7,6 +8,7 @@ import noise from './noise';
 const all = {
     gpu_shader_common_color_utils,
     gpu_shader_common_hash,
+    fresnel,
     hue_sat_val,
     noise,
 };

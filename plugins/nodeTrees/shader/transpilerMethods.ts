@@ -268,6 +268,9 @@ export const transpilerMethods = {
         // compilationCache.defines.add('USE_ALPHAHASH');
         return ['vObjectLocation'];
     },
+    'Camera Position'(): GLSL['vec3'] {
+        return ['cameraPosition'];
+    },
     VECT_MATH(
         operation: string,
         Scale: number = 1,

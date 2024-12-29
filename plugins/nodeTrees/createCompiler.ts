@@ -925,7 +925,11 @@ export function createNodeTreeCompiler<M extends LogicTreeMethods>(
             if (isMethodTranspiler) {
                 if (method) result = method.apply({}, compiledParameters);
 
-                if (parameters.type !== 'LogicTree' && n.type === 'GROUP') {
+                if (
+                    parameters.type !== 'LogicTree' &&
+                    n.type === 'GROUP' &&
+                    !method
+                ) {
                     // Handle constructed GLSL function call
                     result = [
                         `${getReference(n.name)}(${compiledParameters.join(

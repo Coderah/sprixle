@@ -30,6 +30,10 @@ const mathOperationSymbols = {
 
 // REFERENCE: https://github.com/blender/blender/blob/a7bc3e3418d8e1c085f2393ff8d5deded43fb21d/source/blender/gpu/shaders/common/gpu_shader_common_math.glsl
 const mathFunctions = {
+    REFLECT: `reflect($1, normalize($2))`,
+    REFRACT: `refract($1, normalize($2), $Scale)`,
+    CROSS_PRODUCT: `cross($1, $2)`,
+    DOT_PRODUCT: `dot($1, $2)`,
     FLOOR: 'floor($1)',
     CEIL: 'ceil($1)',
     ROUND: 'round($1)',
@@ -43,6 +47,7 @@ const mathFunctions = {
     FLOORED_MODULO: '($2 != 0.0) ? $1 - floor($1 / $2) * $2 : 0.0',
     PINGPONG:
         '($2 != 0.0) ? abs(fract(($1 - $2) / ($2 * 2.0)) * $2 * 2.0 - $2) : 0.0',
+    SCALE: '$1 * $Scale',
 };
 
 type If<T, V> = any;
@@ -267,7 +272,13 @@ export const transpilerMethods = {
         operation: string,
         Scale: number = 1,
         Vector: GLSL['vec3'][]
-    ): GLSL['vec3'] {
+    ): If<
+        'operation',
+        {
+            DOT_PRODUCT: GLSL['float'];
+            else: GLSL['vec3'];
+        }
+    > {
         if (operation in mathOperationSymbols) {
             return [
                 `${Vector[0]} ${mathOperationSymbols[operation]} ${Vector[1]}`,
@@ -276,15 +287,15 @@ export const transpilerMethods = {
             const result = mathFunctions[operation]
                 .replace(/\$1/g, Vector[0])
                 .replace(/\$2/g, Vector[1])
-                .replace(/\$3/g, Vector[2]);
+                .replace(/\$3/g, Vector[2])
+                .replace(/\$Scale/g, Scale);
 
             return [result];
         }
 
         // TODO make sure everything is supported
-        return [
-            `${Vector[0]}.${camelCase(JSON.parse(operation))}(${Vector[1]})`,
-        ];
+        return [`VECT_MATH_UNSUPPORTED_ERROR(${operation})`];
+        // return [`${Vector[0]}.${camelCase(operation)}(${Vector[1]})`];
     },
     MAP_RANGE(
         Value: string,

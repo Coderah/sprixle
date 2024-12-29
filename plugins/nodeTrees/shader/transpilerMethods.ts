@@ -17,6 +17,7 @@ import { addBlenderDependency } from './blender';
 import noise from './blender/noise';
 import hue_sat_val from './blender/hue_sat_val';
 import fresnel from './blender/fresnel';
+import clamp from './blender/clamp';
 
 const mathOperationSymbols = {
     MULTIPLY: '*',
@@ -234,6 +235,20 @@ export const transpilerMethods = {
         addDiffuseBSDF(compilationCache);
 
         return [`DiffuseBSDF(${Color}, ${Roughness}, ${Normal})`];
+    },
+    CLAMP(
+        Max: GLSL['float'],
+        Min: GLSL['float'],
+        Value: GLSL['float'],
+        clamp_type: string,
+        compilationCache: CompilationCache
+    ): GLSL['float'] {
+        addBlenderDependency(clamp, compilationCache);
+        return [
+            `${
+                clamp_type === 'RANGE' ? 'clamp_range' : 'clamp_minmax'
+            }(${Value}, ${Min}, ${Max})`,
+        ];
     },
     FRESNEL(
         IOR: GLSL['float'],

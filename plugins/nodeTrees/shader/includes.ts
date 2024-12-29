@@ -1,8 +1,6 @@
 import { glsl } from '../../../shader/util';
-import blenderNoise from './blenderNoise';
 
 const shaderIncludes = {
-    noise: blenderNoise,
     mapRange: glsl`
 float mapRange(float value, float inMin, float inMax, float outMin, float outMax) {
     return outMin + (value - inMin) * (outMax - outMin) / (inMax - inMin);

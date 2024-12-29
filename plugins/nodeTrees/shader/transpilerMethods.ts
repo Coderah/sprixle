@@ -13,6 +13,9 @@ import {
     TextureLoader,
     Vector3,
 } from 'three';
+import { addBlenderDependency } from './blender';
+import noise from './blender/noise';
+import hue_sat_val from './blender/hue_sat_val';
 
 const mathOperationSymbols = {
     MULTIPLY: '*',
@@ -109,6 +112,25 @@ export const transpilerMethods = {
             `${reference}Sample.rgb, ${reference}Sample.a`,
         ] as any;
     },
+    HUE_SAT(
+        Hue: GLSL['float'],
+        Saturation: GLSL['float'],
+        Value: GLSL['float'],
+        Fac: GLSL['float'],
+        Color: GLSL['vec4'],
+        node: Node,
+        compilationCache: CompilationCache
+    ): GLSL['vec4'] {
+        const reference = camelCase(node.id);
+
+        addBlenderDependency(hue_sat_val, compilationCache);
+
+        return [
+            `vec4 ${reference}Color = vec4(0.);`,
+            `hue_sat(${Hue}, ${Saturation}, ${Value}, ${Fac}, ${Color}, ${reference}Color);`,
+            `${reference}Color`,
+        ];
+    },
     TEX_NOISE(
         Vector: GLSL['vec3'],
         W: GLSL['float'] = '0.',
@@ -127,7 +149,8 @@ export const transpilerMethods = {
     ): GLSL<{ Fac: GLSL['float']; Color: GLSL['vec4'] }> {
         const reference = camelCase(node.id);
 
-        compilationCache.shader.fragmentIncludes.add(shaderIncludes.noise);
+        // compilationCache.shader.fragmentIncludes.add(shaderIncludes.noise);
+        addBlenderDependency(noise, compilationCache);
 
         return [
             `float ${reference}Fac = 0.0;`,

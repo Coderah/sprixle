@@ -1,0 +1,13 @@
+{
+    "compilerOptions": {
+        "module": "CommonJS",
+        "target": "es6",
+        "moduleResolution": "node",
+        "experimentalDecorators": true,
+        "esModuleInterop": true
+    },
+    "ts-node": {
+        "transpileOnly": true
+    },
+    "reflection": true
+}

@@ -35,6 +35,7 @@ export type ShaderTreeComponentTypes = {
 } & MaterialManagerComponenTypes;
 
 // TODO allow passing in custom transpiler methods
+/** This plugin handles compiling and applying ShaderTree format (from blender addon) */
 export function applyShaderTreePlugin<
     C extends defaultComponentTypes & ShaderTreeComponentTypes,
     M extends {}

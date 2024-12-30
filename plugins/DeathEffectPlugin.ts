@@ -11,7 +11,7 @@ export type DeathEffectComponents<
     };
 };
 
-/** Creates a system that as a side-effect of one entity dying creates an entity or applies components to another existing entity. */
+/** Creates a system for death side-effects, an entities death can cause components to be applied to a different entity. */
 export function applyDeathEffectPlugin<
     M extends Manager<ComponentTypes>,
     ComponentTypes extends defaultComponentTypes &

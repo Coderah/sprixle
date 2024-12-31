@@ -30,6 +30,8 @@ const mathOperationSymbols = {
     LESS_THAN: '<',
 };
 
+type PartialSupport = { __meta?: ['PartialSupport'] };
+
 // REFERENCE: https://github.com/blender/blender/blob/a7bc3e3418d8e1c085f2393ff8d5deded43fb21d/source/blender/gpu/shaders/common/gpu_shader_common_math.glsl
 const mathFunctions = {
     REFLECT: `reflect($1, normalize($2))`,
@@ -362,6 +364,9 @@ export const transpilerMethods = {
             }, ${FromMin}, ${FromMax}, ${ToMin}, ${ToMax})`,
         ];
     },
+    /**
+     * Only partially supported currently
+     */
     MIX(
         Factor: string,
         A: string,
@@ -371,14 +376,15 @@ export const transpilerMethods = {
         factor_mode: string,
         clamp_factor: boolean,
         clamp_result: boolean
-    ): If<
-        'data_type',
-        {
-            FLOAT: GLSL['float'];
-            VECTOR: GLSL['vec3'];
-            else: GLSL['vec4'];
-        }
-    > {
+    ): PartialSupport &
+        If<
+            'data_type',
+            {
+                FLOAT: GLSL['float'];
+                VECTOR: GLSL['vec3'];
+                else: GLSL['vec4'];
+            }
+        > {
         return [`mix(${A}, ${B}, ${Factor})`];
     },
     MATH(

@@ -14,12 +14,12 @@
 * [Shader To RGB](https://docs.blender.org/manual/en/latest/render/shader_nodes/converter/shader_to_rgb.html)
 * [Output Material](https://docs.blender.org/manual/en/latest/render/shader_nodes/output/material.html)
 * [Mix Shader](https://docs.blender.org/manual/en/latest/render/shader_nodes/shader/mix.html)
-* [Combxyz](https://docs.blender.org/manual/en/latest/render/shader_nodes/converter/combine_xyz.html)
+* [Combine XYZ](https://docs.blender.org/manual/en/latest/render/shader_nodes/converter/combine_xyz.html)
 * [Object Info](https://docs.blender.org/manual/en/latest/render/shader_nodes/input/object_info.html)
 * Camera Position
 * [Texture Coord](https://docs.blender.org/manual/en/latest/render/shader_nodes/input/texture_coordinate.html)
 * [New Geometry](https://docs.blender.org/manual/en/latest/render/shader_nodes/input/geometry.html)
-* [Vect Math](https://docs.blender.org/manual/en/latest/render/shader_nodes/converter/vector_math.html)
+* [Vector Math](https://docs.blender.org/manual/en/latest/render/shader_nodes/converter/vector_math.html)
 * [Map Range](https://docs.blender.org/manual/en/latest/render/shader_nodes/converter/map_range.html)
-* [Mix](https://docs.blender.org/manual/en/latest/render/shader_nodes/converter/mix.html)
+* [Mix](https://docs.blender.org/manual/en/latest/render/shader_nodes/converter/mix.html) * Partially Supported
 * [Math](https://docs.blender.org/manual/en/latest/render/shader_nodes/converter/math.html)

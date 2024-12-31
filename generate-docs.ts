@@ -4,7 +4,7 @@ import findFiles from 'file-regex';
 import { inspect } from 'util';
 
 import { transpilerMethods as shaderTranspilerMethods } from './plugins/nodeTrees/shader/transpilerMethods';
-import { ReflectionClass, typeOf } from '@deepkit/type';
+import { metaAnnotation, ReflectionClass, typeOf } from '@deepkit/type';
 import path from 'path';
 import { mkdirSync, writeFileSync } from 'fs';
 import fuzzy from 'fuzzy';
@@ -150,17 +150,21 @@ const shaderNodeFiles = ['./plugins/nodeTrees/shader/transpilerMethods.ts'];
     const supportedNodeList = supportedShaderNodesType.types.map((t) => {
         let result = t.name;
 
-        result = result.replace(/(?:([A-Z])([A-Z]*))/g, (n, n1, n2) => {
-            if (n === 'BSDF') return n;
+        result = result
+            .replace('VECT_MATH', 'VECTOR_MATH')
+            .replace(/(?:([A-Z])([A-Z]*))/g, (n, n1, n2) => {
+                if (n === 'BSDF') return n;
 
-            if (n === 'TEX') return 'Texture';
+                if (n === 'TEX') return 'Texture';
 
-            if (n === 'SHADERTORGB') return 'Shader_To_RGB';
+                if (n === 'SHADERTORGB') return 'Shader_To_RGB';
 
-            if (n === 'VALTORGB') return 'Color_Ramp';
+                if (n === 'VALTORGB') return 'Color_Ramp';
 
-            return n1 + n2.toLowerCase();
-        });
+                if (n === 'COMBXYZ') return 'Combine_XYZ';
+
+                return n1 + n2.toLowerCase();
+            });
 
         const urlKey = fuzzy.filter(
             result.startsWith('Texture_') && result !== 'Texture_Coord'
@@ -178,6 +182,10 @@ const shaderNodeFiles = ['./plugins/nodeTrees/shader/transpilerMethods.ts'];
 
         if (urlKey) {
             result = `[${result}](${blenderNodeLinks[urlKey]})`;
+        }
+
+        if (metaAnnotation.getForName(t.return, 'PartialSupport')) {
+            result += ' * Partially Supported';
         }
 
         return '* ' + result;

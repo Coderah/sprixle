@@ -311,7 +311,7 @@ export function createNodeTreeCompiler<M extends LogicTreeMethods>(
                     const passthroughCompile = compileNodeSocket(
                         tree,
                         inputNode,
-                        parameterReflection,
+                        { type: typeOf<any>() },
                         inputNode.inputs['Vector'],
                         compilationCache,
                         'input'

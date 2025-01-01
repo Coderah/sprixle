@@ -170,7 +170,7 @@ export const transpilerMethods = {
     }
 }*/
     TEX_WHITE_NOISE(
-        Vector: GLSL['vec3'],
+        Vector: GLSL['vec3'] = 'vec3(0.0)',
         W: GLSL['float'] = '0.0',
         noise_dimensions: string,
         node: Node,

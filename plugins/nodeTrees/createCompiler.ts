@@ -24,6 +24,7 @@ import GLSL, { convertVecSize, dynamicNodeToType } from './shader/GLSL';
 import staticShaderNodeTranspilers from './shader/staticNodeTranspilers';
 import { transpilerMethods as shaderTranspilerMethods } from './shader/transpilerMethods';
 import {
+    getConditionalType,
     getParameterReference,
     getReference,
     getReturnType,
@@ -157,7 +158,8 @@ export function createNodeTreeCompiler<M extends LogicTreeMethods>(
         parameterReflection: TypeParameter,
         socket: Node['inputs'][number],
         compilationCache: CompilationCache,
-        type: 'output'
+        type: 'output',
+        parameterType?: Type
     ): { compiled: string[]; value: string }[];
     function compileNodeSocket(
         tree: NodeTree,
@@ -165,7 +167,8 @@ export function createNodeTreeCompiler<M extends LogicTreeMethods>(
         parameterReflection: TypeParameter,
         socket: Node['inputs'][number],
         compilationCache: CompilationCache,
-        type: 'input'
+        type: 'input',
+        parameterType?: Type
     ): {
         compiled: string;
         reference: string | null;
@@ -178,7 +181,8 @@ export function createNodeTreeCompiler<M extends LogicTreeMethods>(
         parameterReflection: TypeParameter,
         socket: Node['inputs'][number],
         compilationCache: CompilationCache,
-        type: 'input' | 'output' = 'input'
+        type: 'input' | 'output' = 'input',
+        parameterType: Type = parameterReflection.type
     ):
         | {
               compiled: string[];
@@ -236,7 +240,7 @@ export function createNodeTreeCompiler<M extends LogicTreeMethods>(
                 )
             );
             internalValue = restCompiled.map((c) => c.value);
-            if (parameterReflection.type.kind === ReflectionKind.rest) {
+            if (parameterType.kind === ReflectionKind.rest) {
                 return {
                     compiled: null,
                     reference: null,
@@ -332,7 +336,7 @@ export function createNodeTreeCompiler<M extends LogicTreeMethods>(
                         passthroughCompile.value = convertVecSize(
                             passthroughCompile.value.toString(),
                             typeOf<GLSL['float']>(),
-                            parameterReflection.type
+                            parameterType
                         );
                     }
                     return passthroughCompile;
@@ -393,7 +397,7 @@ export function createNodeTreeCompiler<M extends LogicTreeMethods>(
                             value = convertVecSize(
                                 value,
                                 inputType,
-                                parameterReflection.type
+                                parameterType
                             );
                         }
                     } else {
@@ -419,7 +423,7 @@ export function createNodeTreeCompiler<M extends LogicTreeMethods>(
                                 value = convertVecSize(
                                     value,
                                     referenceType,
-                                    parameterReflection.type
+                                    parameterType
                                 );
                             }
                         }
@@ -484,14 +488,13 @@ export function createNodeTreeCompiler<M extends LogicTreeMethods>(
             parameters.type === 'LogicTree' &&
             parameterReflection &&
             // TODO can be more specific (destructure the rest type)
-            parameterReflection.type.kind !== ReflectionKind.rest &&
+            parameterType.kind !== ReflectionKind.rest &&
             socket.type !== 'VECTOR' &&
             socket.type !== 'RGBA' &&
             // TODO make sure this is safe (hack to solve next TODO temporarily)
             socket.type !== 'VALUE' &&
             // TODO destructure if Array and see if matches
-            ReflectionKind[parameterReflection.type.kind] !==
-                typeof socket.value
+            ReflectionKind[parameterType.kind] !== typeof socket.value
         ) {
             if (socket.type === 'OBJECT' && typeof socket.value === 'string') {
                 reference = getReference(socket.value + 'Entity');
@@ -506,7 +509,7 @@ export function createNodeTreeCompiler<M extends LogicTreeMethods>(
                     '[compileNodeSocket] unable to convert',
                     socket,
                     'to',
-                    ReflectionKind[parameterReflection.type.kind]
+                    ReflectionKind[parameterType.kind]
                 );
             }
             // value = name;
@@ -533,7 +536,7 @@ export function createNodeTreeCompiler<M extends LogicTreeMethods>(
                         socket.type === 'VECTOR'
                             ? typeOf<GLSL['vec3']>()
                             : typeOf<GLSL['vec4']>(),
-                        parameterReflection.type
+                        parameterType
                     );
                 }
                 // TODO logicTree hold onto a static vector?
@@ -545,7 +548,7 @@ export function createNodeTreeCompiler<M extends LogicTreeMethods>(
 
         if (
             parameterReflection &&
-            parameterReflection.type.kind === ReflectionKind.array
+            parameterType.kind === ReflectionKind.array
         ) {
             // value = `[${value}]`;
             // TODO replace hack for when using transpilerMethod and there was only 1 value from node
@@ -797,13 +800,26 @@ export function createNodeTreeCompiler<M extends LogicTreeMethods>(
                         return;
                     }
 
+                    const parameterType = getConditionalType(
+                        methodReflection,
+                        p.type,
+                        compiledParameters
+                    );
+
+                    console.log('input', n.type, p.name, {
+                        input,
+                        p,
+                        parameterType,
+                    });
+
                     const compiledInput = compileNodeSocket(
                         tree,
                         n,
                         p,
                         input,
                         compilationCache,
-                        'input'
+                        'input',
+                        parameterType
                     );
 
                     if (compiledInput.reference) {

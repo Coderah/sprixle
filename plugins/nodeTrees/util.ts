@@ -30,29 +30,28 @@ export function getParameterReference(name: string) {
     return name.replace(/[^\d\w]/g, '');
 }
 
-export function getReturnType(type: TypeMethod, parameters: any[]) {
-    const baseReturn = type.return;
-
-    if (!baseReturn) return baseReturn;
-
-    if (baseReturn.typeName !== 'If') return baseReturn;
+export function getConditionalType(
+    methodType: TypeMethod,
+    type: Type,
+    parameters: any[]
+) {
+    if (type.typeName !== 'If') return type;
 
     if (
-        baseReturn.typeArguments?.[0]?.kind !== ReflectionKind.literal ||
-        baseReturn.typeArguments?.[1]?.kind !== ReflectionKind.objectLiteral
+        type.typeArguments?.[0]?.kind !== ReflectionKind.literal ||
+        type.typeArguments?.[1]?.kind !== ReflectionKind.objectLiteral
     )
-        return;
+        return type;
 
-    const conditionalParameterName = baseReturn.typeArguments[0]
-        .literal as string;
+    const conditionalParameterName = type.typeArguments[0].literal as string;
 
-    const parameterIndex = type.parameters
+    const parameterIndex = methodType.parameters
         .map((p) => p.name)
         .indexOf(conditionalParameterName);
 
     const parameter = parameters[parameterIndex];
 
-    const conditionalTypes = baseReturn.typeArguments[1].types as Type[];
+    const conditionalTypes = type.typeArguments[1].types as Type[];
 
     let returnType: Type | null = null;
 
@@ -65,5 +64,15 @@ export function getReturnType(type: TypeMethod, parameters: any[]) {
         }
     });
 
-    return returnType || baseReturn;
+    // TODO add warning?
+
+    return returnType || type;
+}
+
+export function getReturnType(type: TypeMethod, parameters: any[]) {
+    const baseReturn = type.return;
+
+    if (!baseReturn) return baseReturn;
+
+    return getConditionalType(type, baseReturn, parameters);
 }

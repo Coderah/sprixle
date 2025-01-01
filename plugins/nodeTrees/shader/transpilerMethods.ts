@@ -414,13 +414,19 @@ export const transpilerMethods = {
         // return [`${Vector[0]}.${camelCase(operation)}(${Vector[1]})`];
     },
     MAP_RANGE(
-        Value: string,
-        Vector: GLSL['vec3'],
+        data_type: 'FLOAT' | 'FLOAT_VECTOR',
+        Value: If<
+            'data_type',
+            { FLOAT: GLSL['float']; FLOAT_VECTOR: GLSL['vec3'] }
+        >,
+        Vector: If<
+            'data_type',
+            { FLOAT: GLSL['float']; FLOAT_VECTOR: GLSL['vec3'] }
+        >,
         FromMin: string,
         FromMax: string,
         ToMin: string,
         ToMax: string,
-        data_type: 'FLOAT' | 'FLOAT_VECTOR',
         // TODO
         interpolation_type: string,
         compilationCache: CompilationCache

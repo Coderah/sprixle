@@ -18,6 +18,7 @@ import noise from './blender/noise';
 import hue_sat_val from './blender/hue_sat_val';
 import fresnel from './blender/fresnel';
 import clamp from './blender/clamp';
+import gpu_shader_material_tex_white_noise from './blender/gpu_shader_material_tex_white_noise';
 
 const mathOperationSymbols = {
     MULTIPLY: '*',
@@ -48,6 +49,7 @@ const mathFunctions = {
     ARCTAN2: 'atan2($1, $2)',
     ABSOLUTE: 'abs($1)',
     SQRT: 'sqrt($1)',
+    SNAP: 'floor($1 / $2) * $2',
     FLOORED_MODULO: '($2 != 0.0) ? $1 - floor($1 / $2) * $2 : 0.0',
     PINGPONG:
         '($2 != 0.0) ? abs(fract(($1 - $2) / ($2 * 2.0)) * $2 * 2.0 - $2) : 0.0',
@@ -96,7 +98,7 @@ export const transpilerMethods = {
         );
         compilationCache.shader.fragmentIncludes.add(blenderVector);
         // TODO get from cache
-        const texture = textureLoader.load('assets/' + image);
+        const texture = textureLoader.load('assets/textures/' + image);
         // TODO pull from node
         texture.colorSpace = SRGBColorSpace;
         texture.wrapS = texture.wrapT = RepeatWrapping;
@@ -130,6 +132,68 @@ export const transpilerMethods = {
             `hue_sat(${Hue}, ${Saturation}, ${Value}, ${Fac}, ${Color}, ${reference}Color);`,
             `${reference}Color`,
         ];
+    },
+    /* {
+    "id": "White Noise Texture",
+    "type": "TEX_WHITE_NOISE",
+    "name": "TEX_WHITE_NOISE",
+    "inputs": {
+        "Vector": {
+            "type": "linked",
+            "links": [
+                {
+                    "node": "Combine XYZ.001",
+                    "socket": "Vector"
+                }
+            ],
+            "intended_type": "VECTOR"
+        }
+    },
+    "outputs": {
+        "Value": {
+            "value": 0,
+            "type": "VALUE"
+        },
+        "Color": {
+            "type": "linked",
+            "links": [
+                {
+                    "node": "Separate XYZ",
+                    "socket": "Vector"
+                }
+            ],
+            "intended_type": "RGBA"
+        }
+    },
+    "properties": {
+        "noise_dimensions": "2D"
+    }
+}*/
+    TEX_WHITE_NOISE(
+        Vector: GLSL['vec3'],
+        W: GLSL['float'] = '0.0',
+        noise_dimensions: string,
+        node: Node,
+        compilationCache: CompilationCache
+    ): GLSL<{ Value: GLSL['float']; Color: GLSL['vec4'] }> {
+        const reference = camelCase(node.id);
+
+        addBlenderDependency(
+            gpu_shader_material_tex_white_noise,
+            compilationCache
+        );
+
+        return [
+            `float ${reference}Value = 0.0;`,
+            `vec4 ${reference}Color = vec4(vec3(0.0), 1.);`,
+            `node_white_noise_${noise_dimensions.toLowerCase()}(
+                    ${Vector},
+                    ${W},
+                    ${reference}Value,
+                    ${reference}Color
+            );`,
+            `${reference}Value, ${reference}Color`,
+        ] as any;
     },
     TEX_NOISE(
         Vector: GLSL['vec3'],
@@ -295,6 +359,7 @@ export const transpilerMethods = {
         return ['cameraPosition'];
     },
     TEX_COORD(compilationCache: CompilationCache): GLSL<{
+        Generated: GLSL['vec3'];
         UV: GLSL['vec2'];
         Normal: GLSL['vec3'];
         Object: GLSL['vec3'];
@@ -303,7 +368,11 @@ export const transpilerMethods = {
         compilationCache.defines?.add('USE_UV');
         compilationCache.defines.add('USE_ALPHAHASH');
 
-        return ['vec2(vUv.x, 1. - vUv.y), vObjectNormal, vPosition'] as any;
+        // TODO support and generate Generated uvs by bounding box, detect generated slot is used via node parameter
+
+        return [
+            'vPosition, vec2(vUv.x, 1. - vUv.y), vObjectNormal, vPosition',
+        ] as any;
     },
     NEW_GEOMETRY(compilationCache: CompilationCache): GLSL<{
         Position: GLSL['vec3'];

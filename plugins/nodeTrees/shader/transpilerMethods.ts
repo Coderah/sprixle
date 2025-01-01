@@ -358,6 +358,11 @@ export const transpilerMethods = {
     'Camera Position'(): GLSL['vec3'] {
         return ['cameraPosition'];
     },
+    UVMAP(compilationCache: CompilationCache): PartialSupport & GLSL['vec2'] {
+        compilationCache.defines?.add('USE_UV');
+
+        return ['vec2(vUv.x, 1. - vUv.y)'];
+    },
     TEX_COORD(compilationCache: CompilationCache): GLSL<{
         Generated: GLSL['vec3'];
         UV: GLSL['vec2'];

@@ -147,49 +147,56 @@ const shaderNodeFiles = ['./plugins/nodeTrees/shader/transpilerMethods.ts'];
 
     const blenderNFilter = Object.keys(blenderNodeLinks);
 
-    const supportedNodeList = supportedShaderNodesType.types.map((t) => {
-        let result = t.name;
+    const supportedNodeList = supportedShaderNodesType.types
+        .sort((a, b) => (a.name > b.name ? 1 : -1))
+        .map((t) => {
+            let result = t.name;
 
-        result = result
-            .replace('VECT_MATH', 'VECTOR_MATH')
-            .replace(/(?:([A-Z])([A-Z]*))/g, (n, n1, n2) => {
-                if (n === 'BSDF') return n;
+            result = result
+                .replace('VECT_MATH', 'VECTOR_MATH')
+                .replace(/(?:([A-Z])([A-Z]*))/g, (n, n1, n2) => {
+                    if (n === 'BSDF') return n;
 
-                if (n === 'TEX') return 'Texture';
+                    if (n === 'TEX') return 'Texture';
 
-                if (n === 'SHADERTORGB') return 'Shader_To_RGB';
+                    if (n === 'SHADERTORGB') return 'Shader_To_RGB';
 
-                if (n === 'VALTORGB') return 'Color_Ramp';
+                    if (n === 'VALTORGB') return 'Color_Ramp';
 
-                if (n === 'COMBXYZ') return 'Combine_XYZ';
+                    if (n === 'COMBXYZ') return 'Combine_XYZ';
 
-                return n1 + n2.toLowerCase();
-            });
+                    return n1 + n2.toLowerCase();
+                });
 
-        const urlKey = fuzzy.filter(
-            result.startsWith('Texture_') && result !== 'Texture_Coord'
-                ? result.replace('Texture_', 'textures/')
-                : result
-                      .replace('Output_', 'output/')
-                      .replace('BSDF_', 'shader/')
-                      .replace('New_', '')
-                      .replace('Mix_Shader', 'shader/mix')
-                      .replace('Mix', 'converter/mix'),
-            blenderNFilter
-        )[0]?.string;
+            const urlKey = fuzzy.filter(
+                result.startsWith('Texture_') && result !== 'Texture_Coord'
+                    ? result.replace('Texture_', 'textures/')
+                    : result
+                          .replace('Output_', 'output/')
+                          .replace('BSDF_', 'shader/')
+                          .replace('New_', '')
+                          .replace('Mix_Shader', 'shader/mix')
+                          .replace('Mix', 'converter/mix'),
+                blenderNFilter
+            )[0]?.string;
 
-        result = result.replace(/_/g, ' ');
+            result = result.replace(/_/g, ' ');
 
-        if (urlKey) {
-            result = `[${result}](${blenderNodeLinks[urlKey]})`;
-        }
+            if (urlKey) {
+                result = `[${result}](${blenderNodeLinks[urlKey]})`;
+            }
 
-        if (metaAnnotation.getForName(t.return, 'PartialSupport')) {
-            result += ' * Partially Supported';
-        }
+            if (metaAnnotation.getForName(t.return, 'PartialSupport')) {
+                result += ' * Partially Supported';
+            }
 
-        return '* ' + result;
-    });
+            return '* ' + result;
+        });
+
+    // TODO sort
+    supportedNodeList.push(
+        '* [Separate XYZ](https://docs.blender.org/manual/en/latest/compositing/types/vector/separate_xyz.html)'
+    );
 
     // @ts-ignore
     writeFileSync(

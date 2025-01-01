@@ -2,10 +2,16 @@
 // TODO add purgeMaterials
 // TODO
 
-import { InstancedMesh, Material, Mesh, Object3D, Points } from 'three';
+import {
+    BatchedMesh,
+    InstancedMesh,
+    Material,
+    Mesh,
+    Object3D,
+    Points,
+} from 'three';
 import { defaultComponentTypes, Manager } from '../../ecs/manager';
 import { Pipeline } from '../../ecs/system';
-import { BatchedMesh } from 'three-stdlib';
 import uuid from 'uuid-random';
 
 export type MaterialManagerComponenTypes = {

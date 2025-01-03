@@ -205,7 +205,7 @@ class SprixleInfoPanel(bpy.types.Panel):
 
     def draw(self, context):
         global active_scene
-        self.layout.label(text="Addon Version: 0.1")
+        self.layout.label(text="Addon Version: 0.2")
 
         self.layout.operator(SprixleExport.bl_idname, text="Export Scene", icon="EXPORT")
 

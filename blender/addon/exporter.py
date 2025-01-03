@@ -6,6 +6,74 @@
 
 import bpy
 
+def prepareInstancesForExport(object):
+    if not hasattr(object, 'modifiers'): return False
+
+    for modifier in object.modifiers:
+        if not hasattr(modifier, 'node_group') or not modifier.node_group.name == 'Sprixle: Export Instances': continue
+    
+        # print('baking', object, modifier)
+        print('SprixleExporter instances for', object.name)
+
+        modifier["Socket_2"] = False
+        modifier.show_viewport = True
+
+        evaluated_object = object.evaluated_get(bpy.context.evaluated_depsgraph_get())
+
+        object['+instances'] = 0
+
+        for attribute_name in evaluated_object.data.attributes.keys():
+            if attribute_name.startswith('.'): continue
+            if attribute_name == 'UVMap': continue
+            if attribute_name == 'position': 
+                object['+instances'] = len(attribute.data)
+                continue
+            if attribute_name == 'id': continue
+
+            attribute = evaluated_object.data.attributes[attribute_name]
+            values = []
+            if isinstance(attribute, bpy.types.FloatVectorAttribute):
+                values = (f"[{','.join(str(i) for i in [attr.vector[0], attr.vector[2], attr.vector[1]])}]" for attr in attribute.data)
+            elif isinstance(attribute, bpy.types.Float4x4Attribute):
+                matrices = [list(attr.value) for attr in attribute.data]
+                for index in range(len(matrices)):
+                    matrix = [list(matrixRow) for matrixRow in list(matrices[index])]
+
+                    # matrix = z_up_to_y_up(matrix)
+
+                    # z = matrix[2]
+                    # matrix[2] = matrix[1]
+                    # matrix[1] = z
+
+                    for mRow in matrix:
+                        for mValue in mRow:
+                            values.append(str(mValue))
+                
+            else:
+                values = (attr.value for attr in attribute.data)
+
+            object[attribute_name + '+attribute'] = f"[{','.join(values)}]"
+
+        # enable serialized so geometry gets output in gltf export
+        modifier["Socket_2"] = True
+        modifier.show_render = True
+
+        return True
+
+    return False
+     
+def cleanupInstanceExport(object):
+    if not hasattr(object, 'modifiers'): return
+
+    for modifier in object.modifiers:
+        if not modifier.node_group.name == 'Sprixle: Export Instances': continue
+    
+        modifier["Socket_2"] = False
+        modifier.show_viewport = False
+
+        return
+
+
 def export(sceneKey):
     scene = bpy.data.scenes.get(sceneKey)
     
@@ -33,20 +101,28 @@ def export(sceneKey):
 
     
     # sceneCollection = scene.collection;
+    instanceObjectsToClean = []
+    for object in bpy.context.scene.objects:
+        if prepareInstancesForExport(object): instanceObjectsToClean.append(object)
     
 #    break
     
     bpy.ops.export_scene.gltf(filepath=bpy.path.abspath('//'+sceneKey+'.glb'),
         export_lights =True,
         export_import_convert_lighting_mode='COMPAT',
+        gltf_export_id="Sprixle",
         
         export_extras =True,
         export_yup=True,
         export_apply=True,
         export_attributes=True,
+        export_normals=True,
+        export_texcoords=True,
+        export_shared_accessors=True,
         
 #        use_mesh_edges=True,
-        use_mesh_vertices =True,
+        # use_mesh_vertices =True,
+
         use_renderable=True,
         use_active_scene=True,
         
@@ -58,6 +134,7 @@ def export(sceneKey):
         export_anim_slide_to_zero=True,
         
         export_gpu_instances=True,
+        # export_gn_mesh=True,
         export_original_specular=True,
         
         export_hierarchy_full_collections=True,
@@ -67,3 +144,6 @@ def export(sceneKey):
         
 #        export_texture_dir=bpy.path.abspath('//textures')
     )
+
+    for object in instanceObjectsToClean:
+        cleanupInstanceExport(object)

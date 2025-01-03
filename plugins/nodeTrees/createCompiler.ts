@@ -147,7 +147,7 @@ export function createNodeTreeCompiler<M extends LogicTreeMethods>(
             : transpilerMethods;
     const transpilerReflection = typeOf<typeof transpilerMethods>();
 
-    console.log(transpilerReflection);
+    // console.log(transpilerReflection);
 
     // TODO warn
     if (transpilerReflection.kind !== ReflectionKind.objectLiteral) return;
@@ -373,7 +373,7 @@ export function createNodeTreeCompiler<M extends LogicTreeMethods>(
                     );
 
                     let inputType = compilationCache.inputTypes[reference];
-                    console.log('input', reference, socketReference, inputType);
+                    // console.log('input', reference, socketReference, inputType);
                     let inputNotLiteralOrMissingKey =
                         inputType?.kind !== ReflectionKind.objectLiteral ||
                         !inputType?.types.find(
@@ -617,11 +617,11 @@ export function createNodeTreeCompiler<M extends LogicTreeMethods>(
                     n.internalLogicTree,
                     true
                 );
-                console.log(
-                    '[compiledInternalNodeTree]',
-                    n,
-                    compiledInternalNodeTree
-                );
+                // console.log(
+                //     '[compiledInternalNodeTree]',
+                //     n,
+                //     compiledInternalNodeTree
+                // );
 
                 compilationCache.defines = compilationCache.defines.union(
                     compiledInternalNodeTree.compilationCache.defines
@@ -630,10 +630,10 @@ export function createNodeTreeCompiler<M extends LogicTreeMethods>(
                 const reference = getReference(n.id);
 
                 if (parameters.type !== 'LogicTree') {
-                    console.log(
-                        '[compiledInternalNodeTree] compilation cache',
-                        compiledInternalNodeTree.compilationCache
-                    );
+                    // console.log(
+                    //     '[compiledInternalNodeTree] compilation cache',
+                    //     compiledInternalNodeTree.compilationCache
+                    // );
                     // TODO if return is a single type, bypass struct business
 
                     const { groupInput } =
@@ -806,11 +806,11 @@ export function createNodeTreeCompiler<M extends LogicTreeMethods>(
                         compiledParameters
                     );
 
-                    console.log('input', n.type, p.name, {
-                        input,
-                        p,
-                        parameterType,
-                    });
+                    // console.log('input', n.type, p.name, {
+                    //     input,
+                    //     p,
+                    //     parameterType,
+                    // });
 
                     const compiledInput = compileNodeSocket(
                         tree,
@@ -916,7 +916,7 @@ export function createNodeTreeCompiler<M extends LogicTreeMethods>(
                         compiledParameters.push(property);
 
                         if (p.type.kind === ReflectionKind.enum) {
-                            console.log(p);
+                            // console.log(p);
                         }
                     } else {
                         compiledParameters.push(
@@ -971,11 +971,11 @@ export function createNodeTreeCompiler<M extends LogicTreeMethods>(
                     const structReference = getStructReference(
                         n.type === 'GROUP' ? n.name : n.type
                     );
-                    console.log(
-                        '[STRUCT REFERENCE]',
-                        structReference,
-                        returnType
-                    );
+                    // console.log(
+                    //     '[STRUCT REFERENCE]',
+                    //     structReference,
+                    //     returnType
+                    // );
                     compilationCache.shader.fragmentIncludes.add(glsl`
                         struct ${structReference} {
                         ${returnType.typeArguments[0].types
@@ -999,11 +999,11 @@ export function createNodeTreeCompiler<M extends LogicTreeMethods>(
                 }
 
                 if (result.length) result[result.length - 1] += ';';
-                console.log(
-                    '[nodeTree.isMethodTranspiler]',
-                    result,
-                    compiledParameters
-                );
+                // console.log(
+                //     '[nodeTree.isMethodTranspiler]',
+                //     result,
+                //     compiledParameters
+                // );
             } else {
                 result = result.map((r) =>
                     r === '$1'
@@ -1065,7 +1065,7 @@ export function createNodeTreeCompiler<M extends LogicTreeMethods>(
             }
         });
 
-        console.log('[STARTING NODES]', startingNodes);
+        // console.log('[STARTING NODES]', startingNodes);
 
         let initFn: undefined | Function;
 

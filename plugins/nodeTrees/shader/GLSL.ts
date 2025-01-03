@@ -202,7 +202,7 @@ export function dynamicNodeToType(node: Node): TypeMethod {
     //     genericMethod.return.
     // }
 
-    console.log('[dynamicNodeToType]', node, genericMethod);
+    // console.log('[dynamicNodeToType]', node, genericMethod);
 
     return genericMethod;
 }

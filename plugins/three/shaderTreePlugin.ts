@@ -28,6 +28,7 @@ import {
 import { blenderEvents } from '../../blender/realtime';
 import { MaterialManagerComponenTypes } from './materialManagerPlugin';
 import { combineVertexShader } from '../nodeTrees/shader/combineCode';
+import blenderShaders, { includesRegex } from '../nodeTrees/shader/blender';
 
 export type ShaderTreeComponentTypes = {
     mesh: Object3D;
@@ -60,8 +61,10 @@ export function applyShaderTreePlugin<
         // TODO: allow passing in things like side, etc.
         const material = new ShaderMaterial({
             lights: transpiledShader.compilationCache.features.has('lights'),
+            // TODO control
             side: DoubleSide,
-            transparent: false,
+            // TODO conditional
+            transparent: true,
             alphaTest: 0.1,
             // dithering: true,
             // depthWrite: false,
@@ -125,7 +128,18 @@ export function applyShaderTreePlugin<
             );
 
             const compiledShaderTree = compileShaderTree(shaderTree);
-            console.log('[transpiledShaderTree]', compiledShaderTree);
+
+            let shaderLog = compiledShaderTree.fragmentShader;
+            for (let shaderName in blenderShaders) {
+                const replaceableShaderCode = blenderShaders[
+                    shaderName
+                ].replace(includesRegex, '');
+                shaderLog = shaderLog.replace(
+                    replaceableShaderCode,
+                    `#include <${shaderName}>`
+                );
+            }
+            console.log('[transpiledShaderTree]', shaderLog);
 
             // if (compiledShaderTree.initFn) {
             //     compiledShaderTree.initFn.call(entity.components.ShaderTreeCache, delta, methods, entity, {

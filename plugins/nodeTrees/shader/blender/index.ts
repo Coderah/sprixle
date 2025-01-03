@@ -17,7 +17,7 @@ const all = {
 
 export default all;
 
-const includesRegex = /^\#include "(.*?)\.glsl"/gm;
+export const includesRegex = /^\#include "(.*?)\.glsl"/gm;
 export function addBlenderDependency(
     shader: string,
     compilationCache: CompilationCache

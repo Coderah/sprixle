@@ -32,6 +32,7 @@ const mathOperationSymbols = {
 };
 
 type PartialSupport = { __meta?: ['PartialSupport'] };
+type StubbedSupport = { __meta?: ['StubbedSupport'] };
 
 // REFERENCE: https://github.com/blender/blender/blob/a7bc3e3418d8e1c085f2393ff8d5deded43fb21d/source/blender/gpu/shaders/common/gpu_shader_common_math.glsl
 const mathFunctions = {
@@ -194,6 +195,9 @@ export const transpilerMethods = {
             );`,
             `${reference}Value, ${reference}Color`,
         ] as any;
+    },
+    LIGHT_PATH(): StubbedSupport & GLSL['float'] {
+        return ['0.0'];
     },
     TEX_NOISE(
         Vector: GLSL['vec3'],

@@ -8,6 +8,7 @@
 * Camera Position
 * [Fresnel](https://docs.blender.org/manual/en/latest/render/shader_nodes/input/fresnel.html)
 * [Hue Sat](https://docs.blender.org/manual/en/latest/render/shader_nodes/color/hue_saturation.html)
+* [Light Path](https://docs.blender.org/manual/en/latest/render/shader_nodes/input/light_path.html) * Support is stubbed
 * [Mapping](https://docs.blender.org/manual/en/latest/render/shader_nodes/vector/mapping.html)
 * [Map Range](https://docs.blender.org/manual/en/latest/render/shader_nodes/converter/map_range.html)
 * [Math](https://docs.blender.org/manual/en/latest/render/shader_nodes/converter/math.html)
@@ -21,6 +22,7 @@
 * [Texture Image](https://docs.blender.org/manual/en/latest/render/shader_nodes/textures/image.html)
 * [Texture Noise](https://docs.blender.org/manual/en/latest/render/shader_nodes/textures/noise.html)
 * [Texture White Noise](https://docs.blender.org/manual/en/latest/render/shader_nodes/textures/white_noise.html)
+* [Uvmap](https://docs.blender.org/manual/en/latest/render/shader_nodes/input/uv_map.html) * Partially Supported
 * [Color Ramp](https://docs.blender.org/manual/en/latest/render/shader_nodes/converter/color_ramp.html)
 * [Vector Rotate](https://docs.blender.org/manual/en/latest/render/shader_nodes/vector/vector_rotate.html)
 * [Vector Math](https://docs.blender.org/manual/en/latest/render/shader_nodes/converter/vector_math.html)

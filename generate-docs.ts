@@ -190,6 +190,10 @@ const shaderNodeFiles = ['./plugins/nodeTrees/shader/transpilerMethods.ts'];
                 result += ' * Partially Supported';
             }
 
+            if (metaAnnotation.getForName(t.return, 'StubbedSupport')) {
+                result += ' * Support is stubbed';
+            }
+
             return '* ' + result;
         });
 

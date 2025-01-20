@@ -30,6 +30,14 @@ module.exports = {
         path: path.resolve('dist'),
         filename: '[name].[contenthash].js',
     },
+    node: {
+        // provides the global variable named "global"
+        global: true,
+
+        // provide __filename and __dirname global variables
+        __filename: true,
+        __dirname: true,
+    },
     resolve: {
         extensions: ['.ts', '.js'],
         fallback: {
@@ -38,6 +46,9 @@ module.exports = {
             http: false, // require.resolve('stream-http'),
             vm: false, // require.resolve('vm-browserify'),
             buffer: false, // require.resolve('buffer/'),
+            assert: require.resolve('assert'),
+            process: require.resolve('process/browser'),
+            path: require.resolve('path-browserify'),
             os: false,
             fs: false,
             stream: false,
@@ -113,6 +124,10 @@ module.exports = {
         },
     },
     plugins: [
+        new webpack.ProvidePlugin({
+            // you must `npm install buffer` to use this.
+            process: ['process'],
+        }),
         new webpack.DefinePlugin({
             'process.env.APP_VERSION': commitCount(),
             'process.env.IS_GAME_CLIENT': JSON.stringify(true),

@@ -59,13 +59,53 @@ export class Query<
     consumers = new Array<Consumer<ExactComponentTypes, Includes, M, E>>();
 
     /** What entities are queued for future slices */
-    queuedEntities = new Set<entityId>();
+    private queuedEntities = new Set<entityId>();
     /** tracks what entities are included in the current slice; cleared on tick. */
     entitiesInSlice = new Set<entityId>();
 
     private lastEntity: E | undefined;
 
+    private sliceHead: string | null = null;
+    private nextSliceHead: string | null = null;
+
     *[Symbol.iterator]() {
+        const sliceSize = this.getSliceSize();
+
+        let active = !sliceSize;
+        let count = 0;
+        for (let id of this.entities) {
+            if (!active && (!this.sliceHead || id === this.sliceHead)) {
+                // console.log(
+                //     '[Query.iterator] starting loop at sliceHead',
+                //     this.sliceHead,
+                //     this.entities.size
+                // );
+                active = true;
+            }
+
+            if (!active) continue;
+
+            if (sliceSize && count >= sliceSize) {
+                // console.log(
+                //     '[Query.iterator] ending loop with nextSliceHead',
+                //     id
+                // );
+                this.nextSliceHead = id;
+                return;
+            }
+
+            if (active) {
+                if (sliceSize) count++;
+                yield this.manager.getEntity(id) as E;
+            }
+        }
+        // console.log(
+        //     '[Query.iterator] loop ended with',
+        //     count,
+        //     this.nextSliceHead
+        // );
+    }
+    *IterateIgnoringSlice() {
         for (let id of this.entities) {
             yield this.manager.getEntity(id) as E;
         }
@@ -187,29 +227,36 @@ export class Query<
         }
     }
 
+    private getSliceSize() {
+        const { timeSlicing } = this.queryParameters;
+        if (!timeSlicing) return 0;
+
+        if ('percentage' in timeSlicing) {
+            // TODO get percentage of entities within queue and apply them
+            return Math.floor(
+                (this.entities.size * timeSlicing.percentage) / 100
+            );
+        } else if ('count' in timeSlicing) {
+            return timeSlicing.count;
+        }
+
+        return 0;
+    }
+
     protected updateTimeSlice() {
         const { timeSlicing } = this.queryParameters;
         if (!timeSlicing || !this.queuedEntities.size) return;
 
-        let sliceTarget = 0;
+        const sliceSize = this.getSliceSize();
 
-        if ('percentage' in timeSlicing) {
-            // TODO get percentage of entities within queue and apply them
-            sliceTarget = Math.floor(
-                (this.entities.size * timeSlicing.percentage) / 100
-            );
-        } else if ('count' in timeSlicing) {
-            sliceTarget = timeSlicing.count;
-        }
-
-        if (this.entitiesInSlice.size >= sliceTarget) return;
+        if (this.entitiesInSlice.size >= sliceSize) return;
 
         for (let queuedEntityId of this.queuedEntities) {
             this.entitiesInSlice.add(queuedEntityId);
             this.queuedEntities.delete(queuedEntityId);
             this.handleEntity(this.manager.getEntity(queuedEntityId));
 
-            if (this.entitiesInSlice.size >= sliceTarget) return;
+            if (this.entitiesInSlice.size >= sliceSize) return;
         }
     }
 
@@ -270,9 +317,9 @@ export class Query<
         handler: (entity: E, delta?: number) => boolean | void,
         delta?: number
     ) {
-        this.entities.forEach((id) => {
-            return handler(this.manager.getEntity(id) as any as E, delta);
-        });
+        for (let entity of this[Symbol.iterator]()) {
+            if (handler(entity, delta)) return;
+        }
     }
 
     map<V>(handler: (entity: E) => V, delta?: number) {
@@ -290,26 +337,21 @@ export class Query<
     }
 
     find(handler: (entity: E) => boolean) {
-        let foundEntity: E;
-
-        this.for((possibleEntity) => {
+        for (let possibleEntity of this.IterateIgnoringSlice()) {
             if (handler(possibleEntity)) {
-                foundEntity = possibleEntity;
-                return true;
+                return possibleEntity;
             }
-        });
-
-        return foundEntity;
+        }
     }
 
     filter(handler: (entity: E) => boolean) {
         let foundEntities: E[] = [];
 
-        this.for((possibleEntity) => {
+        for (let possibleEntity of this.IterateIgnoringSlice()) {
             if (handler(possibleEntity)) {
                 foundEntities.push(possibleEntity);
             }
-        });
+        }
 
         return foundEntities;
     }
@@ -318,8 +360,10 @@ export class Query<
         this.consumers.forEach((c) => c.tick());
 
         this.entitiesInSlice.clear();
-
         this.updateTimeSlice();
+
+        this.sliceHead = this.nextSliceHead;
+        this.nextSliceHead = null;
     }
 }
 

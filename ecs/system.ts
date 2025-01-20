@@ -231,9 +231,13 @@ export class Pipeline<ExactComponentTypes extends defaultComponentTypes> {
                 if (!source) return;
 
                 if (source instanceof Query) {
-                    source.for(system.cleanup);
+                    for (let entity of source.IterateIgnoringSlice()) {
+                        system.cleanup?.(entity);
+                    }
                 } else {
-                    source.query.for(system.cleanup);
+                    for (let entity of source.query.IterateIgnoringSlice()) {
+                        system.cleanup?.(entity);
+                    }
                 }
             }
         });

@@ -20,6 +20,7 @@ const positionQuery = manager.createQuery({
 const stats = {
     newEntities: 0,
     updatedEntities: 0,
+    allEntities: 0,
 };
 const slicedSystem = manager.createSystem(positionQuery.createConsumer(), {
     forNew(entity, delta) {
@@ -29,6 +30,10 @@ const slicedSystem = manager.createSystem(positionQuery.createConsumer(), {
     updated(entity) {
         console.log('updated', entity.id);
         stats.updatedEntities++;
+    },
+    all(entity) {
+        console.log('all', entity.id);
+        stats.allEntities++;
     },
 });
 
@@ -43,18 +48,24 @@ const pipeline = new Pipeline(manager, slicedSystem);
 pipeline.tick(1);
 assert.equal(stats.newEntities, 10);
 assert.equal(stats.updatedEntities, 0);
+assert.equal(stats.allEntities, 5);
 
 manager.tick();
+console.log('tick');
 
-for (let entity of positionQuery) {
+for (let entity of positionQuery.IterateIgnoringSlice()) {
     entity.flagUpdate('position');
 }
 manager.subTick(); // as if we are updating entities within a system
 
 pipeline.tick(1);
-console.log(stats, slicedSystem.source);
 assert.equal(stats.updatedEntities, 5);
+assert.equal(stats.allEntities, 10);
 
 manager.tick();
+console.log('tick');
+
 pipeline.tick(1);
 assert.equal(stats.updatedEntities, 10);
+assert.equal(stats.allEntities, 15);
+console.log(stats, slicedSystem.source);

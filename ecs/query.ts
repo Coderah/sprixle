@@ -39,7 +39,7 @@ export type QueryParametersInput<ComponentTypes, IncludeKeys> = {
     /** Entities with these components will be excluded. (this option is not affected by `flexible`) */
     excludes?: Keys<ComponentTypes>[];
 
-    /** Time slicing allows handling fewer updates per tick. Percentage of total Query or exact count per tick. */
+    /** Time slicing allows handling fewer entities per tick. Percentage of total Query or exact count per tick. Handled in update tracking as well as for loops. */
     timeSlicing?: QueryTimeSlicingParameters;
 };
 

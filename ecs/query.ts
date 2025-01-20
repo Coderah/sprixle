@@ -246,6 +246,8 @@ export class Query<
 
     removeEntity(entity: typeof this.manager.Entity) {
         this.entities.delete(entity.id);
+        this.queuedEntities.delete(entity.id);
+        this.entitiesInSlice.delete(entity.id);
         this.consumers.forEach((c) => {
             c.remove(entity);
         });

@@ -10,16 +10,37 @@ import {
 
 export type QueryName = string;
 
+type QueryTimeSlicingParameters = (
+    | {
+          count: number;
+      }
+    | {
+          percentage: number;
+      }
+) & {
+    /** @todo */
+    sliceNew?: boolean;
+};
+
 export type QueryParameters<ComponentTypes, IncludeKeys> = {
     flexible?: boolean;
     includes?: Set<Keys<ComponentTypes>>;
     excludes?: Set<Keys<ComponentTypes>>;
+    timeSlicing?: QueryTimeSlicingParameters;
 };
 
 export type QueryParametersInput<ComponentTypes, IncludeKeys> = {
+    /** Flexible queries match entities with any combination of `includes` */
     flexible?: boolean;
+
+    /** These components will be included in the query (must have all unless `flexible` is true) */
     includes?: IncludeKeys;
+
+    /** Entities with these components will be excluded. (this option is not affected by `flexible`) */
     excludes?: Keys<ComponentTypes>[];
+
+    /** Time slicing allows handling fewer updates per tick. Percentage of total Query or exact count per tick. */
+    timeSlicing?: QueryTimeSlicingParameters;
 };
 
 export class Query<
@@ -37,6 +58,11 @@ export class Query<
     entities = new Set<entityId>();
     consumers = new Array<Consumer<ExactComponentTypes, Includes, M, E>>();
 
+    /** What entities are queued for future slices */
+    queuedEntities = new Set<entityId>();
+    /** tracks what entities are included in the current slice; cleared on tick. */
+    entitiesInSlice = new Set<entityId>();
+
     private lastEntity: E | undefined;
 
     *[Symbol.iterator]() {
@@ -53,7 +79,10 @@ export class Query<
 
         this.queryName = '';
 
-        this.queryParameters = { flexible: parameters.flexible };
+        this.queryParameters = {
+            flexible: parameters.flexible,
+            timeSlicing: parameters.timeSlicing,
+        };
 
         if (parameters.includes) {
             const includesArray = parameters.includes.sort((a, b) =>
@@ -158,6 +187,32 @@ export class Query<
         }
     }
 
+    protected updateTimeSlice() {
+        const { timeSlicing } = this.queryParameters;
+        if (!timeSlicing || !this.queuedEntities.size) return;
+
+        let sliceTarget = 0;
+
+        if ('percentage' in timeSlicing) {
+            // TODO get percentage of entities within queue and apply them
+            sliceTarget = Math.floor(
+                (this.entities.size * timeSlicing.percentage) / 100
+            );
+        } else if ('count' in timeSlicing) {
+            sliceTarget = timeSlicing.count;
+        }
+
+        if (this.entitiesInSlice.size >= sliceTarget) return;
+
+        for (let queuedEntityId of this.queuedEntities) {
+            this.entitiesInSlice.add(queuedEntityId);
+            this.queuedEntities.delete(queuedEntityId);
+            this.handleEntity(this.manager.getEntity(queuedEntityId));
+
+            if (this.entitiesInSlice.size >= sliceTarget) return;
+        }
+    }
+
     addEntity(entity: typeof this.manager.Entity) {
         this.consumers.forEach((c) => c.add(entity.id));
         this.indexEntity(entity);
@@ -171,6 +226,18 @@ export class Query<
 
     updatedEntity(entity: typeof this.manager.Entity) {
         if (!this.entities.has(entity.id)) return;
+
+        if (
+            this.queryParameters.timeSlicing &&
+            !this.entitiesInSlice.has(entity.id)
+        ) {
+            if (this.queuedEntities.has(entity.id)) return;
+
+            this.queuedEntities.add(entity.id);
+            this.updateTimeSlice();
+            return;
+        }
+
         this.consumers.forEach((c) => {
             c.updatedEntities.add(entity.id);
             c.consumedEntities.delete(entity.id);
@@ -247,6 +314,10 @@ export class Query<
 
     tick() {
         this.consumers.forEach((c) => c.tick());
+
+        this.entitiesInSlice.clear();
+
+        this.updateTimeSlice();
     }
 }
 

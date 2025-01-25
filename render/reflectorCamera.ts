@@ -43,6 +43,16 @@ class Reflector extends Object3D {
     textureMatrix: Matrix4;
     renderTarget: WebGLRenderTarget;
 
+    cameraHelper: CameraHelper;
+
+    render(renderer: WebGLRenderer, scene: Scene, camera: Camera) {}
+
+    removeFromParent(): this {
+        super.removeFromParent();
+
+        this.cameraHelper?.removeFromParent();
+    }
+
     constructor(options: ReflectorOptions = { anisotropy: 0 }) {
         super();
 
@@ -90,10 +100,10 @@ class Reflector extends Object3D {
             }
         ));
 
-        const cameraHelper = new CameraHelper(this.camera);
+        this.cameraHelper = new CameraHelper(this.camera);
 
         this.render = function (renderer, scene, camera) {
-            if (options.debug) scene.add(cameraHelper);
+            if (options.debug) scene.add(this.cameraHelper);
             // console.log('reflector onBeforeRender');
             reflectorWorldPosition.setFromMatrixPosition(scope.matrixWorld);
             cameraWorldPosition.setFromMatrixPosition(camera.matrixWorld);
@@ -241,7 +251,7 @@ class Reflector extends Object3D {
 
             scope.visible = true;
 
-            if (options.debug) cameraHelper.update();
+            if (options.debug) this.cameraHelper.update();
         };
     }
     dispose() {

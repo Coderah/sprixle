@@ -119,8 +119,14 @@ export function getGLSLType(intended_type: InputType) {
             type = typeOf<GLSL['vec3']>();
             break;
         case 'RGBA':
+        case 'SHADER':
             type = typeOf<GLSL['vec4']>();
             break;
+        default:
+            console.warn(
+                '[getGLSLType] could not determine glslType from',
+                intended_type
+            );
     }
 
     return type;

@@ -1,4 +1,7 @@
-import { CompilationCache } from '../../createCompiler';
+import {
+    addContextualShaderInclude,
+    CompilationCache,
+} from '../../createCompiler';
 import fresnel from './fresnel';
 import gpu_shader_common_color_utils from './gpu_shader_common_color_utils';
 import gpu_shader_common_hash from './gpu_shader_common_hash';
@@ -34,10 +37,11 @@ export function addBlenderDependency(
             dependencyName
         );
 
-        compilationCache.shader?.fragmentIncludes.add(all[dependencyName]);
+        addContextualShaderInclude(compilationCache, all[dependencyName]);
     }
 
-    compilationCache.shader?.fragmentIncludes.add(
+    addContextualShaderInclude(
+        compilationCache,
         shader.replace(includesRegex, '')
     );
 }

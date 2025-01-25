@@ -1,4 +1,5 @@
 import {
+    metaAnnotation,
     ReflectionClass,
     ReflectionKind,
     ReflectionMethod,
@@ -6,9 +7,20 @@ import {
     Type,
     TypeMethod,
     typeOf,
+    TypePropertySignature,
 } from '@deepkit/type';
 import { find } from 'lodash';
-import { Mesh } from 'three';
+import {
+    Camera,
+    Group,
+    InstancedMesh,
+    Material,
+    Mesh,
+    Object3D,
+    Scene,
+    ShaderMaterial,
+    WebGLRenderer,
+} from 'three';
 
 import staticLogicNodeTranspilers from './logic/staticNodeTranspilers';
 import { transpilerMethods as logicTranspilerMethods } from './logic/transpilerMethods';
@@ -30,19 +42,49 @@ import {
     getReturnType,
     getStructReference,
 } from './util';
-import { TypeParameter } from 'typescript';
+import {
+    LiteralType,
+    ObjectType,
+    TypeParameter,
+    UnionOrIntersectionType,
+} from 'typescript';
+import { BatchedMesh, Geometry } from 'three-stdlib';
 
 export interface CompilationCache {
     defines: Set<string>;
-    compiledInputs: Record<string, string>;
+    compiledInputs: {
+        current: number;
+        compiled: Record<string, string>[];
+    };
     inputTypes: Record<string, Type>;
     uniforms?: Record<string, { value: any }>;
     features?: Set<string>;
     shader?: {
         vertex: string[];
+        displace: string[];
         vertexIncludes: Set<string>;
         fragmentIncludes: Set<string>;
+        onBeforeRender: Set<
+            (
+                this: ShaderMaterial,
+                renderer: WebGLRenderer,
+                scene: Scene,
+                camera: Camera,
+                geometry: Geometry,
+                object: Object3D,
+                group: Group
+            ) => void
+        >;
+        onMaterialApplied: Set<
+            (mesh: Mesh | InstancedMesh | BatchedMesh) => void
+        >;
     };
+}
+
+export enum shaderTargetInputs {
+    Vertex,
+    Displacement,
+    Fragment,
 }
 
 export type InputType =
@@ -101,24 +143,29 @@ export interface NodeTree {
     [key: string]: Node;
 }
 
-// TODO how does this change for shader trees?
 export interface LogicTreeMethods {
+    [key: string]: Function;
+}
+
+export interface ShaderTreeMethods {
     [key: string]: Function;
 }
 
 interface LogicTreeCompilerParameters<M extends LogicTreeMethods> {
     type: 'LogicTree';
     methods: M;
-    reflection: ReflectionClass<M>;
+    reflection: UnionOrIntersectionType;
     compiledTreeToFn: (
         transpiled: string[],
         compilationCache: CompilationCache
     ) => Function;
 }
 
-interface ShaderTreeCompilerParameters {
+type ShaderTreeCompilerParameters = {
     type: 'ShaderTree';
-}
+    methods: ShaderTreeMethods;
+    reflection: UnionOrIntersectionType;
+};
 
 function getNext(tree: NodeTree, n: NodeTree[keyof NodeTree]) {
     const field =
@@ -134,6 +181,38 @@ function getNext(tree: NodeTree, n: NodeTree[keyof NodeTree]) {
         ?.map((l) => tree[l.node]);
 }
 
+export function addCompiledInput(
+    reference: string,
+    compiled: string,
+    compilationCache: CompilationCache
+) {
+    const { compiledInputs } = compilationCache;
+    if (
+        compiledInputs.current === shaderTargetInputs.Vertex &&
+        compiledInputs.compiled[shaderTargetInputs.Displacement] &&
+        reference in compiledInputs.compiled[shaderTargetInputs.Displacement]
+    ) {
+        return;
+    }
+    compiledInputs.compiled[compiledInputs.current][reference] = compiled;
+}
+
+export function addContextualShaderInclude(
+    compilationCache: CompilationCache,
+    include: string
+) {
+    // TODO compcache should probably have includes and body as an array unbounding from vertex / fragment
+
+    // TODO compiledInputs.current should be lifted; maybe `currentTarget`?
+    const current = compilationCache.compiledInputs.current;
+
+    if (current === shaderTargetInputs.Fragment) {
+        compilationCache.shader.fragmentIncludes.add(include);
+    } else {
+        compilationCache.shader.vertexIncludes.add(include);
+    }
+}
+
 export function createNodeTreeCompiler<M extends LogicTreeMethods>(
     parameters: LogicTreeCompilerParameters<M> | ShaderTreeCompilerParameters
 ) {
@@ -142,10 +221,10 @@ export function createNodeTreeCompiler<M extends LogicTreeMethods>(
             ? logicTranspilerMethods
             : shaderTranspilerMethods;
     const methods =
-        parameters.type === 'LogicTree'
-            ? parameters.methods
-            : transpilerMethods;
-    const transpilerReflection = typeOf<typeof transpilerMethods>();
+        'methods' in parameters ? parameters.methods : transpilerMethods;
+    const transpilerReflection = typeOf<
+        typeof transpilerMethods
+    >() as unknown as UnionOrIntersectionType;
 
     // console.log(transpilerReflection);
 
@@ -299,7 +378,9 @@ export function createNodeTreeCompiler<M extends LogicTreeMethods>(
                 value = 'time';
                 // TODO handle high-level re-use of uniforms
                 compilationCache.uniforms.time = uniformTime;
-                compilationCache.shader.fragmentIncludes.add(
+
+                addContextualShaderInclude(
+                    compilationCache,
                     'uniform float time;'
                 );
             } else {
@@ -476,7 +557,8 @@ export function createNodeTreeCompiler<M extends LogicTreeMethods>(
                         compiled = intermediateCompiled.join('\n');
 
                         // TODO if input is a float we should reduce precision for performance?
-                        compilationCache.compiledInputs[reference] = compiled;
+                        // compilationCache.compiledInputs[reference] = compiled;
+                        addCompiledInput(reference, compiled, compilationCache);
                     } else if (!inputType) {
                         // TODO we should store inputType for static transpilers and instead include a warning in the compiled code here?
                         // value = reference;
@@ -503,7 +585,7 @@ export function createNodeTreeCompiler<M extends LogicTreeMethods>(
 
                 compiled = `const ${reference} = em.getEntity("${socket.value}");\nif (!${reference}) return`;
 
-                compilationCache.compiledInputs[reference] = compiled;
+                addCompiledInput(reference, compiled, compilationCache);
             } else {
                 console.warn(
                     '[compileNodeSocket] unable to convert',
@@ -528,6 +610,7 @@ export function createNodeTreeCompiler<M extends LogicTreeMethods>(
                         socket.type === 'VECTOR' ? '3' : '4'
                     }(${value.join(', ')})`;
                 } else {
+                    // TODO if input is less than 3/4 just create and directly input the correct vector rather than converting in glsl
                     value = `vec${socket.type === 'VECTOR' ? '3' : '4'}(${value
                         .map((v) => v.toFixed(4))
                         .join(', ')})`;
@@ -571,412 +654,534 @@ export function createNodeTreeCompiler<M extends LogicTreeMethods>(
     ): string[] {
         if (!n) return [];
 
-        if (n.name in staticLogicNodeTranspilers) {
-            return (
-                parameters.type === 'LogicTree'
-                    ? staticLogicNodeTranspilers
-                    : staticShaderNodeTranspilers
-            )[n.name](tree, n, compilationCache);
+        const staticNodeTranspilers =
+            parameters.type === 'LogicTree'
+                ? staticLogicNodeTranspilers
+                : staticShaderNodeTranspilers;
+
+        if (n.name in staticNodeTranspilers) {
+            return staticNodeTranspilers[n.name](tree, n, compilationCache);
         }
 
-        const method = methods[n.name];
+        const method = methods[n.name] || transpilerMethods[n.name];
 
         let isMethodTranspiler =
             parameters.type === 'LogicTree'
-                ? !parameters.reflection.hasMethod(n.name)
+                ? !parameters.reflection.types.find((t) => t.name === n.name)
                 : true;
-        let methodReflection: TypeMethod = null;
+        let methodReflection: TypeMethod | TypePropertySignature = null;
 
         if (method) {
-            methodReflection =
-                parameters.type === 'LogicTree' && !isMethodTranspiler
-                    ? parameters.reflection?.getMethod(n.name)
-                    : transpilerReflection.types.find((t) => t.name === n.name);
+            methodReflection = (parameters.reflection.types.find(
+                (t) => t.name === n.name
+            ) ||
+                transpilerReflection.types.find(
+                    (t) => t.name === n.name
+                )) as unknown as TypeMethod | TypePropertySignature;
         } else if (
             parameters.type !== 'LogicTree' &&
             (n.type === 'GROUP_OUTPUT' || n.type === 'GROUP')
         ) {
-            methodReflection = dynamicNodeToType(n) as TypeMethod;
+            methodReflection = dynamicNodeToType(n) as
+                | TypeMethod
+                | TypePropertySignature;
             isMethodTranspiler = true;
             // debugger;
         }
 
-        function handleInternalTree() {
-            // TODO rename internalLogicTree to internalNodeTree
-            if (n.internalLogicTree) {
-                if (method) {
-                    console.warn(
-                        '[compileNode] internalNodeTree being ignore in favor of code implementation.',
-                        n
-                    );
-                    return;
-                }
+        if (
+            !(method instanceof Function) &&
+            methodReflection?.kind === ReflectionKind.propertySignature
+        ) {
+            return Object.values(method).flatMap((exactMethod: Function, i) => {
+                const exactMethodReflection = methodReflection.type.types[i];
+                exactMethodReflection.name += methodReflection.name;
 
-                // TODO implement prefix or nesting for cache stuff
-                const compiledInternalNodeTree = compileLogicTree(
-                    n.internalLogicTree,
-                    true
+                return compileUsingMethod(
+                    exactMethod,
+                    isMethodTranspiler,
+                    exactMethodReflection
                 );
-                // console.log(
-                //     '[compiledInternalNodeTree]',
-                //     n,
-                //     compiledInternalNodeTree
-                // );
+            });
+        } else {
+            return compileUsingMethod(
+                method,
+                isMethodTranspiler,
+                methodReflection
+            );
+        }
 
-                compilationCache.defines = compilationCache.defines.union(
-                    compiledInternalNodeTree.compilationCache.defines
-                );
-
-                const reference = getReference(n.id);
-
-                if (parameters.type !== 'LogicTree') {
-                    // console.log(
-                    //     '[compiledInternalNodeTree] compilation cache',
-                    //     compiledInternalNodeTree.compilationCache
-                    // );
-                    // TODO if return is a single type, bypass struct business
-
-                    const { groupInput } =
-                        compiledInternalNodeTree.compilationCache.inputTypes;
-
-                    const structReference = getStructReference(n.name);
-                    const functionReference = getReference(n.name);
-
-                    // inference
-                    let functionArguments: string[] = [];
-                    if (
-                        groupInput &&
-                        groupInput.typeArguments?.[0]?.kind ===
-                            ReflectionKind.objectLiteral
-                    ) {
-                        functionArguments =
-                            groupInput.typeArguments[0].types.map((t) => {
-                                if (
-                                    t.kind === ReflectionKind.propertySignature
-                                ) {
-                                    const typeName =
-                                        t.type.indexAccessOrigin?.container
-                                            .typeName === 'GLSL'
-                                            ? t.type.indexAccessOrigin.index
-                                                  .literal
-                                            : t.name;
-
-                                    return (
-                                        typeName +
-                                        ' ' +
-                                        getParameterReference(t.name)
-                                    );
-                                }
-
-                                return 'COMPILATION_ERROR';
-                            });
+        function compileUsingMethod(
+            method: Function,
+            isMethodTranspiler: boolean,
+            methodReflection: TypeMethod
+        ) {
+            function handleInternalTree() {
+                // TODO rename internalLogicTree to internalNodeTree
+                if (n.internalLogicTree) {
+                    if (method) {
+                        console.warn(
+                            '[compileNode] internalNodeTree being ignored in favor of code implementation.',
+                            n
+                        );
+                        return;
                     }
 
-                    compilationCache.shader.fragmentIncludes.add(`
+                    // TODO implement prefix or nesting for cache stuff
+                    const compiledInternalNodeTree = compileNodeTree(
+                        n.internalLogicTree,
+                        true,
+                        compilationCache.compiledInputs.current
+                    );
+                    // console.log(
+                    //     '[compiledInternalNodeTree]',
+                    //     n,
+                    //     compiledInternalNodeTree
+                    // );
+
+                    compilationCache.defines = compilationCache.defines.union(
+                        compiledInternalNodeTree.compilationCache.defines
+                    );
+
+                    const reference = getReference(n.id);
+
+                    if (parameters.type !== 'LogicTree') {
+                        console.log(
+                            '[compiledInternalNodeTree] compilation cache',
+                            n.name,
+                            compiledInternalNodeTree.compilationCache
+                        );
+                        // TODO if return is a single type, bypass struct business
+
+                        const { groupInput } =
+                            compiledInternalNodeTree.compilationCache
+                                .inputTypes;
+
+                        const structReference = getStructReference(n.name);
+                        const functionReference = getReference(n.name);
+
+                        // inference
+                        let functionArguments: string[] = [];
+                        if (
+                            groupInput &&
+                            groupInput.typeArguments?.[0]?.kind ===
+                                ReflectionKind.objectLiteral
+                        ) {
+                            functionArguments =
+                                groupInput.typeArguments[0].types.map((t) => {
+                                    if (
+                                        t.kind ===
+                                        ReflectionKind.propertySignature
+                                    ) {
+                                        const typeName =
+                                            t.type.indexAccessOrigin?.container
+                                                .typeName === 'GLSL'
+                                                ? t.type.indexAccessOrigin.index
+                                                      .literal
+                                                : t.name;
+
+                                        return (
+                                            typeName +
+                                            ' ' +
+                                            getParameterReference(t.name)
+                                        );
+                                    }
+
+                                    return 'COMPILATION_ERROR';
+                                });
+                        }
+
+                        // TODO handle vertex and fragment shader of internal nodes better?
+                        const structDefinition = `
                         ${structReference} ${functionReference}(${functionArguments}) {
+                            ${compiledInternalNodeTree.vertexShader.replace(
+                                '$structReference',
+                                structReference
+                            )}
                             ${compiledInternalNodeTree.fragmentShader.replace(
                                 '$structReference',
                                 structReference
                             )}
-                        }
-                    `);
-
-                    compilationCache.uniforms = {
-                        ...compiledInternalNodeTree.compilationCache.uniforms,
-                        ...compilationCache.uniforms,
-                    };
-
-                    compilationCache.shader.fragmentIncludes =
-                        compiledInternalNodeTree.compilationCache.shader.fragmentIncludes.union(
-                            compilationCache.shader.fragmentIncludes
-                        );
-                    compilationCache.shader.vertexIncludes =
-                        compiledInternalNodeTree.compilationCache.shader.vertexIncludes.union(
-                            compilationCache.shader.vertexIncludes
+                        }`;
+                        addContextualShaderInclude(
+                            compilationCache,
+                            structDefinition
                         );
 
-                    compilationCache.features = compilationCache.features.union(
-                        compiledInternalNodeTree.compilationCache.features
-                    );
-                } else {
-                    compilationCache.compiledInputs = {
-                        ...compilationCache.compiledInputs,
-                        ...compiledInternalNodeTree.compilationCache
-                            .compiledInputs,
-                    };
-                    compilationCache.compiledInputs[
-                        reference
-                    ] = `const ${reference} = {${Object.keys(n.inputs).reduce(
-                        (o, k) => {
-                            const socket = n.inputs[k];
-                            const compiledSocket = compileNodeSocket(
-                                tree,
-                                n,
-                                null,
-                                socket,
-                                compilationCache,
-                                'input'
+                        compilationCache.uniforms = {
+                            ...compiledInternalNodeTree.compilationCache
+                                .uniforms,
+                            ...compilationCache.uniforms,
+                        };
+
+                        compilationCache.shader.fragmentIncludes =
+                            compiledInternalNodeTree.compilationCache.shader.fragmentIncludes.union(
+                                compilationCache.shader.fragmentIncludes
+                            );
+                        compilationCache.shader.vertexIncludes =
+                            compiledInternalNodeTree.compilationCache.shader.vertexIncludes.union(
+                                compilationCache.shader.vertexIncludes
                             );
 
-                            o += `${k}: ${
-                                compiledSocket.reference || compiledSocket.value
-                            }, `;
+                        compilationCache.features =
+                            compilationCache.features.union(
+                                compiledInternalNodeTree.compilationCache
+                                    .features
+                            );
+                    } else {
+                        // compilationCache.compiledInputs = {
+                        //     compiled:
+                        //     ...compilationCache.compiledInputs,
+                        //     ...compiledInternalNodeTree.compilationCache
+                        //         .compiledInputs,
+                        // };
+                        // TODO instead of inlining, create and re-use a function like we do in shaders
 
-                            return o;
-                        },
-                        ''
-                    )}}`;
+                        compiledInternalNodeTree.compilationCache.compiledInputs.compiled.forEach(
+                            (compiledInputs, index) => {
+                                compilationCache.compiledInputs.compiled[
+                                    index
+                                ] = {
+                                    ...compilationCache.compiledInputs.compiled[
+                                        index
+                                    ],
+                                    ...compiledInputs,
+                                };
+                            }
+                        );
 
-                    return compiledInternalNodeTree.transpiled.map((s) =>
-                        !s ? '' : s.replace(/groupInput/g, reference)
-                    );
+                        addCompiledInput(
+                            reference,
+                            `const ${reference} = {${Object.keys(
+                                n.inputs
+                            ).reduce((o, k) => {
+                                const socket = n.inputs[k];
+                                const compiledSocket = compileNodeSocket(
+                                    tree,
+                                    n,
+                                    null,
+                                    socket,
+                                    compilationCache,
+                                    'input'
+                                );
+
+                                o += `${k}: ${
+                                    compiledSocket.reference ||
+                                    compiledSocket.value
+                                }, `;
+
+                                return o;
+                            }, '')}}`,
+                            compilationCache
+                        );
+
+                        return compiledInternalNodeTree.transpiled.map((s) =>
+                            !s ? '' : s.replace(/groupInput/g, reference)
+                        );
+                    }
                 }
             }
-        }
 
-        if (methodReflection) {
-            const compiledParameters: any[] = [];
+            let result = [];
 
-            const { defines, compiledInputs } = compilationCache;
+            if (methodReflection) {
+                const compiledParameters: any[] = [];
 
-            if (!isMethodTranspiler) defines.add(n.name);
+                const { defines, compiledInputs } = compilationCache;
 
-            // console.log(
-            //     n.name,
-            //     methodReflection,
-            //     methodReflection.getReturnType()
-            // );
+                if (!isMethodTranspiler) defines.add(n.name);
 
-            // TODO implement handling of array inputs to a non array parameter
-
-            let result = ['$1'];
-
-            methodReflection.parameters.forEach((p) => {
-                const input = find(
-                    n.inputs,
-                    (value, key) =>
-                        getParameterReference(key) ===
-                        getParameterReference(p.name)
-                );
-                const output = find(
-                    n.outputs,
-                    (value, key) =>
-                        getParameterReference(key) ===
-                        getParameterReference(p.name)
-                );
-                const property = find(
-                    n.properties,
-                    (value, key) =>
-                        getParameterReference(key) ===
-                        getParameterReference(p.name)
+                const vertexShaderTargetInfo = metaAnnotation.getForName(
+                    methodReflection.return,
+                    'VertexShader'
                 );
 
-                // TODO refactor this and handle things like enum or and isMethodTranspiler more gracefully
+                // console.log(
+                //     n.name,
+                //     'target type',
+                //     vertexShaderTargetInfo
+                //         ? `VertexShader<${vertexShaderTargetInfo[0].literal}>`
+                //         : 'FragmentShader<default>'
+                // );
 
-                if (
-                    isMethodTranspiler &&
-                    // TODO figure out why type doesn't have typeName here
-                    p.name === 'compilationCache'
-                ) {
-                    compiledParameters.push(compilationCache);
-                    return;
+                if (parameters.type === 'ShaderTree') {
+                    if (vertexShaderTargetInfo) {
+                        console.log('entering vertex context');
+                        compilationCache.compiledInputs.current =
+                            vertexShaderTargetInfo[0].literal === 'displacement'
+                                ? shaderTargetInputs.Displacement
+                                : shaderTargetInputs.Vertex;
+                    } else {
+                    }
+                    console.groupCollapsed(
+                        n.name +
+                            ' ' +
+                            shaderTargetInputs[
+                                compilationCache.compiledInputs.current
+                            ]
+                    );
                 }
 
-                // TODO figure out why type doesn't have typeName here
-                if (isMethodTranspiler && p.name === 'node') {
-                    compiledParameters.push(n);
-                    return;
-                }
+                // console.log(
+                //     n.name,
+                //     methodReflection,
+                //     methodReflection.getReturnType()
+                // );
 
-                if (input !== undefined) {
+                // TODO implement handling of array inputs to a non array parameter
+
+                result = ['$1'];
+
+                methodReflection.parameters.forEach((p) => {
+                    const input = find(
+                        n.inputs,
+                        (value, key) =>
+                            getParameterReference(key) ===
+                            getParameterReference(p.name)
+                    );
+                    const output = find(
+                        n.outputs,
+                        (value, key) =>
+                            getParameterReference(key) ===
+                            getParameterReference(p.name)
+                    );
+                    const property = find(
+                        n.properties,
+                        (value, key) =>
+                            getParameterReference(key) ===
+                            getParameterReference(p.name)
+                    );
+
+                    if (parameters.type === 'ShaderTree') {
+                        console.log(p, { input, output, property });
+                    }
+
+                    // TODO refactor this and handle things like enum or and isMethodTranspiler more gracefully
+
                     if (
-                        !Array.isArray(input) &&
-                        input.type !== 'linked' &&
-                        input.input_hidden &&
-                        p.default
+                        isMethodTranspiler &&
+                        // TODO figure out why type doesn't have typeName here
+                        p.name === 'compilationCache'
                     ) {
-                        // TODO check in logic trees
-                        compiledParameters.push(undefined);
+                        compiledParameters.push(compilationCache);
                         return;
                     }
 
-                    const parameterType = getConditionalType(
-                        methodReflection,
-                        p.type,
-                        compiledParameters
-                    );
+                    // TODO figure out why type doesn't have typeName here
+                    if (isMethodTranspiler && p.name === 'node') {
+                        compiledParameters.push(n);
+                        return;
+                    }
 
-                    // console.log('input', n.type, p.name, {
-                    //     input,
-                    //     p,
-                    //     parameterType,
-                    // });
-
-                    const compiledInput = compileNodeSocket(
-                        tree,
-                        n,
-                        p,
-                        input,
-                        compilationCache,
-                        'input',
-                        parameterType
-                    );
-
-                    if (compiledInput.reference) {
-                        const inputType =
-                            compilationCache.inputTypes[
-                                compiledInput.reference
-                            ];
-
+                    if (input !== undefined) {
                         if (
-                            inputType &&
-                            inputType.kind === ReflectionKind.objectLiteral
+                            !Array.isArray(input) &&
+                            input.type !== 'linked' &&
+                            input.input_hidden &&
+                            p.default
                         ) {
-                            const keyReference = compiledInput.value
-                                .toString()
-                                .split('.')[1];
+                            // TODO check in logic trees
+                            compiledParameters.push(undefined);
+                            return;
+                        }
 
-                            if (
-                                keyReference &&
-                                inputType.types.find(
-                                    (t) => t.name === keyReference
-                                )?.type.typeName === 'Iterable'
-                            ) {
-                                const itemReference = getReference(
-                                    compiledInput.reference + p.name
-                                );
-                                // TODO handle looped inputs and their dependency graph
-                                result.unshift(
-                                    `for (let ${itemReference} of ${compiledInput.value.toString()}) {`
-                                );
-                                result.push('}');
+                        const parameterType = getConditionalType(
+                            methodReflection,
+                            p.type,
+                            compiledParameters
+                        );
 
-                                compiledInput.value = itemReference;
+                        if (parameterType.typeName === 'Node') {
+                            if ('type' in input && input.type === 'linked') {
+                                const inputNodeId = input.links[0].node;
+                                const inputNode = tree[inputNodeId];
+                                compiledParameters.push(inputNode);
+                                return;
+                            } else {
+                                compiledParameters.push(undefined);
+                                return;
                             }
                         }
-                    }
 
-                    // if (
-                    //     isMethodTranspiler &&
-                    //     p.type.kind == ReflectionKind.rest
-                    // ) {
-                    //     compiledParameters.push(
-                    //         ...compiledInput.value.toString().split(', ')
-                    //     );
-                    // } else
-                    if (isMethodTranspiler && compiledInput.internalValue) {
-                        compiledParameters.push(compiledInput.internalValue);
-                    } else {
-                        compiledParameters.push(
-                            compiledInput.value?.toString()
+                        // console.log('input', n.type, p.name, {
+                        //     input,
+                        //     p,
+                        //     parameterType,
+                        // });
+
+                        const compiledInput = compileNodeSocket(
+                            tree,
+                            n,
+                            p,
+                            input,
+                            compilationCache,
+                            'input',
+                            parameterType
                         );
-                    }
-                } else if (output !== undefined) {
-                    const compiledOutput = compileNodeSocket(
-                        tree,
-                        n,
-                        p,
-                        output,
-                        compilationCache,
-                        'output'
-                    );
 
-                    function handleOutput(compiledOutput: {
-                        compiled: ReturnType<typeof compileNode>;
-                        value: string;
-                    }) {
-                        compiledParameters.push(
-                            '() => { \n' +
-                                compiledOutput.compiled.reduce(
-                                    (o, c) =>
-                                        o
-                                            ? o +
-                                              '\n' +
-                                              c.replace(/^/gm, '    ')
-                                            : c.replace(/^/gm, '    '),
-                                    ''
-                                ) +
-                                '\n}'
+                        if (compiledInput.reference) {
+                            const inputType =
+                                compilationCache.inputTypes[
+                                    compiledInput.reference
+                                ];
+
+                            if (
+                                inputType &&
+                                inputType.kind === ReflectionKind.objectLiteral
+                            ) {
+                                const keyReference = compiledInput.value
+                                    .toString()
+                                    .split('.')[1];
+
+                                if (
+                                    keyReference &&
+                                    inputType.types.find(
+                                        (t) => t.name === keyReference
+                                    )?.type.typeName === 'Iterable'
+                                ) {
+                                    const itemReference = getReference(
+                                        compiledInput.reference + p.name
+                                    );
+                                    // TODO handle looped inputs and their dependency graph
+                                    result.unshift(
+                                        `for (let ${itemReference} of ${compiledInput.value.toString()}) {`
+                                    );
+                                    result.push('}');
+
+                                    compiledInput.value = itemReference;
+                                }
+                            }
+                        }
+
+                        // if (
+                        //     isMethodTranspiler &&
+                        //     p.type.kind == ReflectionKind.rest
+                        // ) {
+                        //     compiledParameters.push(
+                        //         ...compiledInput.value.toString().split(', ')
+                        //     );
+                        // } else
+                        if (isMethodTranspiler && compiledInput.internalValue) {
+                            compiledParameters.push(
+                                compiledInput.internalValue
+                            );
+                        } else {
+                            compiledParameters.push(
+                                compiledInput.value?.toString()
+                            );
+                        }
+                    } else if (output !== undefined) {
+                        const compiledOutput = compileNodeSocket(
+                            tree,
+                            n,
+                            p,
+                            output,
+                            compilationCache,
+                            'output'
                         );
-                    }
 
-                    if (Array.isArray(compiledOutput)) {
-                        compiledOutput.forEach(handleOutput);
+                        function handleOutput(compiledOutput: {
+                            compiled: ReturnType<typeof compileNode>;
+                            value: string;
+                        }) {
+                            compiledParameters.push(
+                                '() => { \n' +
+                                    compiledOutput.compiled.reduce(
+                                        (o, c) =>
+                                            o
+                                                ? o +
+                                                  '\n' +
+                                                  c.replace(/^/gm, '    ')
+                                                : c.replace(/^/gm, '    '),
+                                        ''
+                                    ) +
+                                    '\n}'
+                            );
+                        }
+
+                        if (Array.isArray(compiledOutput)) {
+                            compiledOutput.forEach(handleOutput);
+                        } else {
+                            // TODO should we even be here? MAP_RANGE for FLOAT triggered
+                            compiledParameters.push(
+                                isMethodTranspiler ? undefined : 'undefined'
+                            );
+                        }
+                    } else if (p.name === 'delta') {
+                        compiledParameters.push('delta');
+                    } else if (property !== undefined) {
+                        if (isMethodTranspiler) {
+                            // TODO genericize this concept
+                            compiledParameters.push(property);
+
+                            if (p.type.kind === ReflectionKind.enum) {
+                                // console.log(p);
+                            }
+                        } else {
+                            compiledParameters.push(
+                                typeof property === 'string'
+                                    ? `"${property}"`
+                                    : property.toString()
+                            );
+                        }
                     } else {
-                        // TODO should we even be here? MAP_RANGE for FLOAT triggered
                         compiledParameters.push(
                             isMethodTranspiler ? undefined : 'undefined'
                         );
                     }
-                } else if (p.name === 'delta') {
-                    compiledParameters.push('delta');
-                } else if (property !== undefined) {
-                    if (isMethodTranspiler) {
-                        // TODO genericize this concept
-                        compiledParameters.push(property);
+                });
 
-                        if (p.type.kind === ReflectionKind.enum) {
-                            // console.log(p);
-                        }
-                    } else {
-                        compiledParameters.push(
-                            typeof property === 'string'
-                                ? `"${property}"`
-                                : property.toString()
-                        );
+                if (parameters.type === 'ShaderTree') {
+                    console.groupEnd();
+                }
+
+                const returnType = getReturnType(
+                    methodReflection,
+                    compiledParameters
+                );
+                compilationCache.inputTypes[getReference(n.id)] = returnType;
+
+                if (isMethodTranspiler) {
+                    if (method) result = method.apply({}, compiledParameters);
+
+                    if (
+                        parameters.type !== 'LogicTree' &&
+                        n.type === 'GROUP' &&
+                        !method
+                    ) {
+                        // Handle constructed GLSL function call
+                        result = [
+                            `${getReference(n.name)}(${compiledParameters.join(
+                                ', '
+                            )})`,
+                        ];
                     }
-                } else {
-                    compiledParameters.push(
-                        isMethodTranspiler ? undefined : 'undefined'
-                    );
-                }
-            });
 
-            const returnType = getReturnType(
-                methodReflection,
-                compiledParameters
-            );
-            compilationCache.inputTypes[getReference(n.id)] = returnType;
-
-            if (isMethodTranspiler) {
-                if (method) result = method.apply({}, compiledParameters);
-
-                if (
-                    parameters.type !== 'LogicTree' &&
-                    n.type === 'GROUP' &&
-                    !method
-                ) {
-                    // Handle constructed GLSL function call
-                    result = [
-                        `${getReference(n.name)}(${compiledParameters.join(
-                            ', '
-                        )})`,
-                    ];
-                }
-
-                if (
-                    parameters.type !== 'LogicTree' &&
-                    n.type === 'GROUP_OUTPUT'
-                ) {
-                    result = [
-                        `return $structReference(${compiledParameters.join(
-                            ', '
-                        )})`,
-                    ];
-                } else if (
-                    returnType.typeName === 'GLSL' &&
-                    returnType.typeArguments[0].kind ===
-                        ReflectionKind.objectLiteral
-                ) {
-                    const structReference = getStructReference(
-                        n.type === 'GROUP' ? n.name : n.type
-                    );
-                    // console.log(
-                    //     '[STRUCT REFERENCE]',
-                    //     structReference,
-                    //     returnType
-                    // );
-                    compilationCache.shader.fragmentIncludes.add(glsl`
+                    if (
+                        parameters.type !== 'LogicTree' &&
+                        n.type === 'GROUP_OUTPUT'
+                    ) {
+                        result = [
+                            `return $structReference(${compiledParameters.join(
+                                ', '
+                            )})`,
+                        ];
+                    } else if (
+                        returnType.typeName === 'GLSL' &&
+                        returnType.typeArguments[0].kind ===
+                            ReflectionKind.objectLiteral
+                    ) {
+                        const structReference = getStructReference(
+                            n.type === 'GROUP' ? n.name : n.type
+                        );
+                        // console.log(
+                        //     '[STRUCT REFERENCE]',
+                        //     structReference,
+                        //     returnType
+                        // );
+                        addContextualShaderInclude(
+                            compilationCache,
+                            glsl`
                         struct ${structReference} {
                         ${returnType.typeArguments[0].types
                             .map(
@@ -989,72 +1194,116 @@ export function createNodeTreeCompiler<M extends LogicTreeMethods>(
                             )
                             .join('\n')}
                         };
-                    `);
+                    `
+                        );
 
-                    if (n.type !== 'GROUP' && result.length) {
-                        result[result.length - 1] = `${structReference}(${
-                            result[result.length - 1]
-                        })`;
+                        if ((n.type !== 'GROUP' || method) && result.length) {
+                            result[result.length - 1] = `${structReference}(${
+                                result[result.length - 1]
+                            })`;
+                        }
                     }
+
+                    if (result.length) result[result.length - 1] += ';';
+                    // console.log(
+                    //     '[nodeTree.isMethodTranspiler]',
+                    //     result,
+                    //     compiledParameters
+                    // );
+                } else {
+                    result = result.map((r) =>
+                        r === '$1'
+                            ? `${n.name}.call(this['${n.id}'] = this['${
+                                  n.id
+                              }'] || {}, ${compiledParameters.join(', ')});`
+                            : r
+                    );
                 }
 
-                if (result.length) result[result.length - 1] += ';';
-                // console.log(
-                //     '[nodeTree.isMethodTranspiler]',
-                //     result,
-                //     compiledParameters
-                // );
+                handleInternalTree();
+
+                result = walk
+                    ? getNext(tree, n).reduce(
+                          (acc, next) => [
+                              ...acc,
+                              ...compileNode(tree, next, compilationCache),
+                          ],
+                          result
+                      )
+                    : result;
+
+                if (vertexShaderTargetInfo) {
+                    const target =
+                        vertexShaderTargetInfo[0].literal || 'default';
+
+                    let shaderDestination: string[] | null = null;
+
+                    if (target === 'displacement') {
+                        shaderDestination = compilationCache.shader.displace;
+                    } else if (target === 'default') {
+                        shaderDestination = compilationCache.shader.vertex;
+                    }
+
+                    if (shaderDestination) {
+                        shaderDestination.push(result.join('\n'));
+                        result = [];
+                    } else {
+                        console.warn(
+                            '[compileNode] unsupported VertexShader target',
+                            target,
+                            'for',
+                            n.name,
+                            n.type
+                        );
+                    }
+
+                    // naive attempt to return to relevant context
+                    // TODO won't handled nested vertex shader targets
+                    console.log('returning to fragment context');
+                    compilationCache.compiledInputs.current =
+                        shaderTargetInputs.Fragment;
+                }
             } else {
-                result = result.map((r) =>
-                    r === '$1'
-                        ? `${n.name}.call(this['${n.id}'] = this['${
-                              n.id
-                          }'] || {}, ${compiledParameters.join(', ')});`
-                        : r
+                handleInternalTree();
+
+                if (
+                    n.type !== 'GROUP_INPUT' &&
+                    n.type !== 'SIMULATION_INPUT' &&
+                    n.type !== 'REROUTE' &&
+                    n.type !== 'GROUP_OUTPUT'
+                ) {
+                    console.warn(
+                        '[compileNode] skipping node without implementation',
+                        n
+                    );
+                }
+                if (
+                    parameters.type !== 'LogicTree' &&
+                    n.type === 'GROUP_INPUT'
+                ) {
+                    compilationCache.inputTypes[getReference(n)] =
+                        getReturnType(dynamicNodeToType(n));
+                }
+                result = getNext(tree, n).reduce(
+                    (acc, next) => [
+                        ...acc,
+                        ...compileNode(tree, next, compilationCache),
+                    ],
+                    []
                 );
             }
 
-            handleInternalTree();
-
-            return walk
-                ? getNext(tree, n).reduce(
-                      (acc, next) => [
-                          ...acc,
-                          ...compileNode(tree, next, compilationCache),
-                      ],
-                      result
-                  )
-                : result;
-        } else {
-            handleInternalTree();
-
-            if (
-                n.type !== 'GROUP_INPUT' &&
-                n.type !== 'SIMULATION_INPUT' &&
-                n.type !== 'REROUTE' &&
-                n.type !== 'GROUP_OUTPUT'
-            ) {
-                console.warn(
-                    '[compileNode] skipping node without implementation',
-                    n
-                );
-            }
-            if (parameters.type !== 'LogicTree' && n.type === 'GROUP_INPUT') {
-                compilationCache.inputTypes[getReference(n)] = getReturnType(
-                    dynamicNodeToType(n)
-                );
-            }
-            return getNext(tree, n).reduce(
-                (acc, next) => [
-                    ...acc,
-                    ...compileNode(tree, next, compilationCache),
-                ],
-                []
-            );
+            return result;
         }
     }
 
-    function compileLogicTree(nodeTree: NodeTree, internal = false) {
+    function compileNodeTree(
+        nodeTree: NodeTree,
+        internal = false,
+        currentTarget = parameters.type === 'LogicTree'
+            ? 0
+            : shaderTargetInputs.Fragment
+    ) {
         const startingNodes = Object.values(nodeTree).filter((n) => {
             if (parameters.type === 'LogicTree') {
                 return n.type === 'SIMULATION_INPUT';
@@ -1076,7 +1325,10 @@ export function createNodeTreeCompiler<M extends LogicTreeMethods>(
 
             const initCache: CompilationCache = {
                 defines: new Set(),
-                compiledInputs: {},
+                compiledInputs: {
+                    current: currentTarget,
+                    compiled: [{}],
+                },
                 inputTypes: {
                     groupInput: ReflectionClass.from<{
                         Geometry: Mesh;
@@ -1094,23 +1346,38 @@ export function createNodeTreeCompiler<M extends LogicTreeMethods>(
 
         const compilationCache: CompilationCache = {
             defines: new Set(),
-            compiledInputs: {},
+            compiledInputs: {
+                current: currentTarget,
+                compiled: [{}],
+            },
             inputTypes: {
                 groupInput: ReflectionClass.from<{ Geometry: Mesh }>().type,
             },
         };
 
         if (parameters.type === 'ShaderTree') {
+            compilationCache.compiledInputs.compiled.push({}, {}); // TODO use length of shaderTargetInputs?
             delete compilationCache.inputTypes['groupInput'];
             compilationCache.inputTypes['vUv'] = typeOf<GLSL['vec2']>();
             compilationCache.shader = {
                 vertex: [],
+                displace: [],
                 vertexIncludes: new Set(),
                 fragmentIncludes: new Set(),
+
+                onBeforeRender: new Set(),
+                onMaterialApplied: new Set(),
             };
             compilationCache.uniforms = {};
             compilationCache.features = new Set();
         }
+
+        console.log(
+            '[compileNodeTree] compiling',
+            parameters.type,
+            'starting context',
+            shaderTargetInputs[compilationCache.compiledInputs.current]
+        );
 
         const transpiled = startingNodes.reduce((r, startingNode) => {
             r.push(...compileNode(nodeTree, startingNode, compilationCache));
@@ -1132,8 +1399,15 @@ export function createNodeTreeCompiler<M extends LogicTreeMethods>(
                     compilationCache
                 );
             } else {
+                vertexShader = Object.values(
+                    compilationCache.compiledInputs.compiled[
+                        shaderTargetInputs.Vertex
+                    ]
+                ).join('\n');
                 fragmentShader = `${Object.values(
-                    compilationCache.compiledInputs
+                    compilationCache.compiledInputs.compiled[
+                        shaderTargetInputs.Fragment
+                    ]
                 ).join('\n')}
 ${transpiled.join('\n')}`;
             }
@@ -1154,5 +1428,5 @@ ${transpiled.join('\n')}`;
         return { transpiled, fn, initFn, compilationCache };
     }
 
-    return compileLogicTree;
+    return compileNodeTree;
 }

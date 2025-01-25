@@ -1,5 +1,10 @@
 import { camelCase } from 'lodash';
-import { CompilationCache, Node } from '../createCompiler';
+import {
+    addContextualShaderInclude,
+    CompilationCache,
+    Node,
+    shaderTargetInputs,
+} from '../createCompiler';
 import GLSL from './GLSL';
 import { ColorStop, createColorRampLUT, InterpolationType } from './colorRamp';
 import { addDiffuseBSDF } from './diffuseBSDF';
@@ -19,6 +24,7 @@ import hue_sat_val from './blender/hue_sat_val';
 import fresnel from './blender/fresnel';
 import clamp from './blender/clamp';
 import gpu_shader_material_tex_white_noise from './blender/gpu_shader_material_tex_white_noise';
+import { getReference } from '../util';
 
 const mathOperationSymbols = {
     MULTIPLY: '*',
@@ -33,6 +39,9 @@ const mathOperationSymbols = {
 
 type PartialSupport = { __meta?: ['PartialSupport'] };
 type StubbedSupport = { __meta?: ['StubbedSupport'] };
+type VertexShader<T extends string = 'default'> = {
+    __meta?: ['VertexShader', T];
+};
 
 // REFERENCE: https://github.com/blender/blender/blob/a7bc3e3418d8e1c085f2393ff8d5deded43fb21d/source/blender/gpu/shaders/common/gpu_shader_common_math.glsl
 const mathFunctions = {
@@ -94,12 +103,14 @@ export const transpilerMethods = {
     ): GLSL<{ Color: GLSL['vec3']; Alpha: GLSL['float'] }> {
         // TODO revisit using GLSL['imageTex'] as rewrite return type
         const reference = camelCase(image);
-        compilationCache.shader.fragmentIncludes.add(
+        addContextualShaderInclude(
+            compilationCache,
             `uniform sampler2D ${reference};`
         );
-        compilationCache.shader.fragmentIncludes.add(blenderVector);
+        addContextualShaderInclude(compilationCache, blenderVector);
         // TODO get from cache
         const texture = textureLoader.load('assets/textures/' + image);
+        texture.flipY = false;
         // TODO pull from node
         texture.colorSpace = SRGBColorSpace;
         texture.wrapS = texture.wrapT = RepeatWrapping;
@@ -262,7 +273,8 @@ export const transpilerMethods = {
         Scale: GLSL['vec3'],
         compilationCache: CompilationCache
     ): GLSL['vec3'] {
-        compilationCache.shader.fragmentIncludes.add(
+        addContextualShaderInclude(
+            compilationCache,
             shaderIncludes.mappingNode
         );
         return [`mappingNode(${Vector}, ${Location}, ${Rotation}, ${Scale})`];
@@ -283,10 +295,11 @@ export const transpilerMethods = {
                 InterpolationType[interpolation]
             ),
         };
-        compilationCache.shader.fragmentIncludes.add(
+        addContextualShaderInclude(
+            compilationCache,
             `uniform sampler2D ${reference};`
         );
-        compilationCache.shader.fragmentIncludes.add(shaderIncludes.colorRamp);
+        addContextualShaderInclude(compilationCache, shaderIncludes.colorRamp);
 
         // console.log('[ColorRamp] compile', ...arguments);
         return [
@@ -355,8 +368,19 @@ export const transpilerMethods = {
     SHADERTORGB(Shader: GLSL['vec4']): GLSL['vec4'] {
         return [Shader];
     },
-    OUTPUT_MATERIAL(Surface: GLSL['vec4']) {
-        return [`gl_FragColor = ${Surface}`];
+    OUTPUT_MATERIAL: {
+        0: function (
+            Displacement: GLSL['vec3'] = null
+        ): string[] & VertexShader<'displacement'> {
+            if (Displacement) {
+                return [`transformed += ${Displacement}`];
+            }
+
+            return [];
+        },
+        1: function (Surface: GLSL['vec4']) {
+            return [`gl_FragColor = ${Surface}`];
+        },
     },
     MIX_SHADER(Fac: GLSL['float'], Shader: GLSL['vec4'][]): GLSL['vec4'] {
         return [`mix(${Shader[0]}, ${Shader[1]}, ${Fac})`];
@@ -383,7 +407,7 @@ export const transpilerMethods = {
     UVMAP(compilationCache: CompilationCache): PartialSupport & GLSL['vec2'] {
         compilationCache.defines?.add('USE_UV');
 
-        return ['vec2(vUv.x, 1. - vUv.y)'];
+        return ['vUv'];
     },
     TEX_COORD(compilationCache: CompilationCache): GLSL<{
         Generated: GLSL['vec3'];
@@ -397,9 +421,14 @@ export const transpilerMethods = {
 
         // TODO support and generate Generated uvs by bounding box, detect generated slot is used via node parameter
 
-        return [
-            'vPosition, vec2(vUv.x, 1. - vUv.y), vObjectNormal, vPosition',
-        ] as any;
+        if (
+            compilationCache.compiledInputs.current ===
+            shaderTargetInputs.Vertex
+        ) {
+            return ['position, uv, vNormal, position'] as any;
+        }
+
+        return ['vPosition, vUv, vNormal, vPosition'] as any;
     },
     NEW_GEOMETRY(compilationCache: CompilationCache): GLSL<{
         Position: GLSL['vec3'];
@@ -458,7 +487,7 @@ export const transpilerMethods = {
         interpolation_type: string,
         compilationCache: CompilationCache
     ): If<'data_type', { FLOAT: GLSL['float']; FLOAT_VECTOR: GLSL['vec3'] }> {
-        compilationCache.shader.fragmentIncludes.add(shaderIncludes.mapRange);
+        addContextualShaderInclude(compilationCache, shaderIncludes.mapRange);
 
         return [
             `mapRange(${

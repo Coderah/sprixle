@@ -1,6 +1,6 @@
 import { UniformsLib } from 'three';
 import { glsl } from '../../../shader/util';
-import { CompilationCache } from '../createCompiler';
+import { CompilationCache, shaderTargetInputs } from '../createCompiler';
 import { diffuseBSDF } from './diffuseBSDF';
 
 function makeF(compilationCache: CompilationCache) {
@@ -69,7 +69,7 @@ varying vec3 vViewPosition;
 #include <fog_pars_vertex>
 
 #include <morphtarget_pars_vertex>
-
+#include <envmap_pars_vertex>
 #include <shadowmap_pars_vertex>
 #include <logdepthbuf_pars_vertex>
 #include <clipping_planes_pars_vertex>
@@ -144,13 +144,21 @@ void main() {
 
     #endif
 
+    
 	#include <begin_vertex>
 	#include <morphtarget_vertex>
     #ifndef USE_POINTS
-        #include <skinning_vertex>
-        #include <displacementmap_vertex>
+    #include <skinning_vertex>
+    #include <displacementmap_vertex>
     #endif
-
+    
+    // TODO handle context conflicts between displacement and vertex compiled inputs
+    ${Object.values(
+        compilationCache.compiledInputs.compiled[
+            shaderTargetInputs.Displacement
+        ]
+    ).join('\n')}
+    ${compilationCache.shader.displace.join('\n')}
     #include <project_vertex>
 
     #ifdef USE_POINTS
@@ -182,6 +190,7 @@ void main() {
         #ifdef USE_POINTS
         vObjectLocation = position;
         #endif
+
         vObjectLocation = (modelMatrix * vec4(vObjectLocation, 1.)).xyz;
 
 
@@ -214,6 +223,10 @@ void main() {
         #include <shadowmap_vertex>
     #endif
 	#include <fog_vertex>
+
+    ${Object.values(
+        compilationCache.compiledInputs.compiled[shaderTargetInputs.Vertex]
+    ).join('\n')}
 
     ${compilationCache.shader.vertex.join('\n')}
 
@@ -320,7 +333,11 @@ export function combineFragmentShader(
         // TODO
         // #include <clipping_planes_fragment>
         #include <logdepthbuf_fragment>
-        ${Object.values(compilationCache.compiledInputs).join('\n')}
+        ${Object.values(
+            compilationCache.compiledInputs.compiled[
+                shaderTargetInputs.Fragment
+            ]
+        ).join('\n')}
         ${transpiled.join('\n')}
 
         // #include <alphatest_fragment>

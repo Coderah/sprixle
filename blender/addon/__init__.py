@@ -65,7 +65,7 @@ def handleDepsGraphUpdate(scene, graph):
                 print('sending shaderTree', update.id.name)
                 graphs_serialized.append(material)
                 server.send_message_to_all(json.dumps({
-                    "name": name.replace('.', ''),
+                    "name": name,
                     "type": 'shaderTree',
                     "data": data
                 }, indent=0))
@@ -116,7 +116,7 @@ def prepAllNodeTrees():
 
         for material_slot in object.material_slots:
             material = material_slot.material
-            if material.name in handledTreeParent: continue
+            if not material or material.name in handledTreeParent: continue
             handledTreeParent.append(material.name)
             (data, name) = node_trees.serialize(material)
 
@@ -142,7 +142,7 @@ def new_client(client, server):
     for material in materials:
         print('sending shaderTree', material)
         server.send_message_to_all(json.dumps({
-            "name": material.replace('.', ''),
+            "name": material,
             "type": 'shaderTree',
             "data": materials[material]
         }, indent=0))
@@ -205,7 +205,7 @@ class SprixleInfoPanel(bpy.types.Panel):
 
     def draw(self, context):
         global active_scene
-        self.layout.label(text="Addon Version: 0.2")
+        self.layout.label(text="Addon Version: 0.3")
 
         self.layout.operator(SprixleExport.bl_idname, text="Export Scene", icon="EXPORT")
 

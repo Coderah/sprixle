@@ -71,19 +71,10 @@ def serialize(target):
 
             if len(drivers):
                 node_data['properties']['drivers'] = drivers
-
-        if node.type == 'TEX_IMAGE':
-            image = node.image
-            filepath = image.filepath
-            newpath = './textures/' + image.name
-            if not os.path.exists(newpath):
-                image.filepath = newpath
-                image.save()
-                image.unpack()
-                image.filepath = image.filepath
-                image.pack()
-
-
+                
+        if node.type == 'RGB':
+            node_data['properties']['color'] = list(node.color)
+        
         if node.type == 'VALTORGB':
             node_data['properties']['elements'] = []
             node_data['properties']['color_mode'] = node.color_ramp.color_mode
@@ -97,7 +88,18 @@ def serialize(target):
                 })
 
         if node.type == 'TEX_IMAGE' and not node.image == None:
-            node_data['properties']['image'] = node.image.name
+            image = node.image
+            name = image.name
+            if '.' not in name: name = name + '.png'
+            filepath = image.filepath
+            newpath = './textures/' + name
+            if not os.path.exists(newpath):
+                image.filepath = newpath
+                image.save()
+                image.unpack()
+                image.filepath = filepath
+                image.pack()
+            node_data['properties']['image'] = name
         
         # TODO handle vectors
         for input in node.inputs:

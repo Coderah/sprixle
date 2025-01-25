@@ -64,6 +64,7 @@ const mathFunctions = {
     PINGPONG:
         '($2 != 0.0) ? abs(fract(($1 - $2) / ($2 * 2.0)) * $2 * 2.0 - $2) : 0.0',
     SCALE: '$1 * $Scale',
+    FRACT: `fract($1)`,
 };
 
 type If<T, V> = any;

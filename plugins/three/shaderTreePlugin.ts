@@ -2,12 +2,16 @@ import {
     ReceiveType,
     ReflectionClass,
     resolveReceiveType,
+    typeOf,
 } from '@deepkit/type';
 import {
+    AddOperation,
     DoubleSide,
     FrontSide,
     InstancedMesh,
     Material,
+    MixOperation,
+    MultiplyOperation,
     Object3D,
     ShaderMaterial,
     Vector3,
@@ -24,27 +28,29 @@ import {
     CompilationCache,
     createNodeTreeCompiler,
     NodeTree,
+    ShaderTreeMethods,
 } from '../nodeTrees/createCompiler';
 import { blenderEvents } from '../../blender/realtime';
-import { MaterialManagerComponenTypes } from './materialManagerPlugin';
+import { MaterialManagerComponentTypes } from './materialManagerPlugin';
 import { combineVertexShader } from '../nodeTrees/shader/combineCode';
 import blenderShaders, { includesRegex } from '../nodeTrees/shader/blender';
+import { UnionOrIntersectionType } from 'typescript';
 
 export type ShaderTreeComponentTypes = {
     mesh: Object3D;
     shaderTree: NodeTree;
-} & MaterialManagerComponenTypes;
+} & MaterialManagerComponentTypes;
 
 // TODO allow passing in custom transpiler methods
 /** This plugin handles compiling and applying ShaderTree format (from blender addon) */
 export function applyShaderTreePlugin<
     C extends defaultComponentTypes & ShaderTreeComponentTypes,
-    M extends {}
->(em: Manager<C>, transpilerMethods: M, methodsType?: ReceiveType<M>) {
-    // methodsType = resolveReceiveType(methodsType);
+    M extends ShaderTreeMethods
+>(em: Manager<C>, methods: M, methodsType?: ReceiveType<M>) {
+    methodsType = resolveReceiveType(methodsType);
 
-    // const reflection = ReflectionClass.from(methodsType);
-    // TODO should be improved with abstraction of createCompiler
+    const reflection = ReflectionClass.from(methodsType)
+        .type as unknown as UnionOrIntersectionType;
 
     const shaderTreeQuery = em.createQuery({
         includes: ['shaderTree', 'materialName'],
@@ -52,17 +58,22 @@ export function applyShaderTreePlugin<
 
     const compileShaderTree = createNodeTreeCompiler({
         type: 'ShaderTree',
+        methods,
+        reflection,
     });
 
     function makeShaderMaterial(
         entity: EntityWithComponents<C, Manager<C>, 'materialName'>,
         transpiledShader: ReturnType<typeof compileShaderTree>
     ) {
+        const { compilationCache } = transpiledShader;
+
         // TODO: allow passing in things like side, etc.
+        compilationCache.uniforms.envMapIntensity = { value: 1.0 };
         const material = new ShaderMaterial({
-            lights: transpiledShader.compilationCache.features.has('lights'),
+            lights: compilationCache.features.has('lights'),
             // TODO control
-            side: DoubleSide,
+            side: FrontSide,
             // TODO conditional
             transparent: true,
             alphaTest: 0.1,
@@ -70,17 +81,11 @@ export function applyShaderTreePlugin<
             // depthWrite: false,
             // depthTest: false,
 
-            uniforms: {
-                ...transpiledShader.compilationCache.uniforms,
-                // TODO get from geometry bounding box
-                // size: { value: 90 },
-                // scale: { value: 1 },
-            },
-            defines: Array.from(
-                transpiledShader.compilationCache.defines
-            ).reduce(
+            uniforms: compilationCache.uniforms,
+            defines: Array.from(compilationCache.defines).reduce(
                 (defines, v) => {
-                    defines[v] = '';
+                    const [define, value = ''] = v.split(/ ?= ?/);
+                    defines[define] = value;
                     return defines;
                 },
                 {}
@@ -91,6 +96,13 @@ export function applyShaderTreePlugin<
         });
         if ('STANDARD' in material.defines) {
             material.isMeshStandardMaterial = true;
+            material.uniforms.alphaTest = { value: 1.0 };
+            material.uniforms.opacity = { value: 1 };
+            material.uniforms.reflectivity = { value: 1 };
+            material.uniforms.ior = { value: 1.25 };
+            material.uniforms.refractionRatio = { value: 0.98 };
+            material.uniforms.metalness = { value: 0.0 };
+            material.uniforms.roughness = { value: 0.0 };
         }
         material.name = entity.components.materialName;
 
@@ -113,10 +125,24 @@ export function applyShaderTreePlugin<
             } else if ('USE_INSTANCING' in material.defines) {
                 delete material.defines['USE_INSTANCING'];
             }
+
+            for (let method of compilationCache.shader.onBeforeRender) {
+                method.call(
+                    material,
+                    renderer,
+                    scene,
+                    camera,
+                    geometry,
+                    object,
+                    group
+                );
+            }
         };
 
         entity.components.material = material;
         em.removeComponent(entity, 'shaderTree');
+
+        console.log('[shaderTreePlugin] created material', material);
     }
 
     const shaderTreeSystem = em.createSystem(shaderTreeQuery.createConsumer(), {
@@ -132,17 +158,33 @@ export function applyShaderTreePlugin<
 
             const compiledShaderTree = compileShaderTree(shaderTree);
 
-            let shaderLog = compiledShaderTree.fragmentShader;
+            let fragmentLog = compiledShaderTree.fragmentShader;
             for (let shaderName in blenderShaders) {
                 const replaceableShaderCode = blenderShaders[
                     shaderName
                 ].replace(includesRegex, '');
-                shaderLog = shaderLog.replace(
+                fragmentLog = fragmentLog.replace(
                     replaceableShaderCode,
                     `#include <${shaderName}>`
                 );
             }
-            console.log('[transpiledShaderTree]', shaderLog);
+
+            let vertexLog = compiledShaderTree.vertexShader;
+            for (let shaderName in blenderShaders) {
+                const replaceableShaderCode = blenderShaders[
+                    shaderName
+                ].replace(includesRegex, '');
+                vertexLog = vertexLog.replace(
+                    replaceableShaderCode,
+                    `#include <${shaderName}>`
+                );
+            }
+
+            console.groupCollapsed('[transpiledShaderTree] logs', materialName);
+            console.log(compiledShaderTree.compilationCache);
+            console.log('vertex', vertexLog);
+            console.log('fragment', fragmentLog);
+            console.groupEnd();
 
             // if (compiledShaderTree.initFn) {
             //     compiledShaderTree.initFn.call(entity.components.ShaderTreeCache, delta, methods, entity, {

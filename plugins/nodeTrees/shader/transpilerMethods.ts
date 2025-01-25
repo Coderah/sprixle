@@ -537,4 +537,32 @@ export const transpilerMethods = {
 
         return [result];
     },
+
+    'Per Vertex: Vector': {
+        0: function (
+            Vector: GLSL['vec3'],
+            node: Node,
+            compilationCache: CompilationCache
+        ): GLSL['vec3'] & VertexShader {
+            const reference = getReference(
+                'v' + node.id[0].toUpperCase() + node.id.substring(1)
+            );
+
+            compilationCache.shader.vertexIncludes.add(
+                `varying vec3 ${reference};`
+            );
+            compilationCache.shader.fragmentIncludes.add(
+                `varying vec3 ${reference};`
+            );
+
+            return [`${reference} = ${Vector}`];
+        },
+        1: function (node: Node): GLSL['vec3'] {
+            const reference = getReference(
+                'v' + node.id[0].toUpperCase() + node.id.substring(1)
+            );
+
+            return [reference];
+        },
+    },
 };

@@ -298,13 +298,31 @@ export const transpilerMethods = {
     },
     BSDF_DIFFUSE(
         Color: GLSL['vec3'],
-        Roughness: GLSL['float'],
-        Normal: GLSL['vec3'] = 'vNormal',
+        Normal: GLSL['vec3'] = 'normalize(vNormal)',
         compilationCache: CompilationCache
     ): GLSL['vec3'] {
         addDiffuseBSDF(compilationCache);
 
-        return [`DiffuseBSDF(${Color}, ${Roughness}, ${Normal})`];
+        return [
+            `DiffuseBSDF(${Color}, ${Normal}, 0.0, 0.0, 0.0, 0.0, vec3(0.0))`,
+        ];
+    },
+    EEVEE_SPECULAR(
+        BaseColor: GLSL['vec3'],
+        Roughness: GLSL['float'],
+        Specular: GLSL['vec3'],
+        EmissiveColor: GLSL['vec3'],
+        Normal: GLSL['vec3'] = 'normalize(vNormal)', // TODO for displaced... 'normalize( cross( dFdx( vViewPosition ), dFdy( vViewPosition ) ) )',
+        Transparency: GLSL['float'],
+        compilationCache: CompilationCache
+    ): GLSL['vec4'] {
+        addDiffuseBSDF(compilationCache);
+
+        return [
+            `vec4(DiffuseBSDF(${BaseColor}, ${
+                Normal.includes('v') ? Normal : 'normalMatrix * ' + Normal
+            }, ${Roughness}, 0.0, ${Specular}, 1.0, ${EmissiveColor}), 1.0 - ${Transparency})`,
+        ];
     },
     CLAMP(
         Max: GLSL['float'],

@@ -207,6 +207,9 @@ void main() {
         worldPosition = modelMatrix * worldPosition;
 
     #endif
+
+    #include <envmap_vertex>
+
 	#ifndef USE_POINTS
         #include <shadowmap_vertex>
     #endif
@@ -264,17 +267,25 @@ export function combineFragmentShader(
 
     #endif
 
-    // TODO
-    // #include <envmap_common_pars_fragment>
-    // #include <envmap_pars_fragment>
-
     #include <fog_pars_fragment>
     ${f('bsdf', '#include <bsdfs>')}
     #include <lights_pars_begin>
     #include <normal_pars_fragment>
     // TODO dedupe varying vec3 vViewPosition
-    ${nF('diffuseBSDF', 'varying vec3 vViewPosition;')}
-    ${f('diffuseBSDF', '#include <lights_lambert_pars_fragment>')}
+    varying vec3 vViewPosition;
+    ${f(
+        'diffuseBSDF',
+        `
+    #include <clearcoat_pars_fragment>
+#include <iridescence_pars_fragment>
+#include <lights_physical_pars_fragment>
+#include <transmission_pars_fragment>
+#include <iridescence_fragment>
+#include <cube_uv_reflection_fragment>
+#include <envmap_common_pars_fragment>
+#include <envmap_physical_pars_fragment>
+    `
+    )}
     #include <shadowmap_pars_fragment>
     #include <bumpmap_pars_fragment>
     // #include <normalmap_pars_fragment>

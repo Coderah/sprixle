@@ -89,6 +89,9 @@ export function applyShaderTreePlugin<
             vertexShader: transpiledShader.vertexShader,
             fragmentShader: transpiledShader.fragmentShader,
         });
+        if ('STANDARD' in material.defines) {
+            material.isMeshStandardMaterial = true;
+        }
         material.name = entity.components.materialName;
 
         material.onBeforeRender = (

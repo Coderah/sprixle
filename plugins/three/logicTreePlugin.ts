@@ -2,6 +2,7 @@ import {
     ReceiveType,
     ReflectionClass,
     resolveReceiveType,
+    typeOf,
 } from '@deepkit/type';
 import { Object3D, Vector3 } from 'three';
 import { defaultComponentTypes, Entity, Manager } from '../../ecs/manager';
@@ -15,6 +16,7 @@ import {
     NodeTree,
 } from '../nodeTrees/createCompiler';
 import { blenderEvents } from '../../blender/realtime';
+import { UnionOrIntersectionType } from 'typescript';
 
 export type LogicTreeComponentTypes<ComponentTypes> = {
     mesh: Object3D;
@@ -37,7 +39,10 @@ export function applyLogicTreePlugin<
 >(em: Manager<C>, methods: M, methodsType?: ReceiveType<M>) {
     methodsType = resolveReceiveType(methodsType);
 
-    const reflection = ReflectionClass.from(methodsType);
+    // const reflection = ReflectionClass.from(methodsType);
+    const reflection = ReflectionClass.from(methodsType)
+        .type as unknown as UnionOrIntersectionType;
+
     // TODO should be improved with abstraction of createCompiler
     for (let transpilerMethod in transpilerMethods) {
         // @ts-ignore
@@ -64,6 +69,7 @@ export function applyLogicTreePlugin<
         transpiled: string[],
         compilationCache: CompilationCache
     ) {
+        const compiledInputs = compilationCache.compiledInputs.compiled[0];
         return Function(
             ...Object.keys(dependencies),
             'delta',
@@ -72,8 +78,8 @@ export function applyLogicTreePlugin<
             'groupInput',
             `
 const { ${Array.from(compilationCache.defines).join(', ')} } = methods;
-${Object.keys(compilationCache.compiledInputs).reduce((r, key) => {
-    const compiledInput = compilationCache.compiledInputs[key];
+${Object.keys(compiledInputs).reduce((r, key) => {
+    const compiledInput = compiledInputs[key];
 
     if (compiledInput) {
         r = r + '\n' + compiledInput;

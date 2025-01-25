@@ -4,20 +4,26 @@
 
 import {
     BatchedMesh,
+    Euler,
     InstancedMesh,
     Material,
+    Matrix3,
+    Matrix4,
     Mesh,
     Object3D,
     Points,
+    Texture,
 } from 'three';
 import { defaultComponentTypes, Manager } from '../../ecs/manager';
 import { Pipeline } from '../../ecs/system';
 import uuid from 'uuid-random';
 
-export type MaterialManagerComponenTypes = {
+export type MaterialManagerComponentTypes = {
     mesh: Object3D;
     material: Material;
     materialName: string;
+    // TODO ability to tag for singleton use only?
+    environmentMap: Texture;
 };
 
 function objectWithMaterial(o: Object3D) {
@@ -36,7 +42,7 @@ function objectWithMaterial(o: Object3D) {
 
 export function applyMaterialManagerPlugin<
     M extends Manager<ComponentTypes>,
-    ComponentTypes extends defaultComponentTypes & MaterialManagerComponenTypes
+    ComponentTypes extends defaultComponentTypes & MaterialManagerComponentTypes
 >(em: M) {
     const objectQuery = em.createQuery({
         includes: ['mesh'],
@@ -72,6 +78,9 @@ export function applyMaterialManagerPlugin<
             );
             material.name = uuid();
         }
+
+        applyEnvironmentMapToMaterial(material);
+
         // TODO @ts-ignore
         em.quickEntity(
             {
@@ -82,6 +91,29 @@ export function applyMaterialManagerPlugin<
         );
 
         return material;
+    }
+
+    function applyEnvironmentMapToMaterial(material: Material) {
+        const environmentMap = em.getSingletonEntityComponent('environmentMap');
+        if (environmentMap && !material.envMap) {
+            material.envMapRotation = new Euler();
+            material.envMap = environmentMap;
+            material.envMapIntensity = 1.0;
+            if (material.uniforms) {
+                material.uniforms.envMap = {
+                    value: environmentMap,
+                };
+                material.uniforms.envMapRotation = {
+                    value: new Matrix3(),
+                };
+                material.uniforms.flipEnvMap = {
+                    value: 1.0,
+                };
+                material.needsUpdate = true;
+                material.uniformsNeedUpdate = true;
+            }
+            console.log('add environment map to material', material);
+        }
     }
 
     function garbageCollectMaterials() {
@@ -145,6 +177,7 @@ export function applyMaterialManagerPlugin<
                 }
             }
 
+            applyEnvironmentMapToMaterial(material);
             for (let objectEntity of objectQuery) {
                 objectEntity.components.mesh.traverse((o) => {
                     const object = objectWithMaterial(o);
@@ -157,6 +190,8 @@ export function applyMaterialManagerPlugin<
                         return;
 
                     object.material.dispose();
+
+                    // TODO apply in more situations more appropriately
                     object.material = material;
                 });
             }

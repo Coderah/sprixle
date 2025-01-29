@@ -56,8 +56,21 @@ def handleDepsGraphUpdate(scene, graph):
 
     graphs_serialized = []
     for update in graph.updates:
-        print(update)
-        if isinstance(update.id, bpy.types.Material):
+        print(update, update.id)
+        if isinstance(update.id, bpy.types.World):
+            world = bpy.data.worlds[update.id.name]
+            (data, name) = node_trees.serialize(world)
+
+            if data and server:
+                print('sending world shader', update.id.name)
+                graphs_serialized.append(material)
+                server.send_message_to_all(json.dumps({
+                    "name": name.replace('.',''),
+                    "type": 'shaderTree',
+                    "data": data
+                }, indent=0))
+        
+        elif isinstance(update.id, bpy.types.Material):
             material = bpy.data.materials[update.id.name]
             (data, name) = node_trees.serialize(material)
 

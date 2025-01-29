@@ -42,7 +42,9 @@ const staticNodeTranspilers: {
         compilationCache.inputTypes[reference] = typeOf<GLSL['vec3']>();
         addCompiledInput(
             reference,
-            `vec3 ${reference} = vec3(${node.properties.color.join(', ')});`,
+            `vec3 ${reference} = vec3(${node.properties.color
+                .slice(0, 3)
+                .join(', ')});`,
             compilationCache
         );
 

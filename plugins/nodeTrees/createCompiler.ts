@@ -611,14 +611,13 @@ export function createNodeTreeCompiler<M extends LogicTreeMethods>(
                     }(${value.join(', ')})`;
                 } else {
                     // TODO if input is less than 3/4 just create and directly input the correct vector rather than converting in glsl
-                    value = `vec${socket.type === 'VECTOR' ? '3' : '4'}(${value
+                    value = `vec3(${(value as any as Array<number>)
+                        .slice(0, 3)
                         .map((v) => v.toFixed(4))
                         .join(', ')})`;
                     value = convertVecSize(
                         value,
-                        socket.type === 'VECTOR'
-                            ? typeOf<GLSL['vec3']>()
-                            : typeOf<GLSL['vec4']>(),
+                        typeOf<GLSL['vec3']>(),
                         parameterType
                     );
                 }

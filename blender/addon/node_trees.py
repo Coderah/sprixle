@@ -21,6 +21,10 @@ def serialize(target):
         modifier = target
         node_group = modifier.node_tree
         name = target.name
+    elif isinstance(target, bpy.types.World):
+        modifier = target
+        node_group = modifier.node_tree
+        name = target.name
 
     if not modifier or not node_group: return (None, None)
 
@@ -71,9 +75,9 @@ def serialize(target):
 
             if len(drivers):
                 node_data['properties']['drivers'] = drivers
-                
+
         if node.type == 'RGB':
-            node_data['properties']['color'] = list(node.color)
+            node_data['properties']['color'] = list(node.outputs[0].default_value)
         
         if node.type == 'VALTORGB':
             node_data['properties']['elements'] = []
@@ -96,9 +100,16 @@ def serialize(target):
             if not os.path.exists(newpath):
                 image.filepath = newpath
                 image.save()
-                image.unpack()
+                try:
+                    image.unpack()
+                except:
+                    pass
+
                 image.filepath = filepath
-                image.pack()
+                try:
+                    image.pack()
+                except:
+                    pass
             node_data['properties']['image'] = name
         
         # TODO handle vectors
@@ -206,6 +217,8 @@ def serialize(target):
     output = json.dumps(serialized_tree, indent=0)
     if isinstance(target, bpy.types.Material):
         target['shaderTree'] = output
+    elif isinstance(target, bpy.types.World):
+        bpy.context.scene['worldShaderTree'] = output
     else:
         bpy.context.scene[name] = output
         target['logicTree'] = name

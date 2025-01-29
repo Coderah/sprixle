@@ -513,8 +513,8 @@ export const transpilerMethods = {
             'data_type',
             {
                 FLOAT: GLSL['float'];
-                VECTOR: GLSL['vec3'];
-                else: GLSL['vec4'];
+                // VECTOR: GLSL['vec3'];
+                else: GLSL['vec3'];
             }
         > {
         return [`mix(${A}, ${B}, ${Factor})`];

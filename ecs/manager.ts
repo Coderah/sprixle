@@ -48,7 +48,8 @@ export type EntityAdminState<
     queryMap: QueryMap;
 
     /** Queries effectively define archetypes and maintain performant query sets according to actual system needs */
-    queries: Map<string, Query<ExactComponentTypes, any>>;
+    // TODO improve types
+    queries: Map<string, Query<ExactComponentTypes, any, any, any, any>>;
 
     stagedUpdates: Map<Keys<ExactComponentTypes>, Set<entityId>>;
 
@@ -166,10 +167,14 @@ export class Manager<ExactComponentTypes extends defaultComponentTypes> {
         this.state = newState;
     }
 
-    createQuery<Includes extends Keys<ExactComponentTypes>[]>(
+    createQuery<
+        Includes extends Keys<ExactComponentTypes>[],
+        IndexedComponent extends Keys<ExactComponentTypes>
+    >(
         queryParameters: QueryParametersInput<
             typeof this.ComponentTypes,
-            Includes
+            Includes,
+            IndexedComponent
         >
     ) {
         const query = new Query(this, queryParameters);
@@ -361,6 +366,8 @@ export class Manager<ExactComponentTypes extends defaultComponentTypes> {
                         //     componentType,
                         //     query.queryName
                         // );
+                    } else if (query.queryParameters.index === componentType) {
+                        query.indexEntity(entity);
                     }
                 });
             });

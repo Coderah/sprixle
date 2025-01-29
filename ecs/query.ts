@@ -22,14 +22,19 @@ type QueryTimeSlicingParameters = (
     sliceNew?: boolean;
 };
 
-export type QueryParameters<ComponentTypes, IncludeKeys> = {
+export type QueryParameters<ComponentTypes, IncludeKeys, IndexedComponent> = {
     flexible?: boolean;
     includes?: Set<Keys<ComponentTypes>>;
     excludes?: Set<Keys<ComponentTypes>>;
     timeSlicing?: QueryTimeSlicingParameters;
+    index?: Keys<ComponentTypes>;
 };
 
-export type QueryParametersInput<ComponentTypes, IncludeKeys> = {
+export type QueryParametersInput<
+    ComponentTypes,
+    IncludeKeys,
+    IndexedComponent
+> = {
     /** Flexible queries match entities with any combination of `includes` */
     flexible?: boolean;
 
@@ -41,22 +46,32 @@ export type QueryParametersInput<ComponentTypes, IncludeKeys> = {
 
     /** Time slicing allows handling fewer entities per tick. Percentage of total Query or exact count per tick. Handled in update tracking as well as for loops. */
     timeSlicing?: QueryTimeSlicingParameters;
+
+    index?: IndexedComponent;
 };
 
 export class Query<
     ExactComponentTypes extends defaultComponentTypes,
     Includes extends Keys<ExactComponentTypes>[],
     M extends Manager<ExactComponentTypes> = Manager<ExactComponentTypes>,
-    E = EntityWithComponents<ExactComponentTypes, M, Includes[number]>
+    E = EntityWithComponents<ExactComponentTypes, M, Includes[number]>,
+    IndexedComponent extends Keys<ExactComponentTypes> = null
 > implements Iterable<E>
 {
     Entity: E;
     manager: M;
     queryName: QueryName;
 
-    queryParameters: QueryParameters<Partial<ExactComponentTypes>, Includes>;
+    queryParameters: QueryParameters<
+        Partial<ExactComponentTypes>,
+        Includes,
+        IndexedComponent
+    >;
     entities = new Set<entityId>();
     consumers = new Array<Consumer<ExactComponentTypes, Includes, M, E>>();
+
+    indexed: Map<ExactComponentTypes[IndexedComponent], Set<entityId>> =
+        new Map();
 
     /** What entities are queued for future slices */
     private queuedEntities = new Set<entityId>();
@@ -113,7 +128,11 @@ export class Query<
 
     constructor(
         manager: M,
-        parameters: QueryParametersInput<Partial<ExactComponentTypes>, Includes>
+        parameters: QueryParametersInput<
+            Partial<ExactComponentTypes>,
+            Includes,
+            IndexedComponent
+        >
     ) {
         this.manager = manager;
 
@@ -122,6 +141,7 @@ export class Query<
         this.queryParameters = {
             flexible: parameters.flexible,
             timeSlicing: parameters.timeSlicing,
+            index: parameters.index,
         };
 
         if (parameters.includes) {
@@ -196,8 +216,31 @@ export class Query<
         });
     }
 
-    private indexEntity(entity: typeof this.manager.Entity) {
+    /** for internal use */
+    indexEntity(entity: typeof this.manager.Entity) {
+        // TODO split add and update for performance?
+
         this.entities.add(entity.id);
+
+        const indexedComponent = this.queryParameters.index as IndexedComponent;
+
+        if (!indexedComponent) return;
+
+        const value = entity.components[indexedComponent];
+        const previousValue = entity.previousComponents[indexedComponent];
+
+        if (previousValue && previousValue !== value) {
+            this.indexed.get(previousValue)?.delete(entity.id);
+        }
+
+        if (value && (!previousValue || value !== previousValue)) {
+            if (!this.indexed.has(value)) {
+                this.indexed.set(value, new Set());
+            }
+
+            const indexSet = this.indexed.get(value);
+            indexSet.add(entity.id);
+        }
     }
 
     handleEntity(entity: typeof this.manager.Entity) {
@@ -274,6 +317,8 @@ export class Query<
     updatedEntity(entity: typeof this.manager.Entity) {
         if (!this.entities.has(entity.id)) return;
 
+        this.indexEntity(entity);
+
         if (
             this.queryParameters.timeSlicing &&
             !this.entitiesInSlice.has(entity.id)
@@ -298,6 +343,16 @@ export class Query<
         this.consumers.forEach((c) => {
             c.remove(entity);
         });
+
+        if (this.queryParameters.index) {
+            this.indexed
+                .get(
+                    entity.components[
+                        this.queryParameters.index
+                    ] as ExactComponentTypes[IndexedComponent]
+                )
+                .delete(entity.id);
+        }
 
         if (this.lastEntity === entity) {
             const lastID = Array.from(this.entities).pop();
@@ -334,6 +389,20 @@ export class Query<
 
     last() {
         return this.lastEntity;
+    }
+
+    get(
+        indexedValue: ExactComponentTypes[IndexedComponent]
+    ): Set<typeof this.Entity> {
+        if (!this.queryParameters.index) {
+            throw new Error(
+                '[Query] ' + this.queryName + ' does not have indexed entities'
+            );
+        }
+
+        return (this.indexed.get(indexedValue) || new Set()).map(
+            (id) => this.manager.getEntity(id) as typeof this.Entity
+        );
     }
 
     find(handler: (entity: E) => boolean) {

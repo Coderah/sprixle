@@ -89,6 +89,8 @@ export class Manager<ExactComponentTypes extends defaultComponentTypes> {
 
     state: ReturnType<typeof this.createInitialState>;
 
+    componentsReflection: ReflectionClass<ComponentTypes>;
+
     /**
      *
      * @param componentNames [DO NOT PASS] This is dynamic now and can be accessed at `new Manager<*>().componentNames` if needed
@@ -107,7 +109,8 @@ export class Manager<ExactComponentTypes extends defaultComponentTypes> {
         }
         const type = resolveReceiveType(componentNames);
 
-        const reflection = ReflectionClass.from(type);
+        const reflection = (this.componentsReflection =
+            ReflectionClass.from(type));
 
         const extractedComponentNames = reflection
             .getProperties()
@@ -252,6 +255,24 @@ export class Manager<ExactComponentTypes extends defaultComponentTypes> {
             components: new Proxy(components, {
                 set(target, componentType, value = null) {
                     // TODO handle setting undefined (should removeComponent)
+
+                    const reflectionType =
+                        manager.componentsReflection.getProperty(componentType);
+                    console.log(reflectionType);
+
+                    if (
+                        reflectionType.type.decorators.find(
+                            (d) => d.typeName === 'SingletonComponent'
+                        ) &&
+                        manager.state.entityMap.get(componentType as any)
+                            ?.size > 0
+                    ) {
+                        throw new Error(
+                            `[Entity.components.${
+                                componentType as string
+                            }] singleton component being used more than once.`
+                        );
+                    }
 
                     const entityIsRegistered = manager.state.entities.has(id);
 

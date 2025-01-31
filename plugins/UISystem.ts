@@ -35,13 +35,7 @@ export const createUISystem = <
 
     function add<
         Includes extends Keys<ComponentTypes>[],
-        Q extends Query<
-            ComponentTypes,
-            Includes,
-            M,
-            EntityWithComponents<ComponentTypes, M, Includes[number]>,
-            IndexedComponent
-        >,
+        Q extends Query<ComponentTypes, Includes, M, IndexedComponent>,
         IndexedComponent extends Keys<ComponentTypes> = null
     >(
         query: Q & Query<ComponentTypes, Includes, M, IndexedComponent>,

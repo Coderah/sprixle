@@ -54,8 +54,8 @@ export class Query<
     ExactComponentTypes extends defaultComponentTypes,
     Includes extends Keys<ExactComponentTypes>[],
     M extends Manager<ExactComponentTypes> = Manager<ExactComponentTypes>,
-    E = EntityWithComponents<ExactComponentTypes, M, Includes[number]>,
-    IndexedComponent extends Keys<ExactComponentTypes> = null
+    IndexedComponent extends Keys<ExactComponentTypes> = null,
+    E = EntityWithComponents<ExactComponentTypes, M, Includes[number]>
 > implements Iterable<E>
 {
     Entity: E;
@@ -442,9 +442,10 @@ export class Consumer<
     ExactComponentTypes extends defaultComponentTypes,
     Includes extends Keys<ExactComponentTypes>[],
     M extends Manager<ExactComponentTypes> = Manager<ExactComponentTypes>,
+    IndexedComponent extends Keys<ExactComponentTypes> = null,
     E = EntityWithComponents<ExactComponentTypes, M, Includes[number]>
 > {
-    query: Query<ExactComponentTypes, Includes, M, E>;
+    query: Query<ExactComponentTypes, Includes, M, IndexedComponent, E>;
     updatedEntities = new Set<entityId>();
     newEntities = new Set<entityId>();
     deletedEntities = new Set<typeof this.query.manager.Entity>();
@@ -452,7 +453,9 @@ export class Consumer<
     consumed = false;
     consumedEntities = new Set<entityId>();
 
-    constructor(query: Query<ExactComponentTypes, Includes, M, E>) {
+    constructor(
+        query: Query<ExactComponentTypes, Includes, M, IndexedComponent, E>
+    ) {
         this.query = query;
 
         if (query.entities.size) {

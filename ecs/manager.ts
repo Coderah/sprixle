@@ -198,17 +198,36 @@ export class Manager<ExactComponentTypes extends defaultComponentTypes> {
             System<ExactComponentTypes, Manager<ExactComponentTypes>, Includes>
         >
     ): System<ExactComponentTypes, Manager<ExactComponentTypes>, Includes>;
-    createSystem<Includes extends Keys<ExactComponentTypes>[]>(
-        source: Query<ExactComponentTypes, Includes>,
+    createSystem<
+        Includes extends Keys<ExactComponentTypes>[],
+        IndexedComponent extends Keys<ExactComponentTypes> = null
+    >(
+        source: Query<
+            ExactComponentTypes,
+            Includes,
+            Manager<ExactComponentTypes>,
+            IndexedComponent
+        >,
         system: Partial<QuerySystem<ExactComponentTypes, Includes>>
     ): QuerySystem<ExactComponentTypes, Includes>;
-    createSystem<Includes extends Keys<ExactComponentTypes>[]>(
+    createSystem<
+        Includes extends Keys<ExactComponentTypes>[],
+        IndexedComponent extends Keys<ExactComponentTypes> = null
+    >(
         source: ReturnType<
-            Query<ExactComponentTypes, Includes>['createConsumer']
+            Query<
+                ExactComponentTypes,
+                Includes,
+                Manager<ExactComponentTypes>,
+                IndexedComponent
+            >['createConsumer']
         >,
         system: Partial<ConsumerSystem<ExactComponentTypes, Includes>>
     ): ConsumerSystem<ExactComponentTypes, Includes>;
-    createSystem<Includes extends Keys<ExactComponentTypes>[]>(
+    createSystem<
+        Includes extends Keys<ExactComponentTypes>[],
+        IndexedComponent extends Keys<ExactComponentTypes> = null
+    >(
         sourceOrSystem:
             | Partial<
                   System<
@@ -217,12 +236,24 @@ export class Manager<ExactComponentTypes extends defaultComponentTypes> {
                       Includes
                   >
               >
-            | Query<ExactComponentTypes, Includes>
+            | Query<
+                  ExactComponentTypes,
+                  Includes,
+                  Manager<ExactComponentTypes>,
+                  IndexedComponent
+              >
             | ReturnType<
                   Query<ExactComponentTypes, Includes>['createConsumer']
               >,
         system?:
-            | Partial<QuerySystem<ExactComponentTypes, Includes>>
+            | Partial<
+                  QuerySystem<
+                      ExactComponentTypes,
+                      Includes,
+                      Manager<ExactComponentTypes>,
+                      IndexedComponent
+                  >
+              >
             | Partial<ConsumerSystem<ExactComponentTypes, Includes>>
     ):
         | System<ExactComponentTypes, Manager<ExactComponentTypes>, Includes>

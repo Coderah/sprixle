@@ -36,10 +36,11 @@ export interface System<
 export interface SourceSystem<
     ExactComponentTypes extends defaultComponentTypes,
     TManager extends Manager<ExactComponentTypes>,
-    Includes extends Keys<ExactComponentTypes>[]
+    Includes extends Keys<ExactComponentTypes>[],
+    IndexedComponent extends Keys<ExactComponentTypes> = null
 > extends System<ExactComponentTypes, TManager, Includes> {
     source:
-        | Query<ExactComponentTypes, Includes>
+        | Query<ExactComponentTypes, Includes, TManager, IndexedComponent>
         | ReturnType<Query<ExactComponentTypes, Includes>['createConsumer']>;
 
     /** Runs for every entity every frame */
@@ -56,8 +57,14 @@ export interface SourceSystem<
 export interface ConsumerSystem<
     ExactComponentTypes extends defaultComponentTypes,
     Includes extends Keys<ExactComponentTypes>[],
-    TManager extends Manager<ExactComponentTypes> = Manager<ExactComponentTypes>
-> extends SourceSystem<ExactComponentTypes, TManager, Includes> {
+    TManager extends Manager<ExactComponentTypes> = Manager<ExactComponentTypes>,
+    IndexedComponent extends Keys<ExactComponentTypes> = null
+> extends SourceSystem<
+        ExactComponentTypes,
+        TManager,
+        Includes,
+        IndexedComponent
+    > {
     /** Runs for each entity that was updated each frame */
     updated?: (
         entity: EntityWithComponents<
@@ -104,8 +111,14 @@ export interface ConsumerSystem<
 export interface QuerySystem<
     ExactComponentTypes extends defaultComponentTypes,
     Includes extends Keys<ExactComponentTypes>[],
-    TManager extends Manager<ExactComponentTypes> = Manager<ExactComponentTypes>
-> extends SourceSystem<ExactComponentTypes, TManager, Includes> {}
+    TManager extends Manager<ExactComponentTypes> = Manager<ExactComponentTypes>,
+    IndexedComponent extends Keys<ExactComponentTypes> = null
+> extends SourceSystem<
+        ExactComponentTypes,
+        TManager,
+        Includes,
+        IndexedComponent
+    > {}
 
 export type AnySystem<ExactComponentTypes extends defaultComponentTypes> =
     | System<ExactComponentTypes, Manager<ExactComponentTypes>, any>

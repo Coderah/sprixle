@@ -258,14 +258,13 @@ export class Manager<ExactComponentTypes extends defaultComponentTypes> {
 
                     const reflectionType =
                         manager.componentsReflection.getProperty(componentType);
-                    console.log(reflectionType);
 
                     if (
-                        reflectionType.type.decorators.find(
+                        reflectionType.type.decorators?.find(
                             (d) => d.typeName === 'SingletonComponent'
                         ) &&
                         manager.state.entityMap.get(componentType as any)
-                            ?.size > 0
+                            ?.size > 1
                     ) {
                         throw new Error(
                             `[Entity.components.${

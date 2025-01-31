@@ -351,7 +351,7 @@ export class Query<
                         this.queryParameters.index
                     ] as ExactComponentTypes[IndexedComponent]
                 )
-                .delete(entity.id);
+                ?.delete(entity.id);
         }
 
         if (this.lastEntity === entity) {

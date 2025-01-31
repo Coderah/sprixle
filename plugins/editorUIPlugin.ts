@@ -64,18 +64,23 @@ export function applyEditorUIPlugin<
             query: Query<ComponentTypes, any> = manager.createQuery({
                 includes: [component],
             }),
-            parent: Pane | FolderApi | TabPageApi = primaryPane
+            parent?: Pane | FolderApi | TabPageApi,
+            topLevel = primaryPane
         ) {
             const system = manager.createSystem(query.createConsumer(), {
                 forNew(entity) {
-                    const folder = (folders[entity.id] =
-                        folders[entity.id] ||
-                        parent.addFolder({
-                            title: '[Entity] ' + entity.id,
-                            expanded: true,
-                        }));
+                    const folder =
+                        parent ||
+                        (folders[entity.id] =
+                            folders[entity.id] ||
+                            topLevel.addFolder({
+                                title: '[Entity] ' + entity.id,
+                                expanded: true,
+                            }));
 
-                    folder.hidden = false;
+                    if (!parent) {
+                        folder.hidden = false;
+                    }
 
                     const value = entity.components[component];
                     if (value.constructor === Object || Array.isArray(value)) {
@@ -102,7 +107,7 @@ export function applyEditorUIPlugin<
                 },
                 updated(entity) {
                     // binding.blades[entity.id]?.refresh();
-                    const folder = folders[entity.id];
+                    const folder = parent || folders[entity.id];
                     if (folder) folder.refresh();
                 },
                 removed(entity) {

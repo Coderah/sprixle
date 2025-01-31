@@ -24,10 +24,10 @@ type QueryTimeSlicingParameters = (
 
 export type QueryParameters<ComponentTypes, IncludeKeys, IndexedComponent> = {
     flexible?: boolean;
-    includes?: Set<Keys<ComponentTypes>>;
+    includes?: Set<Keys<IncludeKeys>>;
     excludes?: Set<Keys<ComponentTypes>>;
     timeSlicing?: QueryTimeSlicingParameters;
-    index?: Keys<ComponentTypes>;
+    index?: IndexedComponent;
 };
 
 export type QueryParametersInput<
@@ -152,7 +152,7 @@ export class Query<
                 .map((c) => '+' + c.toString())
                 .join(',');
 
-            this.queryParameters.includes = new Set(parameters.includes);
+            this.queryParameters.includes = new Set(parameters.includes) as any;
         }
         if (parameters.excludes) {
             const excludesArray = parameters.excludes.sort((a, b) =>

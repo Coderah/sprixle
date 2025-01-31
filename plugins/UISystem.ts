@@ -35,9 +35,16 @@ export const createUISystem = <
 
     function add<
         Includes extends Keys<ComponentTypes>[],
-        Q extends Query<ComponentTypes, Includes>
+        Q extends Query<
+            ComponentTypes,
+            Includes,
+            M,
+            EntityWithComponents<ComponentTypes, M, Includes[number]>,
+            IndexedComponent
+        >,
+        IndexedComponent extends Keys<ComponentTypes> = null
     >(
-        query: Q & Query<ComponentTypes, Includes>,
+        query: Q & Query<ComponentTypes, Includes, M, IndexedComponent>,
         handlers: {
             create?: (entity: Q['Entity']) => HTMLElement | undefined;
             update?: (uiElement: HTMLElement, entity: Q['Entity']) => void;
@@ -64,11 +71,20 @@ export const createUISystem = <
                             );
                         }
                     }
+                    if (update) update(entity.components.uiElement, entity);
                 },
                 updated(entity) {
                     // TODO call create if element not existing?
-                    if (update && entity.components.uiElement)
-                        update(entity.components.uiElement, entity);
+                    if (!entity.components.uiElement) {
+                        if (!create || entity.components.uiElement) return;
+
+                        const uiElement = create(entity);
+
+                        if (!uiElement) return;
+                        entity.components.uiElement = uiElement;
+                    }
+
+                    if (update) update(entity.components.uiElement, entity);
                 },
                 removed(entity) {
                     entity.components.uiElement?.remove();

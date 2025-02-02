@@ -94,8 +94,13 @@ export const createUISystem = <
         const uiComponent = uiComponents[component];
         if (!uiComponent) continue;
 
+        const includes: (keyof ComponentTypes)[] = [component];
+        if (!uiComponent.create) {
+            includes.push('uiElement');
+        }
+
         const componentQuery = em.createQuery({
-            includes: [component],
+            includes,
         });
 
         add(componentQuery, uiComponent);

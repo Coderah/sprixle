@@ -22,7 +22,7 @@ export interface System<
 
     /** Runs at the end of a frame to do any cleanup necessary */
     cleanup?(
-        entity: EntityWithComponents<
+        entity?: EntityWithComponents<
             ExactComponentTypes,
             TManager,
             Includes[number]
@@ -241,7 +241,10 @@ export class Pipeline<ExactComponentTypes extends defaultComponentTypes> {
         this.systems.forEach((system) => {
             if (system.cleanup) {
                 const { source } = system;
-                if (!source) return;
+                if (!source) {
+                    system.cleanup();
+                    return;
+                }
 
                 if (source instanceof Query) {
                     for (let entity of source.IterateIgnoringSlice()) {

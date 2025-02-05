@@ -673,6 +673,8 @@ export class Manager<ExactComponentTypes extends defaultComponentTypes> {
         T extends typeof this.Entity,
         K extends Keys<typeof this.ComponentTypes>
     >(entity: T, type: K) {
+        // @ts-ignore
+        entity.previousComponents[type] = entity.components[type];
         delete entity.components[type];
         this.removeEntityMapping(entity, type);
         // TODO update queries

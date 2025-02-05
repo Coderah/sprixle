@@ -347,9 +347,12 @@ export class Query<
         if (this.queryParameters.index) {
             this.indexed
                 .get(
-                    entity.components[
+                    (entity.components[
                         this.queryParameters.index
-                    ] as ExactComponentTypes[IndexedComponent]
+                    ] as ExactComponentTypes[IndexedComponent]) ||
+                        (entity.previousComponents[
+                            this.queryParameters.index
+                        ] as ExactComponentTypes[IndexedComponent])
                 )
                 ?.delete(entity.id);
         }
@@ -474,6 +477,10 @@ export class Consumer<
     /** called by Query when adding an entity, for internal use */
     add(id: entityId) {
         this.newEntities.add(id);
+        const deletedEntity = this.deletedEntities.find((e) => e.id === id);
+        if (deletedEntity) {
+            this.deletedEntities.delete(deletedEntity);
+        }
         // this.updated(id);
     }
 

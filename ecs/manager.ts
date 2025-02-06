@@ -521,7 +521,13 @@ export class Manager<ExactComponentTypes extends defaultComponentTypes> {
         this.state.queryMap.get(entity.id)?.forEach((queryName) => {
             const query = this.state.queries.get(queryName);
 
-            if (!query?.componentMatches(componentType)) return;
+            if (query.queryParameters.index === componentType) {
+                query.indexEntity(entity);
+            }
+
+            if (!query?.componentMatches(componentType)) {
+                return;
+            }
 
             query?.removeEntity(entity);
         });

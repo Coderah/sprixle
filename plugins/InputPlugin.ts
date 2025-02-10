@@ -61,7 +61,8 @@ window['inputState'] = inputState;
 
 interface InputPluginOptions {
     useThreeForWorldPosition?: boolean;
-    threeCamera: Camera;
+    threeCamera?: Camera;
+    allowOtherMouseEvents?: boolean;
 }
 
 export type InputComponents = {
@@ -199,7 +200,10 @@ export function applyInputPlugin<
             };
 
             const handleMouseDown = (event: MouseEvent) => {
-                if (event.currentTarget === domElement) {
+                if (
+                    event.currentTarget === domElement &&
+                    !options?.allowOtherMouseEvents
+                ) {
                     event.preventDefault();
                 }
 
@@ -216,7 +220,10 @@ export function applyInputPlugin<
             };
 
             const handleMouseUp = (event: MouseEvent) => {
-                if (event.currentTarget === domElement) {
+                if (
+                    event.currentTarget === domElement &&
+                    !options?.allowOtherMouseEvents
+                ) {
                     event.preventDefault();
                 }
                 let mouseButton =

@@ -43,6 +43,7 @@ export function applyDeathEffectPlugin<
                     );
 
                     if (existingEntityForEffect) {
+                        // TODO merge object components
                         manager.addComponents(
                             existingEntityForEffect,
                             deathEffect.components

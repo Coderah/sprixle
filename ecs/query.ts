@@ -50,6 +50,28 @@ export type QueryParametersInput<
     index?: IndexedComponent;
 };
 
+export interface QueryState<
+    ExactComponentTypes extends defaultComponentTypes,
+    Includes extends Keys<ExactComponentTypes>[],
+    M extends Manager<ExactComponentTypes> = Manager<ExactComponentTypes>,
+    IndexedComponent extends Keys<ExactComponentTypes> = null,
+    E = EntityWithComponents<ExactComponentTypes, M, Includes[number]>
+> {
+    entities: Set<entityId>;
+    consumerStates: ConsumerState[];
+
+    indexed: Map<ExactComponentTypes[IndexedComponent], Set<entityId>>;
+
+    /** What entities are queued for future slices */
+    queuedEntities: Set<entityId>;
+    /** tracks what entities are included in the current slice; cleared on tick. */
+    entitiesInSlice: Set<entityId>;
+
+    lastEntity: E | undefined;
+    sliceHead: string | null;
+    nextSliceHead: string | null;
+}
+
 export class Query<
     ExactComponentTypes extends defaultComponentTypes,
     Includes extends Keys<ExactComponentTypes>[],
@@ -67,21 +89,69 @@ export class Query<
         Includes,
         IndexedComponent
     >;
-    entities = new Set<entityId>();
-    consumers = new Array<Consumer<ExactComponentTypes, Includes, M, E>>();
 
-    indexed: Map<ExactComponentTypes[IndexedComponent], Set<entityId>> =
-        new Map();
+    consumers = new Array<
+        Consumer<ExactComponentTypes, Includes, M, IndexedComponent, E>
+    >();
+
+    get state() {
+        return this.manager.state.queryStates.get(this.queryName) as QueryState<
+            ExactComponentTypes,
+            Includes,
+            M,
+            IndexedComponent,
+            E
+        >;
+    }
+
+    get entities() {
+        return this.state.entities;
+    }
+
+    set entities(v) {
+        this.state.entities = v;
+    }
+
+    // entities = new Set<entityId>();
+
+    get indexed() {
+        return this.state.indexed;
+    }
+    // indexed: Map<ExactComponentTypes[IndexedComponent], Set<entityId>> =
+    //     new Map();
 
     /** What entities are queued for future slices */
-    private queuedEntities = new Set<entityId>();
+    private get queuedEntities() {
+        return this.state.queuedEntities;
+    }
+    // private queuedEntities = new Set<entityId>();
     /** tracks what entities are included in the current slice; cleared on tick. */
-    entitiesInSlice = new Set<entityId>();
+    get entitiesInSlice() {
+        return this.state.entitiesInSlice;
+    }
+    // entitiesInSlice = new Set<entityId>();
 
-    private lastEntity: E | undefined;
-
-    private sliceHead: string | null = null;
-    private nextSliceHead: string | null = null;
+    private get lastEntity() {
+        return this.state.lastEntity;
+    }
+    private set lastEntity(v) {
+        this.state.lastEntity = v;
+    }
+    // private lastEntity: E | undefined;
+    private get sliceHead() {
+        return this.state.sliceHead;
+    }
+    private set sliceHead(v) {
+        this.state.sliceHead = v;
+    }
+    // private sliceHead: string | null = null;
+    private get nextSliceHead() {
+        return this.state.nextSliceHead;
+    }
+    private set nextSliceHead(v) {
+        this.state.nextSliceHead = v;
+    }
+    // private nextSliceHead: string | null = null;
 
     *[Symbol.iterator]() {
         const sliceSize = this.getSliceSize();
@@ -439,6 +509,14 @@ export class Query<
     }
 }
 
+export interface ConsumerState {
+    updatedEntities: Set<entityId>;
+    newEntities: Set<entityId>;
+    deletedEntities: Set<typeof this.query.manager.Entity>;
+    consumed: boolean;
+    consumedEntities: Set<entityId>;
+}
+
 // TODO: revisit this.consumed concept
 /** Consumers track updated and new entities until consumed for a given Query */
 export class Consumer<
@@ -449,17 +527,67 @@ export class Consumer<
     E = EntityWithComponents<ExactComponentTypes, M, Includes[number]>
 > {
     query: Query<ExactComponentTypes, Includes, M, IndexedComponent, E>;
-    updatedEntities = new Set<entityId>();
-    newEntities = new Set<entityId>();
-    deletedEntities = new Set<typeof this.query.manager.Entity>();
 
-    consumed = false;
-    consumedEntities = new Set<entityId>();
+    consumerId: number;
+
+    get state() {
+        return this.query.state.consumerStates[this.consumerId];
+    }
+
+    // updatedEntities = new Set<entityId>();
+    get updatedEntities() {
+        return this.state.updatedEntities;
+    }
+    set updatedEntities(v) {
+        this.state.updatedEntities = v;
+    }
+
+    // newEntities = new Set<entityId>();
+    get newEntities() {
+        return this.state.newEntities;
+    }
+    set newEntities(v) {
+        this.state.newEntities = v;
+    }
+
+    // deletedEntities = new Set<typeof this.query.manager.Entity>();
+    get deletedEntities() {
+        return this.state.deletedEntities;
+    }
+    set deletedEntities(v) {
+        this.state.deletedEntities = v;
+    }
+
+    // consumed = false;
+    get consumed() {
+        return this.state.consumed;
+    }
+    set consumed(v) {
+        this.state.consumed = v;
+    }
+
+    // consumedEntities = new Set<entityId>();
+    get consumedEntities() {
+        return this.state.consumedEntities;
+    }
+    set consumedEntities(v) {
+        this.state.consumedEntities = v;
+    }
 
     constructor(
         query: Query<ExactComponentTypes, Includes, M, IndexedComponent, E>
     ) {
         this.query = query;
+
+        this.consumerId = query.consumers.length;
+
+        query.state.consumerStates[this.consumerId] = {
+            updatedEntities: new Set(),
+            newEntities: new Set(),
+            deletedEntities: new Set(),
+            consumed: false,
+            consumedEntities: new Set(),
+        };
 
         if (query.entities.size) {
             query.entities.forEach((entity) => this.add(entity));

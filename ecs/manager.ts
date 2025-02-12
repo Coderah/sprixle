@@ -3,7 +3,7 @@ import uuid from 'uuid-random';
 import { memoizedGlobalNow, now } from '../util/now';
 import { keys } from './dict';
 import './object.extensions.ts';
-import { Query, QueryName, QueryParametersInput } from './query';
+import { Query, QueryName, QueryParametersInput, QueryState } from './query';
 import { ConsumerSystem, QuerySystem, System } from './system';
 import { throttleLog } from '../util/log';
 import { ComponentTypes } from '../../game/components';
@@ -50,6 +50,11 @@ export type EntityAdminState<
     /** Queries effectively define archetypes and maintain performant query sets according to actual system needs */
     // TODO improve types
     queries: Map<string, Query<ExactComponentTypes, any, any, any, any>>;
+    queryStates: Map<
+        string,
+        QueryState<ExactComponentTypes, any, any, any, any>
+    >;
+    // consumerStates: Array<>
 
     stagedUpdates: Map<Keys<ExactComponentTypes>, Set<entityId>>;
 
@@ -135,13 +140,17 @@ export class Manager<ExactComponentTypes extends defaultComponentTypes> {
     }
 
     createInitialState() {
-        const newState = {
+        const newState: EntityAdminState<
+            typeof this.ComponentTypes,
+            ExactComponentTypes
+        > = {
             entities: new Map(),
             entityMap: new Map(),
             componentMap: new Map(),
             queryMap: new Map(),
 
             queries: new Map(),
+            queryStates: new Map(),
 
             stagedUpdates: new Map(),
 
@@ -149,7 +158,7 @@ export class Manager<ExactComponentTypes extends defaultComponentTypes> {
             previouslyUpdatedEntities: new Set(),
             updatedEntities: new Set(),
             deletedEntities: new Set(),
-        } as EntityAdminState<typeof this.ComponentTypes, ExactComponentTypes>;
+        };
 
         this.componentTypesSet.forEach((type) => {
             newState.stagedUpdates.set(type, new Set());
@@ -189,6 +198,19 @@ export class Manager<ExactComponentTypes extends defaultComponentTypes> {
             >;
 
         this.state.queries.set(query.queryName, query);
+        this.state.queryStates.set(query.queryName, {
+            entities: new Set(),
+            consumerStates: [],
+
+            indexed: new Map(),
+
+            queuedEntities: new Set(),
+            entitiesInSlice: new Set(),
+
+            lastEntity: undefined,
+            sliceHead: null,
+            nextSliceHead: null,
+        });
 
         return query;
     }

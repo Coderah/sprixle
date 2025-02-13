@@ -198,19 +198,6 @@ export class Manager<ExactComponentTypes extends defaultComponentTypes> {
             >;
 
         this.state.queries.set(query.queryName, query);
-        this.state.queryStates.set(query.queryName, {
-            entities: new Set(),
-            consumerStates: [],
-
-            indexed: new Map(),
-
-            queuedEntities: new Set(),
-            entitiesInSlice: new Set(),
-
-            lastEntity: undefined,
-            sliceHead: null,
-            nextSliceHead: null,
-        });
 
         return query;
     }

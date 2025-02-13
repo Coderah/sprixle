@@ -236,6 +236,20 @@ export class Query<
             this.queryParameters.excludes = new Set(parameters.excludes);
         }
 
+        manager.state.queryStates.set(this.queryName, {
+            entities: new Set(),
+            consumerStates: [],
+
+            indexed: new Map(),
+
+            queuedEntities: new Set(),
+            entitiesInSlice: new Set(),
+
+            lastEntity: undefined,
+            sliceHead: null,
+            nextSliceHead: null,
+        });
+
         // TODO: handle existing entities
         manager.state.entities.forEach((entity) => {
             if (this.entityMatches(entity)) this.addEntity(entity);

@@ -1,4 +1,5 @@
 import { throttleLog } from '../util/log';
+import uuid from 'uuid-random';
 import {
     defaultComponentTypes,
     Entity,
@@ -214,13 +215,20 @@ export class Query<
             index: parameters.index,
         };
 
+        if (parameters.index) {
+            this.queryName += `[${parameters.index as string}]`;
+        }
+
+        this.queryName += parameters.flexible ? '|' : '&';
+
         if (parameters.includes) {
             const includesArray = parameters.includes.sort((a, b) =>
                 a.toString()[0] > b.toString()[0] ? 1 : -1
             );
-            this.queryName += includesArray
-                .map((c) => '+' + c.toString())
-                .join(',');
+            this.queryName +=
+                '(' +
+                includesArray.map((c) => '+' + c.toString()).join('') +
+                ')';
 
             this.queryParameters.includes = new Set(parameters.includes) as any;
         }
@@ -228,14 +236,16 @@ export class Query<
             const excludesArray = parameters.excludes.sort((a, b) =>
                 a.toString()[0] > b.toString()[0] ? 1 : -1
             );
-            if (this.queryName) this.queryName += ',';
             this.queryName += excludesArray
                 .map((c) => '-' + c.toString())
-                .join(',');
+                .join('');
 
             this.queryParameters.excludes = new Set(parameters.excludes);
         }
 
+        if (manager.state.queryStates.has(this.queryName)) {
+            this.queryName += uuid();
+        }
         manager.state.queryStates.set(this.queryName, {
             entities: new Set(),
             consumerStates: [],

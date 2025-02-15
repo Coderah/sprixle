@@ -74,7 +74,7 @@ export function applyEditorUIPlugin<
                         (folders[entity.id] =
                             folders[entity.id] ||
                             topLevel.addFolder({
-                                title: '[Entity] ' + entity.id,
+                                title: 'Entity: ' + entity.id,
                                 expanded: true,
                             }));
 
@@ -138,7 +138,13 @@ export function applyEditorUIPlugin<
             query: Query<ComponentTypes, any>,
             options: Partial<BindingParams> = { interval: 0 },
             folderTitle = query.queryName,
-            include = ['count', 'updated', 'removed'],
+            include = [
+                'count',
+                'updated',
+                'removed',
+                'indexKeys',
+                'indexValues',
+            ],
             parent: Pane | FolderApi | TabPageApi = primaryPane
         ) {
             options.readonly = true;
@@ -148,7 +154,7 @@ export function applyEditorUIPlugin<
             const folder = (folders[folderTitle] =
                 folders[folderTitle] ||
                 parent.addFolder({
-                    title: '[Query] ' + folderTitle,
+                    title: 'Query: ' + folderTitle,
                     expanded: true,
                 }));
 
@@ -156,27 +162,44 @@ export function applyEditorUIPlugin<
                 count: 0,
                 updated: 0,
                 removed: 0,
+                indexKeys: 0,
+                indexValues: 0,
             };
+
+            if (!query.queryParameters.index) {
+                include = include.filter((n) => !n.startsWith('index'));
+            }
 
             const updateInterval = interval(1000 / (options.interval || 50));
             updateInterval.accumulative = false;
 
             options.interval = 0;
 
+            function updateIndex() {
+                state.indexKeys = query.indexed.size;
+                state.indexValues = 0;
+                query.indexed.forEach((ids) => {
+                    state.indexValues += ids.size;
+                });
+            }
+
             const system = manager.createSystem(consumer, {
                 forNew(entity, delta) {
                     state.count = query.entities.size;
+                    updateIndex();
                     if (options.interval === 0 || updateInterval(delta))
                         folder.refresh();
                 },
                 updated(entity, delta) {
                     state.updated = consumer.updatedEntities.size;
+                    updateIndex();
                     if (options.interval === 0 || updateInterval(delta))
                         folder.refresh();
                 },
                 removed(entity, delta) {
                     state.count = query.entities.size;
                     state.removed = consumer.deletedEntities.size;
+                    updateIndex();
                     if (options.interval === 0 || updateInterval(delta))
                         folder.refresh();
                 },

@@ -1,9 +1,5 @@
 import { Vector2 } from 'three';
-import {
-    defaultComponentNames,
-    defaultComponentTypes,
-    Manager,
-} from '../ecs/manager';
+import { defaultComponentTypes, Manager } from '../ecs/manager';
 import assert from 'assert';
 
 type ComponentTypes = defaultComponentTypes & {
@@ -45,7 +41,8 @@ manager.subTick();
 assert.equal(positionQuery.size, 0);
 assert.equal(inactivePositionQuery.size, 2);
 
-manager.removeComponent(entity, 'inactive');
+// manager.removeComponent(entity, 'inactive');
+delete entity.components.inactive;
 
 assert.equal(inactivePositionQuery.size, 1);
 assert.equal(positionQuery.size, 1);

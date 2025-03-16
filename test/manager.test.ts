@@ -1,10 +1,6 @@
 import assert from 'assert';
 import { vec2 } from 'gl-matrix';
-import {
-    defaultComponentNames,
-    defaultComponentTypes,
-    Manager,
-} from '../ecs/manager';
+import { defaultComponentTypes, Manager } from '../ecs/manager';
 
 type ComponentTypes = defaultComponentTypes & {
     position: vec2;

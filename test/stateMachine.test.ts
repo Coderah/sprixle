@@ -1,17 +1,12 @@
 import assert from 'assert';
 import {
     applyStateMachinePlugin,
-    getStateMachineComponentNames,
     StateMachineComponents,
 } from '../plugins/stateMachinePlugin';
 import { Pipeline } from '../ecs/system';
 import { now } from '../util/now';
 import { throttleLog } from '../util/log';
-import {
-    defaultComponentNames,
-    defaultComponentTypes,
-    Manager,
-} from '../ecs/manager';
+import { defaultComponentTypes, Manager } from '../ecs/manager';
 
 enum STATES {
     idle,

@@ -1,3 +1,8 @@
+import {
+    ReceiveType,
+    ReflectionClass,
+    resolveReceiveType,
+} from '@deepkit/type';
 import { each } from 'lodash';
 import uuid from 'uuid-random';
 import { memoizedGlobalNow, now } from '../util/now';
@@ -5,13 +10,6 @@ import { keys } from './dict';
 import './object.extensions.ts';
 import { Query, QueryName, QueryParametersInput, QueryState } from './query';
 import { ConsumerSystem, QuerySystem, System } from './system';
-import { throttleLog } from '../util/log';
-import { ComponentTypes } from '../../game/components';
-import {
-    ReceiveType,
-    ReflectionClass,
-    resolveReceiveType,
-} from '@deepkit/type';
 
 export type Keys<T> = keyof T;
 export type entityId = string;

@@ -1,6 +1,8 @@
-const modules = require.context('./', true, /\.ts$/);
+import { setLogContextToDebug } from '../util/log';
 
-console.log(modules);
+const modules = require.context('./', true, /test\.ts$/);
+setLogContextToDebug();
+console.log(modules.keys());
 
 document.body.style.background = '#1d1d1d';
 document.body.style.fontFamily = 'Fira Code';

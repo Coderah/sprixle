@@ -3,7 +3,7 @@ schema_version = "1.0.0"
 # Example of manifest file for a Blender extension
 # Change the values according to your extension
 id = "sprixle"
-version = "1.0.0"
+version = "0.0.3"
 name = "Sprixle"
 tagline = "This is another extension"
 maintainer = "Alex DiBerardino"
@@ -24,9 +24,7 @@ blender_version_min = "4.2.0"
 
 # License conforming to https://spdx.org/licenses/ (use "SPDX: prefix)
 # https://docs.blender.org/manual/en/dev/advanced/extensions/licenses.html
-license = [
-  "SPDX:GPL-2.0-or-later",
-]
+license = ["SPDX:GPL-2.0-or-later"]
 # Optional: required by some licenses.
 # copyright = [
 #   "2002-2024 Developer Name",
@@ -42,7 +40,7 @@ license = [
 wheels = [
   "./wheels/websocket_server-0.6.4-py3-none-any.whl",
   "./wheels/deepdiff-8.0.1-py3-none-any.whl",
-  "./wheels/orderly_set-5.2.2-py3-none-any.whl"
+  "./wheels/orderly_set-5.2.2-py3-none-any.whl",
 ]
 
 # Optional: add-ons can list which resources they will require:

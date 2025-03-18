@@ -11,7 +11,7 @@ def serialize(target):
     node_group = None
     name = ''
     if hasattr(target, 'modifiers'):
-        modifier = next((m for m in target.modifiers if m.type == 'NODES' and '+logic' in m.node_group.name), None)
+        modifier = next((m for m in target.modifiers if m.type == 'NODES' and m.node_group and '+logic' in m.node_group.name), None)
         if modifier is None:
             return (None, None)
         node_group = modifier.node_group
@@ -99,17 +99,19 @@ def serialize(target):
             newpath = './textures/' + name
             if not os.path.exists(newpath):
                 image.filepath = newpath
-                image.save()
                 try:
-                    image.unpack()
+                    image.save()
                 except:
-                    pass
+                    print('unable to save', filepath)
+                # try:
+                #     image.unpack(method='WRITE_LOCAL')
+                # except:
+                #     pass
 
-                image.filepath = filepath
-                try:
-                    image.pack()
-                except:
-                    pass
+                # try:
+                #     image.pack()
+                # except:
+                #     pass
             node_data['properties']['image'] = name
         
         # TODO handle vectors

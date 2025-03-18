@@ -10,7 +10,7 @@ def prepareInstancesForExport(object):
     if not hasattr(object, 'modifiers'): return False
 
     for modifier in object.modifiers:
-        if not hasattr(modifier, 'node_group') or not modifier.node_group.name == 'Sprixle: Export Instances': continue
+        if not hasattr(modifier, 'node_group') or not modifier.node_group or not modifier.node_group.name == 'Sprixle: Export Instances': continue
     
         # print('baking', object, modifier)
         print('SprixleExporter instances for', object.name)

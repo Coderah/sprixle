@@ -91,7 +91,7 @@ def handleDepsGraphUpdate(scene, graph):
     for object in graph.objects:
         object = bpy.data.objects[object.name]
         if not hasattr(object, 'modifiers'): continue
-        modifier = next((m for m in object.modifiers if m.type == 'NODES' and '+logic' in m.node_group.name), None)
+        modifier = next((m for m in object.modifiers if m.type == 'NODES' and m.node_group and '+logic' in m.node_group.name), None)
         if modifier is None:
             continue
         
@@ -129,7 +129,7 @@ def prepAllNodeTrees():
 
         for material_slot in object.material_slots:
             material = material_slot.material
-            if not material or material.name in handledTreeParent: continue
+            if material == None or not material or material.name in handledTreeParent: continue
             handledTreeParent.append(material.name)
             (data, name) = node_trees.serialize(material)
 
@@ -218,7 +218,7 @@ class SprixleInfoPanel(bpy.types.Panel):
 
     def draw(self, context):
         global active_scene
-        self.layout.label(text="Addon Version: 0.3")
+        self.layout.label(text="Addon Version: 0.0.3")
 
         self.layout.operator(SprixleExport.bl_idname, text="Export Scene", icon="EXPORT")
 

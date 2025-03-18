@@ -136,12 +136,16 @@ export interface Node {
         interpolation?: 'EASE' | 'LINEAR' | 'B_SPLINE' | 'CONSTANT';
         hue_interpolation?: string;
     };
-    internalLogicTree?: NodeTree;
+    internalNodeTree?: string;
 }
 
-export interface NodeTree {
+export type NodeTree = {
     [key: string]: Node;
-}
+} & {
+    $internalTrees: {
+        [key: string]: NodeTree;
+    };
+};
 
 export interface LogicTreeMethods {
     [key: string]: Function;
@@ -159,12 +163,20 @@ interface LogicTreeCompilerParameters<M extends LogicTreeMethods> {
         transpiled: string[],
         compilationCache: CompilationCache
     ) => Function;
+    currentInternalTrees?: {
+        [key: string]: NodeTree;
+    };
+    compiledInternalTrees?: Set<string>;
 }
 
 type ShaderTreeCompilerParameters = {
     type: 'ShaderTree';
     methods: ShaderTreeMethods;
     reflection: UnionOrIntersectionType;
+    currentInternalTrees?: {
+        [key: string]: NodeTree;
+    };
+    compiledInternalTrees?: Set<string>;
 };
 
 function getNext(tree: NodeTree, n: NodeTree[keyof NodeTree]) {
@@ -716,8 +728,28 @@ export function createNodeTreeCompiler<M extends LogicTreeMethods>(
             methodReflection: TypeMethod
         ) {
             function handleInternalTree() {
-                // TODO rename internalLogicTree to internalNodeTree
-                if (n.internalLogicTree) {
+                // TODO rename internalNodeTree  to internalNodeTree
+                if (n.internalNodeTree) {
+                    const internalNodeTree =
+                        parameters.currentInternalTrees?.[n.internalNodeTree];
+
+                    if (!internalNodeTree) {
+                        console.error(n);
+                        throw Error(
+                            'unable to locate internalNodeTree, likely an export issue.'
+                        );
+                    }
+                    if (
+                        parameters.compiledInternalTrees?.has(
+                            n.internalNodeTree
+                        )
+                    ) {
+                        console.warn(
+                            'skipping recompile of internal tree',
+                            n.internalNodeTree
+                        );
+                        return;
+                    }
                     if (method) {
                         console.warn(
                             '[compileNode] internalNodeTree being ignored in favor of code implementation.',
@@ -725,10 +757,11 @@ export function createNodeTreeCompiler<M extends LogicTreeMethods>(
                         );
                         return;
                     }
+                    parameters.compiledInternalTrees.add(n.internalNodeTree);
 
                     // TODO implement prefix or nesting for cache stuff
                     const compiledInternalNodeTree = compileNodeTree(
-                        n.internalLogicTree,
+                        internalNodeTree,
                         true,
                         compilationCache.compiledInputs.current
                     );
@@ -1303,6 +1336,11 @@ export function createNodeTreeCompiler<M extends LogicTreeMethods>(
             ? 0
             : shaderTargetInputs.Fragment
     ) {
+        if (nodeTree.$internalTrees) {
+            parameters.currentInternalTrees = nodeTree.$internalTrees;
+            parameters.compiledInternalTrees = new Set();
+        }
+
         const startingNodes = Object.values(nodeTree).filter((n) => {
             if (parameters.type === 'LogicTree') {
                 return n.type === 'SIMULATION_INPUT';

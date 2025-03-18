@@ -28,16 +28,20 @@ def serialize(target):
 
     if not modifier or not node_group: return (None, None)
 
-    def serialize_tree(node_tree):
+    def serialize_tree(node_tree, internal_trees = None):
         nodes_data = {}
 
+        if internal_trees == None:
+            internal_trees = {}
+            nodes_data['$internalTrees'] = internal_trees
+
         for node in node_tree.nodes:
-            node_data = serialize_node(node, node_tree)
+            node_data = serialize_node(node, node_tree, internal_trees)
             nodes_data[node_data['id']] = node_data
 
         return nodes_data
 
-    def serialize_node(node, node_tree):
+    def serialize_node(node, node_tree, internal_trees):
         node_data = {
             "id": node.name,
             "type": node.type,
@@ -51,9 +55,12 @@ def serialize(target):
             node_data['name'] = node.node_tree.name
 
             if len(node.node_tree.nodes) > 2:
-                node_data['properties']['containsLogicTree'] = True
+                node_data['properties']['containsNodeTree'] = True
 
-                node_data["internalLogicTree"] = serialize_tree(node.node_tree)
+                if not node_data['name'] in internal_trees:
+                    internal_trees[node_data['name']] = serialize_tree(node.node_tree, internal_trees)
+                
+                node_data["internalNodeTree"] = node_data['name']
                 # for n in node.node_tree.nodes:
                 #     serialize_node(n, node_data["name"] + "-")
         else:

@@ -65,6 +65,9 @@ const mathFunctions = {
         '($2 != 0.0) ? abs(fract(($1 - $2) / ($2 * 2.0)) * $2 * 2.0 - $2) : 0.0',
     SCALE: '$1 * $Scale',
     FRACT: `fract($1)`,
+    NORMALIZE: `normalize($1)`,
+    COMPARE: `(abs($1 - $2) <= max($3, 1e-5)) ? 1.0 : 0.0`,
+    SIGN: `sign($1)`,
 };
 
 type If<T, V> = any;
@@ -306,6 +309,9 @@ export const transpilerMethods = {
         return [
             `texture2D(${reference}, vec2(compute_color_map_coordinate(clamp(${Fac}, 0.0, 1.0)), 0.5))`,
         ];
+    },
+    EMISSION(Color: GLSL['vec3'], Strength: GLSL['float']): GLSL['vec3'] {
+        return [`${Color} * ${Strength}`];
     },
     BSDF_TRANSPARENT(Color: GLSL['vec3']): GLSL['vec4'] {
         return [`vec4(0.,0.,0.,1. - clamp(length(${Color}), 0., 1.))`];

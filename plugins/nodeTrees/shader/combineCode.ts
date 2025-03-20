@@ -95,6 +95,8 @@ varying vec3 vObjectLocation;
 
 #endif
 
+${Array.from(compilationCache.shader.vertexFunctionStubs).join('\n')}
+
 ${Array.from(compilationCache.shader.vertexIncludes).join('\n')}
 
 void main() {
@@ -313,17 +315,19 @@ export function combineFragmentShader(
     #endif
     uniform mat3 normalMatrix;
 
+    ${f('diffuseBSDF', diffuseBSDF)}
+
     ${Array.from(compilationCache.shader.fragmentIncludes)
-        .sort((a, b) =>
-            a.trimStart().startsWith('struct')
-                ? -1
-                : b.trimStart().startsWith('struct')
-                ? 1
-                : 0
-        )
+        .filter((a) => a.trimStart().startsWith('struct'))
         .join('\n')}
 
-    ${f('diffuseBSDF', diffuseBSDF)}
+    ${Array.from(compilationCache.shader.fragmentFunctionStubs).join('\n')}
+
+    ${Array.from(compilationCache.shader.fragmentIncludes)
+        .filter((a) => !a.trimStart().startsWith('struct'))
+        .join('\n')}
+
+    
 
     void main() {
         #ifdef USE_POINTS

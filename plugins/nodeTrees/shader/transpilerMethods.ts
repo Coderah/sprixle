@@ -104,13 +104,14 @@ export const transpilerMethods = {
     TEX_IMAGE(
         Vector: GLSL['vec2'],
         image: string,
+        node: Node,
         compilationCache: CompilationCache
     ): GLSL<{ Color: GLSL['vec3']; Alpha: GLSL['float'] }> {
         // TODO revisit using GLSL['imageTex'] as rewrite return type
-        const reference = camelCase(image);
+        const reference = getReference(node);
         addContextualShaderInclude(
             compilationCache,
-            `uniform sampler2D ${reference};`
+            `uniform sampler2D ${camelCase(image)};`
         );
         addContextualShaderInclude(compilationCache, blenderVector);
         // TODO get from cache

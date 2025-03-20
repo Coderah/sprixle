@@ -37,7 +37,6 @@ import blenderShaders, { includesRegex } from '../nodeTrees/shader/blender';
 import { UnionOrIntersectionType } from 'typescript';
 
 export type ShaderTreeComponentTypes = {
-    mesh: Object3D;
     shaderTree: NodeTree;
 } & MaterialManagerComponentTypes;
 

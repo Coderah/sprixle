@@ -326,7 +326,7 @@ export const transpilerMethods = {
         addDiffuseBSDF(compilationCache);
 
         return [
-            `DiffuseBSDF(${Color}, ${Normal}, 0.0, 0.0, 0.0, 0.0, vec3(0.0))`,
+            `DiffuseBSDF(${Color}, ${Normal}, 0.0, 0.0, vec3(0.0), 0.0, vec3(0.0))`,
         ];
     },
     EEVEE_SPECULAR(
@@ -514,10 +514,22 @@ export const transpilerMethods = {
             'data_type',
             { FLOAT: GLSL['float']; FLOAT_VECTOR: GLSL['vec3'] }
         >,
-        FromMin: string,
-        FromMax: string,
-        ToMin: string,
-        ToMax: string,
+        FromMin: If<
+            'data_type',
+            { FLOAT: GLSL['float']; FLOAT_VECTOR: GLSL['vec3'] }
+        >,
+        FromMax: If<
+            'data_type',
+            { FLOAT: GLSL['float']; FLOAT_VECTOR: GLSL['vec3'] }
+        >,
+        ToMin: If<
+            'data_type',
+            { FLOAT: GLSL['float']; FLOAT_VECTOR: GLSL['vec3'] }
+        >,
+        ToMax: If<
+            'data_type',
+            { FLOAT: GLSL['float']; FLOAT_VECTOR: GLSL['vec3'] }
+        >,
         // TODO
         interpolation_type: string,
         compilationCache: CompilationCache
@@ -534,9 +546,23 @@ export const transpilerMethods = {
      * Only partially supported currently
      */
     MIX(
-        Factor: string,
-        A: string,
-        B: string,
+        Factor: GLSL['float'],
+        A: If<
+            'data_type',
+            {
+                FLOAT: GLSL['float'];
+                // VECTOR: GLSL['vec3'];
+                else: GLSL['vec3'];
+            }
+        >,
+        B: If<
+            'data_type',
+            {
+                FLOAT: GLSL['float'];
+                // VECTOR: GLSL['vec3'];
+                else: GLSL['vec3'];
+            }
+        >,
         data_type: 'FLOAT' | 'VECTOR' | 'RGBA',
         blend_type: string,
         factor_mode: string,
@@ -557,13 +583,19 @@ export const transpilerMethods = {
         operation: string,
         use_clamp: boolean,
         Value: GLSL['float'][]
-    ): GLSL['float'] {
+    ): If<
+        'operation',
+        {
+            GREATER_THAN: GLSL['bool'];
+            else: GLSL['float'];
+        }
+    > {
         let result: string = `MATH_ERROR_${operation}`;
         if (operation in mathOperationSymbols) {
             result = `${Value[0]} ${mathOperationSymbols[operation]} ${Value[1]}`;
         } else if (operation in mathFunctions) {
             result = mathFunctions[operation]
-                .replace(/\$1/g, Value[0])
+                .replace(/\$1/g, Value instanceof Array ? Value[0] : Value)
                 .replace(/\$2/g, Value[1])
                 .replace(/\$3/g, Value[2]);
         }

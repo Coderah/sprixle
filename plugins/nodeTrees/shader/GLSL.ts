@@ -17,6 +17,7 @@ export default interface GLSL<V = any> {
     imageTex: any;
 
     int: any;
+    bool: any;
 
     float: any;
 }
@@ -56,6 +57,10 @@ export function convertVecSize(
         return `int(${reference})`;
     } else if (from === 'imageTex' && to === 'float') {
         return `${reference}.a`;
+    } else if (from === 'bool' && to === 'float') {
+        return `${reference} ? 1.0 : 0.0`;
+    } else if (from === 'bool' && to === 'int') {
+        return `${reference} ? 1 : 0`;
     }
 
     from = from === 'imageTex' ? 'vec4' : from;
@@ -107,6 +112,10 @@ export function getGLSLType(intended_type: InputType) {
     let type: Type;
 
     switch (intended_type) {
+        case 'BOOL':
+        case 'BOOLEAN':
+            type = typeOf<GLSL['bool']>();
+            break;
         case 'INT':
         case 'INTEGER':
             type = typeOf<GLSL['int']>();

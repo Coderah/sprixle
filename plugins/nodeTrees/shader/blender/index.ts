@@ -2,9 +2,10 @@ import {
     addContextualShaderInclude,
     CompilationCache,
 } from '../../createCompiler';
-import fresnel from './fresnel';
 import gpu_shader_common_color_utils from './gpu_shader_common_color_utils';
 import gpu_shader_common_hash from './gpu_shader_common_hash';
+import gpu_shader_material_fresnel from './gpu_shader_material_fresnel';
+import gpu_shader_material_layer_weight from './gpu_shader_material_layer_weight';
 import gpu_shader_material_tex_white_noise from './gpu_shader_material_tex_white_noise';
 import hue_sat_val from './hue_sat_val';
 import noise from './noise';
@@ -12,7 +13,8 @@ import noise from './noise';
 const all = {
     gpu_shader_common_color_utils,
     gpu_shader_common_hash,
-    fresnel,
+    gpu_shader_material_fresnel,
+    gpu_shader_material_layer_weight,
     hue_sat_val,
     gpu_shader_material_tex_white_noise,
     noise,

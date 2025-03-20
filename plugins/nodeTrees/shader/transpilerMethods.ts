@@ -21,10 +21,11 @@ import {
 import { addBlenderDependency } from './blender';
 import noise from './blender/noise';
 import hue_sat_val from './blender/hue_sat_val';
-import fresnel from './blender/fresnel';
+import fresnel from './blender/gpu_shader_material_fresnel';
 import clamp from './blender/clamp';
 import gpu_shader_material_tex_white_noise from './blender/gpu_shader_material_tex_white_noise';
 import { getReference } from '../util';
+import gpu_shader_material_layer_weight from './blender/gpu_shader_material_layer_weight';
 
 const mathOperationSymbols = {
     MULTIPLY: '*',
@@ -371,6 +372,27 @@ export const transpilerMethods = {
             `node_fresnel(${IOR}, ${Normal}, ${reference}Calc);`,
             `${reference}Calc`,
         ];
+    },
+    LAYER_WEIGHT(
+        Blend: GLSL['float'],
+        Normal: GLSL['vec3'] = 'vNormal',
+        node: Node,
+        compilationCache: CompilationCache
+    ): GLSL<{
+        Fresnel: GLSL['float'];
+        Facing: GLSL['float'];
+    }> {
+        const reference = camelCase(node.id);
+        addBlenderDependency(
+            gpu_shader_material_layer_weight,
+            compilationCache
+        );
+        return [
+            `float ${reference}Fresnel = 0.0;`,
+            `float ${reference}Facing = 0.0;`,
+            `node_layer_weight(${Blend}, ${Normal}, ${reference}Fresnel, ${reference}Facing);`,
+            `${reference}Fresnel, ${reference}Facing`,
+        ] as any;
     },
     SHADERTORGB(Shader: GLSL['vec4']): GLSL['vec4'] {
         return [Shader];

@@ -95,6 +95,8 @@ export type InputType =
     | 'VECTOR'
     | 'STRING'
     | 'FLOAT'
+    | 'BOOLEAN'
+    | 'BOOL'
     | 'INTEGER'
     | 'INT'
     | 'VALUE'
@@ -434,13 +436,24 @@ export function createNodeTreeCompiler<M extends LogicTreeMethods>(
 
                     socketReference = socketReference.toLowerCase();
                     // TODO happen at point of export??
-                    socketReference =
-                        socketReference === 'y'
-                            ? 'z'
-                            : socketReference === 'z'
-                            ? 'y'
-                            : socketReference;
-
+                    if (
+                        !passthroughCompile.value
+                            .toString()
+                            .toLowerCase()
+                            .includes('uv')
+                    ) {
+                        socketReference =
+                            socketReference === 'y'
+                                ? 'z'
+                                : socketReference === 'z'
+                                ? 'y'
+                                : socketReference;
+                    } else {
+                        if (socketReference === 'y') {
+                            passthroughCompile.value =
+                                '1.0 + ' + passthroughCompile.value;
+                        }
+                    }
                     passthroughCompile.value += '.' + socketReference;
 
                     if (parameters.type === 'ShaderTree') {

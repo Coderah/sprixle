@@ -444,6 +444,7 @@ export const transpilerMethods = {
         UV: GLSL['vec2'];
         Normal: GLSL['vec3'];
         Object: GLSL['vec3'];
+        Reflection: GLSL['vec3'];
     }> {
         compilationCache.defines.add('USE_OBJECT_NORMAL');
         compilationCache.defines?.add('USE_UV');
@@ -455,10 +456,14 @@ export const transpilerMethods = {
             compilationCache.compiledInputs.current ===
             shaderTargetInputs.Vertex
         ) {
-            return ['position, uv, vNormal, position'] as any;
+            return [
+                'position, uv, vNormal, position, reflect(normalize(vViewPosition), normalize(vNormal))',
+            ] as any;
         }
 
-        return ['vPosition, vUv, vNormal, vPosition'] as any;
+        return [
+            'vPosition, vUv, vNormal, vPosition, reflect(normalize(vViewPosition), normalize(vNormal))',
+        ] as any;
     },
     NEW_GEOMETRY(compilationCache: CompilationCache): GLSL<{
         Position: GLSL['vec3'];

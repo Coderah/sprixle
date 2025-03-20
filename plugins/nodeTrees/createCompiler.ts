@@ -63,7 +63,9 @@ export interface CompilationCache {
         vertex: string[];
         displace: string[];
         vertexIncludes: Set<string>;
+        vertexFunctionStubs: Set<string>;
         fragmentIncludes: Set<string>;
+        fragmentFunctionStubs: Set<string>;
         onBeforeRender: Set<
             (
                 this: ShaderMaterial,
@@ -222,6 +224,22 @@ export function addContextualShaderInclude(
         compilationCache.shader.fragmentIncludes.add(include);
     } else {
         compilationCache.shader.vertexIncludes.add(include);
+    }
+}
+
+export function addContextualShaderFunctionStub(
+    compilationCache: CompilationCache,
+    functionStub: string
+) {
+    // TODO compcache should probably have includes and body as an array unbounding from vertex / fragment
+
+    // TODO compiledInputs.current should be lifted; maybe `currentTarget`?
+    const current = compilationCache.compiledInputs.current;
+
+    if (current === shaderTargetInputs.Fragment) {
+        compilationCache.shader.fragmentFunctionStubs.add(functionStub);
+    } else {
+        compilationCache.shader.vertexFunctionStubs.add(functionStub);
     }
 }
 
@@ -835,6 +853,10 @@ export function createNodeTreeCompiler<M extends LogicTreeMethods>(
                                 structReference
                             )}
                         }`;
+                        addContextualShaderFunctionStub(
+                            compilationCache,
+                            `${structReference} ${functionReference}(${functionArguments});`
+                        );
                         addContextualShaderInclude(
                             compilationCache,
                             structDefinition
@@ -1400,7 +1422,9 @@ export function createNodeTreeCompiler<M extends LogicTreeMethods>(
                 vertex: [],
                 displace: [],
                 vertexIncludes: new Set(),
+                vertexFunctionStubs: new Set(),
                 fragmentIncludes: new Set(),
+                fragmentFunctionStubs: new Set(),
 
                 onBeforeRender: new Set(),
                 onMaterialApplied: new Set(),

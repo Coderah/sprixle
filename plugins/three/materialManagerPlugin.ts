@@ -19,7 +19,7 @@ import { Pipeline } from '../../ecs/system';
 import uuid from 'uuid-random';
 
 export type MaterialManagerComponentTypes = {
-    mesh: Object3D;
+    object3D: Object3D;
     material: Material;
     materialName: string;
     // TODO ability to tag for singleton use only?
@@ -45,7 +45,7 @@ export function applyMaterialManagerPlugin<
     ComponentTypes extends defaultComponentTypes & MaterialManagerComponentTypes
 >(em: M) {
     const objectQuery = em.createQuery({
-        includes: ['mesh'],
+        includes: ['object3D'],
     });
 
     const materialQuery = em.createQuery({
@@ -120,9 +120,9 @@ export function applyMaterialManagerPlugin<
         const inUseMaterials = new Set<string>();
 
         for (let entity of objectQuery) {
-            const { mesh } = entity.components;
+            const { object3D } = entity.components;
 
-            mesh.traverse((o) => {
+            object3D.traverse((o) => {
                 const object = objectWithMaterial(o);
                 if (!object) return;
 
@@ -146,12 +146,14 @@ export function applyMaterialManagerPlugin<
     const objectSystem = em.createSystem(objectQuery.createConsumer(), {
         forNew(entity) {
             // TODO traverse
-            const object = objectWithMaterial(entity.components.mesh);
+            entity.components.object3D.traverse((o) => {
+                const object = objectWithMaterial(o);
 
-            if (!object) return;
+                if (!object) return;
 
-            // TODO dedupe work in materialSystem somehow?
-            reuseMaterial(object);
+                // TODO dedupe work in materialSystem somehow?
+                reuseMaterial(object);
+            });
         },
     });
 
@@ -179,7 +181,7 @@ export function applyMaterialManagerPlugin<
 
             applyEnvironmentMapToMaterial(material);
             for (let objectEntity of objectQuery) {
-                objectEntity.components.mesh.traverse((o) => {
+                objectEntity.components.object3D.traverse((o) => {
                     const object = objectWithMaterial(o);
 
                     if (
@@ -192,6 +194,11 @@ export function applyMaterialManagerPlugin<
                     object.material.dispose();
 
                     // TODO apply in more situations more appropriately
+                    console.log(
+                        '[materialManagerPlugin] swapped new material',
+                        object,
+                        material
+                    );
                     object.material = material;
                 });
             }

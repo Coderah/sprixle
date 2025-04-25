@@ -2,6 +2,7 @@ import bpy
 import json
 import mathutils
 import os
+import re
 
 def is_struct(val):
     return val.__class__.__name__ == "bpy_prop_array" or isinstance(val, bpy.types.bpy_struct)
@@ -200,25 +201,29 @@ def serialize(target):
         if node.type == 'TEX_IMAGE' and not node.image == None:
             image = node.image
             name = image.name
-            if '.' not in name: name = name + '.png'
             filepath = image.filepath
-            newpath = './textures/' + name
-            if not os.path.exists(newpath):
+            splitPath = re.split(r"[\\/]", filepath)
+            filename = splitPath[-1]
+            if '.' not in filename: filename = filename + '.png'
+            if not filepath.startswith('//textures'):
+                newpath = '//textures/' + filename
+                print('[SAVE_IMAGE]', filepath, newpath)
                 image.filepath = newpath
                 try:
                     image.save()
                 except:
                     print('unable to save', filepath)
-                # try:
-                #     image.unpack(method='WRITE_LOCAL')
-                # except:
-                #     pass
+                    # try:
+                    #     image.unpack(method='WRITE_LOCAL')
+                    # except:
+                    #     pass
 
-                # try:
-                #     image.pack()
-                # except:
-                #     pass
-            node_data['properties']['image'] = name
+                    # try:
+                    #     image.pack()
+                    # except:
+                    #     pass
+            print('[IMAGE]', filepath, filename)
+            node_data['properties']['image'] = filename
         
         # TODO handle vectors
         for input in node.inputs:

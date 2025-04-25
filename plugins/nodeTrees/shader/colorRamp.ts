@@ -1,4 +1,10 @@
-import { CanvasTexture, NearestFilter, RepeatWrapping, Texture } from 'three';
+import {
+    CanvasTexture,
+    LinearFilter,
+    NearestFilter,
+    RepeatWrapping,
+    Texture,
+} from 'three';
 
 export interface ColorStop {
     position: number;
@@ -105,10 +111,13 @@ export function createColorRampLUT(
     imageData.data.set(data);
     context.putImageData(imageData, 0, 0);
 
-    const texture = new CanvasTexture(canvas);
-    texture.wrapS = texture.wrapT = RepeatWrapping;
-    texture.magFilter = texture.minFilter = NearestFilter;
-    texture.needsUpdate = true;
-
-    return texture;
+    return canvas;
 }
+
+//     const texture = new CanvasTexture(canvas);
+//     texture.wrapS = texture.wrapT = RepeatWrapping;
+//     texture.magFilter = texture.minFilter = LinearFilter;
+//     texture.needsUpdate = true;
+
+//     return texture;
+// }

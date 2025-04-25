@@ -80,6 +80,9 @@ export interface CompilationCache {
         onMaterialApplied: Set<
             (mesh: Mesh | InstancedMesh | BatchedMesh) => void
         >;
+        compositeTextures: {
+            [key: string]: CompositeTexture;
+        };
     };
 }
 
@@ -1369,8 +1372,10 @@ export function createNodeTreeCompiler<M extends LogicTreeMethods>(
         internal = false,
         currentTarget = parameters.type === 'LogicTree'
             ? 0
-            : shaderTargetInputs.Fragment
+            : shaderTargetInputs.Fragment,
+        parentCompilationCache?: CompilationCache
     ) {
+        // Handle root-level stuff
         if (nodeTree.$internalTrees) {
             parameters.currentInternalTrees = nodeTree.$internalTrees;
             parameters.compiledInternalTrees = new Set();
@@ -1438,10 +1443,15 @@ export function createNodeTreeCompiler<M extends LogicTreeMethods>(
                 vertexFunctionStubs: new Set(),
                 fragmentIncludes: new Set(),
                 fragmentFunctionStubs: new Set(),
+                compositeTextures: {},
 
                 onBeforeRender: new Set(),
                 onMaterialApplied: new Set(),
             };
+            if (parentCompilationCache) {
+                compilationCache.shader.compositeTextures =
+                    parentCompilationCache.shader.compositeTextures;
+            }
             compilationCache.uniforms = {};
             compilationCache.features = new Set();
         }

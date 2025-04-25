@@ -13,6 +13,7 @@ import blenderVector from './blenderVector';
 import {
     LinearFilter,
     LinearMipMapLinearFilter,
+    NearestFilter,
     RepeatWrapping,
     SRGBColorSpace,
     TextureLoader,
@@ -27,6 +28,7 @@ import gpu_shader_material_tex_white_noise from './blender/gpu_shader_material_t
 import { getReference } from '../util';
 import gpu_shader_material_layer_weight from './blender/gpu_shader_material_layer_weight';
 import { getCompositeTexture } from './compositeTexture';
+import gpu_shader_common_mix_rgb from './blender/gpu_shader_common_mix_rgb';
 
 const mathOperationSymbols = {
     MULTIPLY: '*',
@@ -72,6 +74,16 @@ const mathFunctions = {
     SIGN: `sign($1)`,
 };
 
+const mixFunctions = {
+    RGBA: {
+        DARKEN: 'mix_dark',
+        LIGHTEN: 'mix_light',
+        VALUE: 'mix_val',
+        COLOR_DODGE: 'mix_dodge',
+        COLOR_BURN: 'mix_burn',
+    },
+};
+
 type If<T, V> = any;
 
 // TODO pull out / pass in, etc
@@ -110,9 +122,10 @@ export const transpilerMethods = {
     ): GLSL<{ Color: GLSL['vec3']; Alpha: GLSL['float'] }> {
         // TODO revisit using GLSL['imageTex'] as rewrite return type
         const reference = getReference(node);
+        const uniformReference = camelCase(image);
         addContextualShaderInclude(
             compilationCache,
-            `uniform sampler2D ${camelCase(image)};`
+            `uniform sampler2D ${uniformReference};`
         );
         addContextualShaderInclude(compilationCache, blenderVector);
         // TODO get from cache
@@ -123,13 +136,11 @@ export const transpilerMethods = {
         texture.wrapS = texture.wrapT = RepeatWrapping;
         texture.magFilter = texture.minFilter = LinearFilter;
         // texture.minFilter = LinearMipMapLinearFilter;
-        compilationCache.uniforms[reference] = {
+        compilationCache.uniforms[uniformReference] = {
             value: texture,
         };
         return [
-            `vec4 ${reference}Sample = texture2D(${camelCase(
-                image
-            )}, ${Vector});`,
+            `vec4 ${reference}Sample = texture2D(${uniformReference}, ${Vector});`,
             `${reference}Sample.rgb, ${reference}Sample.a`,
         ] as any;
     },
@@ -483,12 +494,12 @@ export const transpilerMethods = {
             shaderTargetInputs.Vertex
         ) {
             return [
-                'position, uv, vNormal, position, reflect(normalize(vViewPosition), normalize(vNormal))',
+                'position, vec2(uv.x, 1.0 - uv.y), vNormal, position, reflect(normalize(vViewPosition), normalize(vNormal))',
             ] as any;
         }
 
         return [
-            'vPosition, vUv, vNormal, vPosition, reflect(normalize(vViewPosition), normalize(vNormal))',
+            'vPosition, vec2(vUv.x, 1.0 - vUv.y), vNormal, vPosition, reflect(normalize(vViewPosition), normalize(vNormal))',
         ] as any;
     },
     NEW_GEOMETRY(compilationCache: CompilationCache): GLSL<{
@@ -572,37 +583,49 @@ export const transpilerMethods = {
      * Only partially supported currently
      */
     MIX(
+        data_type: 'FLOAT' | 'VECTOR' | 'RGBA',
         Factor: GLSL['float'],
         A: If<
             'data_type',
             {
                 FLOAT: GLSL['float'];
-                // VECTOR: GLSL['vec3'];
-                else: GLSL['vec3'];
+                RGBA: GLSL['vec4'];
+                VECTOR: GLSL['vec3'];
             }
         >,
         B: If<
             'data_type',
             {
                 FLOAT: GLSL['float'];
-                // VECTOR: GLSL['vec3'];
-                else: GLSL['vec3'];
+                RGBA: GLSL['vec4'];
+                VECTOR: GLSL['vec3'];
             }
         >,
-        data_type: 'FLOAT' | 'VECTOR' | 'RGBA',
         blend_type: string,
         factor_mode: string,
         clamp_factor: boolean,
-        clamp_result: boolean
+        clamp_result: boolean,
+        compilationCache: CompilationCache
     ): PartialSupport &
         If<
             'data_type',
             {
                 FLOAT: GLSL['float'];
-                // VECTOR: GLSL['vec3'];
-                else: GLSL['vec3'];
+                RGBA: GLSL['vec4'];
+                VECTOR: GLSL['vec3'];
             }
         > {
+        if (data_type === 'RGBA') {
+            addBlenderDependency(gpu_shader_common_mix_rgb, compilationCache);
+
+            let fn = `mix_${blend_type.toLowerCase()}`;
+            if (blend_type in mixFunctions.RGBA) {
+                fn = mixFunctions.RGBA[blend_type];
+            }
+
+            return [`${fn}(${Factor}, ${A}, ${B})`];
+        }
+
         return [`mix(${A}, ${B}, ${Factor})`];
     },
     MATH(

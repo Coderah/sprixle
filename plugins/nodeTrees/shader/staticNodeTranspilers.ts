@@ -7,6 +7,7 @@ import {
 } from '../createCompiler';
 import GLSL from './GLSL';
 import { typeOf } from '@deepkit/type';
+import { getReference } from '../util';
 
 const staticNodeTranspilers: {
     [key: string]: (
@@ -16,7 +17,7 @@ const staticNodeTranspilers: {
     ) => string[];
 } = {
     INPUT_STRING(tree, node, compilationCache) {
-        const reference = camelCase(node.id);
+        const reference = getReference(node);
         addCompiledInput(
             reference,
             `string ${reference} = "${node.properties.string}";`,
@@ -27,7 +28,7 @@ const staticNodeTranspilers: {
     },
 
     VALUE(tree, node, compilationCache) {
-        const reference = camelCase(node.id);
+        const reference = getReference(node);
         addCompiledInput(
             reference,
             `float ${reference} = ${node.properties.value.toFixed(4)};`,
@@ -38,7 +39,7 @@ const staticNodeTranspilers: {
     },
 
     RGB(tree, node, compilationCache) {
-        const reference = camelCase(node.id);
+        const reference = getReference(node);
         compilationCache.inputTypes[reference] = typeOf<GLSL['vec3']>();
         addCompiledInput(
             reference,

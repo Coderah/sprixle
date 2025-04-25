@@ -4,6 +4,7 @@ import {
 } from '../../createCompiler';
 import gpu_shader_common_color_utils from './gpu_shader_common_color_utils';
 import gpu_shader_common_hash from './gpu_shader_common_hash';
+import gpu_shader_common_mix_rgb from './gpu_shader_common_mix_rgb';
 import gpu_shader_material_fresnel from './gpu_shader_material_fresnel';
 import gpu_shader_material_layer_weight from './gpu_shader_material_layer_weight';
 import gpu_shader_material_tex_white_noise from './gpu_shader_material_tex_white_noise';
@@ -12,6 +13,7 @@ import noise from './noise';
 
 const all = {
     gpu_shader_common_color_utils,
+    gpu_shader_common_mix_rgb,
     gpu_shader_common_hash,
     gpu_shader_material_fresnel,
     gpu_shader_material_layer_weight,

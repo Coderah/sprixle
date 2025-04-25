@@ -24,7 +24,7 @@ const mathFunctions = {
 
 export const transpilerMethods = {
     COMBXYZ(X: number, Y: number, Z: number) {
-        return [`new Vector3(${X}, ${Z}, ${Y})`];
+        return [`new Vector3(${X}, ${Y}, ${Z})`];
     },
     lerpVector(targetVector: string, Vector: string, delta: number) {
         return [`${targetVector}.lerp(${Vector}, ${delta})`];

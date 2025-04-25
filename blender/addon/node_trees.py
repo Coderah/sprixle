@@ -6,6 +6,120 @@ import os
 def is_struct(val):
     return val.__class__.__name__ == "bpy_prop_array" or isinstance(val, bpy.types.bpy_struct)
 
+vector_space_rules = {
+    'output_spaces': {
+        # Texture Coordinate Node
+        'TEX_COORD': {
+            'UV': 'UV',
+            'Object': 'OBJECT',
+            'Camera': 'CAMERA',
+            'Window': 'SCREEN',
+            'Normal': 'OBJECT_NORMAL',
+            'Reflection': 'WORLD_REFLECTION',
+            'Generated': 'OBJECT_GENERATED'
+        },
+        
+        # Input Nodes
+        'TEX_IMAGE': {'__ALL__': 'UV'},
+        'TEX_NOISE': {'__ALL__': 'OBJECT'},
+        'TEX_VORONOI': {'__ALL__': 'OBJECT'},
+        'TEX_MUSGRAVE': {'__ALL__': 'OBJECT'},
+        'TEX_WAVE': {'__ALL__': 'OBJECT'},
+        'TEX_GRADIENT': {'__ALL__': 'OBJECT'},
+        'TEX_CHECKER': {'__ALL__': 'UV'},
+        'TEX_BRICK': {'__ALL__': 'UV'},
+        'TEX_POINTDENSITY': {'__ALL__': 'OBJECT'},
+        
+        # Vector Nodes
+        'NORMAL': {'Normal': 'OBJECT_NORMAL'},
+        'NORMAL_MAP': {'Normal': 'TANGENT'},
+        'BUMP': {'Normal': 'OBJECT_NORMAL'},
+        'DISPLACEMENT': {'Displacement': 'OBJECT'},
+        'VECTOR_TRANSFORM': {'Vector': 'OBJECT'},  # Default output space
+        'VECTOR_CURVES': {'Vector': 'PRESERVE'},  # Inherits input space
+        'VECT_MATH': {'Vector': 'PRESERVE'},  # Inherits dominant input space
+        
+        # Geometry Nodes
+        'NEW_GEOMETRY': {
+            'Position': 'WORLD',
+            'Normal': 'OBJECT_NORMAL',
+            'Tangent': 'TANGENT',
+            'True Normal': 'OBJECT_NORMAL',
+            'Incoming': 'WORLD',
+            'Parametric': 'UV',
+            'Backfacing': 'SCREEN'
+        },
+        'GEOMETRY_TO_INSTANCE': {'__ALL__': 'INSTANCE'},
+        'POSITION': {'Position': 'OBJECT'},  # Input position node
+    },
+    
+    'input_spaces': {
+        # Normal Mapping
+        'NORMAL_MAP': {
+            'Normal': 'TANGENT',  # Expects tangent-space normal
+        },
+        
+        # Bump and Displacement
+        'BUMP': {
+            'Normal': 'OBJECT_NORMAL',
+            'Height': 'OBJECT',
+        },
+        'DISPLACEMENT': {
+            'Height': 'OBJECT',
+            'Normal': 'OBJECT_NORMAL'
+        },
+        
+        # Vector Transform
+        'VECTOR_TRANSFORM': {
+            'Vector': 'WORLD',  # Default input space
+        },
+        
+        # Texture Nodes
+        'MAPPING': {
+            'Vector': 'PRESERVE',  # Inherits from connected node
+        },
+        
+        # Shader Nodes
+        'BSDF_PRINCIPLED': {
+            'Normal': 'OBJECT_NORMAL',
+            'Clearcoat Normal': 'OBJECT_NORMAL',
+            'Tangent': 'TANGENT'
+        },
+        
+        # Geometry Probes
+        'RAYCAST': {
+            'Ray Direction': 'WORLD',
+            'Ray Origin': 'WORLD',
+        },
+        
+        # UV Nodes
+        'UVMAP': {'UV': 'UV'},
+        'UV_UNWRAP': {'UV': 'UV'},
+        
+        # Special Cases
+        'REFRACTION_BSDF': {
+            'Normal': 'OBJECT_NORMAL',
+        },
+        'FRESNEL': {'Normal': 'OBJECT_NORMAL'},
+        'LAYER_WEIGHT': {'Normal': 'OBJECT_NORMAL'},
+    }
+}
+
+def calculate_vector_space(node, socket, type = 'output'):
+    if node.type in vector_space_rules[type+'_spaces']:
+        if socket.name in vector_space_rules[type+'_spaces'][node.type]:
+            return vector_space_rules[type+'_spaces'][node.type][socket.name]
+        elif '__ALL__' in vector_space_rules[type+'_spaces'][node.type]:
+            return vector_space_rules[type+'_spaces'][node.type]['__ALL__']
+        else:
+            return 'PRESERVE'
+            
+    # TODO determine if appropriate
+    elif socket.name == 'UV':
+        return 'UV'
+    else:
+        return 'PRESERVE'
+
 def serialize(target):
     modifier = None
     node_group = None
@@ -50,21 +164,6 @@ def serialize(target):
             "outputs": {},
             "properties": {}
         }
-        
-        if node.type == 'GROUP' and not node.node_tree == None:
-            node_data['name'] = node.node_tree.name
-
-            if len(node.node_tree.nodes) > 2:
-                node_data['properties']['containsNodeTree'] = True
-
-                if not node_data['name'] in internal_trees:
-                    internal_trees[node_data['name']] = serialize_tree(node.node_tree, internal_trees)
-                
-                node_data["internalNodeTree"] = node_data['name']
-                # for n in node.node_tree.nodes:
-                #     serialize_node(n, node_data["name"] + "-")
-        else:
-            node_data['name'] = node.type
 
         for attribute in node.bl_rna.properties.keys():
             if attribute not in bpy.types.Node.bl_rna.properties.keys():
@@ -149,6 +248,9 @@ def serialize(target):
                     })
 
                 value = {"type": 'linked', "links": links, "intended_type": f"{input.type}"}
+
+                if value['intended_type'] == 'VECTOR':
+                    value['incoming_vector_space'] = calculate_vector_space(input.links[0].from_node, input.links[0].from_socket)
             else:
                 if hasattr(input, 'default_value'):
                     value = input.default_value
@@ -156,7 +258,7 @@ def serialize(target):
                 if isinstance(value, (bpy.types.Object, bpy.types.Material)):
                     value = f"{value.name}"
                 elif input.type == 'VECTOR' or isinstance(value, (mathutils.Vector, mathutils.Euler)):
-                    value = [value[0], value[2], value[1]]
+                    value = [value[0], value[1], value[2]]
                 elif input.type == 'RGBA':
                     value = list(value)
                 elif isinstance(value, float):
@@ -168,6 +270,13 @@ def serialize(target):
                 
             if input.label:
                 value['label'] = input.label
+
+            if input.type == 'VECTOR':
+                value['vector_space'] = calculate_vector_space(node, input, 'input')
+
+                if not 'vector_space' in node_data['properties'] or node_data['properties']['vector_space'] == 'PRESERVE':
+                    node_data['properties']['vector_space'] = value['vector_space']
+
             if input.name in node_data['inputs']:
                 existingValue = node_data['inputs'][input.name]
 
@@ -176,6 +285,8 @@ def serialize(target):
                     value = existingValue
                 else:
                     value = [existingValue, value]
+
+
             node_data['inputs'][input.name] = value
             
         for output in node.outputs:
@@ -206,7 +317,7 @@ def serialize(target):
                     value = f"{value.name}"
                 elif isinstance(value, (mathutils.Vector, mathutils.Euler)):
                     # value = list(value)
-                    value = [value[0], value[2], value[1]]
+                    value = [value[0], value[1], value[2]]
                 elif isinstance(value, float):
                     value = round(value, 6)
                 if is_struct(value):
@@ -216,10 +327,48 @@ def serialize(target):
 
             if node.type == 'VALUE':
                 node_data['properties']['value'] = output.default_value
+
+            if output.type == 'VECTOR':
+                value['vector_space'] = calculate_vector_space(node, output)
+
+                if not 'vector_space' in node_data['properties'] or node_data['properties']['vector_space'] == 'PRESERVE':
+                    node_data['properties']['vector_space'] = value['vector_space']
                 
             node_data['outputs'][output.name] = value
 
+        if node.type == 'GROUP' and not node.node_tree == None:
+            node_data['name'] = node.node_tree.name
+
+            if len(node.node_tree.nodes) > 2:
+                node_data['properties']['containsNodeTree'] = True
+
+                if not node_data['name'] in internal_trees:
+                    internal_trees[node_data['name']] = serialize_tree(node.node_tree, internal_trees)
+                
+                node_data["internalNodeTree"] = node_data['name']
+                # for n in node.node_tree.nodes:
+                #     serialize_node(n, node_data["name"] + "-")
+
+                for internalN in internal_trees[node_data['name']]:
+                    internalNode = internal_trees[node_data['name']][internalN]
+                    if internalNode['type'] == 'GROUP_INPUT':
+                        for outputN in internalNode['outputs']:
+                            if not outputN: continue
+
+                            output = internalNode['outputs'][outputN]
+                            groupInput = node_data['inputs'][outputN]
+                            if 'vector_space' not in output or 'incoming_vector_space' not in groupInput: continue
+
+                            # print("maybe determine vector space for group input", outputN, output, groupInput)
+                            if not output['vector_space'] == 'PRESERVE' and not output['vector_space'] == groupInput['incoming_vector_space']:
+                                print('[WARN] node group inputs have varying vector spaces', internalN, outputN, output['vector_space'], groupInput['incoming_vector_space'])
+                            
+                            output['vector_space'] = groupInput['incoming_vector_space']
+        else:
+            node_data['name'] = node.type
+
         return node_data
+        
         
     serialized_tree = serialize_tree(node_group)
 

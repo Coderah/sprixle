@@ -218,10 +218,23 @@ class SprixleInfoPanel(bpy.types.Panel):
 
     def draw(self, context):
         global active_scene
-        self.layout.label(text="Addon Version: 0.0.3")
+        self.layout.label(text="Addon Version: 0.0.5")
 
         self.layout.operator(SprixleExport.bl_idname, text="Export Scene", icon="EXPORT")
 
+class SprixleInfoPanelInTree(bpy.types.Panel):
+    bl_idname = "TREE_PT_sprixle"
+    bl_category = 'Sprixle'
+    bl_label = "Version"
+    bl_space_type = 'NODE_EDITOR'
+    bl_region_type = 'UI'
+    bl_context = "objectmode"
+
+    def draw(self, context):
+        global active_scene
+        self.layout.label(text="Addon Version: 0.0.5")
+
+        self.layout.operator(SprixleExport.bl_idname, text="Export Scene", icon="EXPORT")
 
 
 def register():
@@ -234,6 +247,7 @@ def register():
     # bpy.utils.unregister_class(SprixleExport)
     bpy.utils.register_class(SprixleExport)
     bpy.utils.register_class(SprixleInfoPanel)
+    bpy.utils.register_class(SprixleInfoPanelInTree)
     # bpy.types.TOPBAR_MT_file_export.append(menu_func_export)
 
     global server
@@ -257,5 +271,6 @@ def unregister():
 
     bpy.utils.unregister_class(SprixleExport)
     bpy.utils.unregister_class(SprixleInfoPanel)
+    bpy.utils.unregister_class(SprixleInfoPanelInTree)
     # bpy.types.TOPBAR_MT_file_export.remove(menu_func_export)
 

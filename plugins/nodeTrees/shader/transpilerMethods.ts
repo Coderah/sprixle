@@ -439,8 +439,14 @@ export const transpilerMethods = {
         // TODO figure out why making this a float causes average and +'.z'
         X: number,
         Y: number,
-        Z: number
+        Z: number,
+        compilationCache: CompilationCache
     ): GLSL['vec3'] {
+        // TODO maybe leverage compilationCache.shader.currentVectorSpace?
+        // const { currentVectorSpace } = compilationCache.shader;
+        // if (currentVectorSpace !== 'UV' && currentVectorSpace !== 'PRESERVE') {
+        //     return [`vec3(${X}, ${Z}, ${Y})`];
+        // }
         return [`vec3(${X}, ${Y}, ${Z})`];
     },
     OBJECT_INFO(compilationCache: CompilationCache): GLSL['vec3'] {

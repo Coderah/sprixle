@@ -34,6 +34,7 @@
   },
   "scripts": {
     "dev": "npx webpack serve --config webpack-dev.config.js",
+    "tests": "npx webpack serve --config webpack-tests.config.js",
     "docs": "ts-node --project docs.tsconfig.json generate-docs.ts",
     "postinstall": "deepkit-type-install"
   },

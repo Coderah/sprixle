@@ -49,6 +49,7 @@ import {
     UnionOrIntersectionType,
 } from 'typescript';
 import { BatchedMesh, Geometry } from 'three-stdlib';
+import { CompositeTexture } from './shader/compositeTexture';
 
 export interface CompilationCache {
     defines: Set<string>;
@@ -66,6 +67,7 @@ export interface CompilationCache {
         vertexFunctionStubs: Set<string>;
         fragmentIncludes: Set<string>;
         fragmentFunctionStubs: Set<string>;
+        currentVectorSpace: VectorSpace;
         onBeforeRender: Set<
             (
                 this: ShaderMaterial,
@@ -107,21 +109,49 @@ export type InputType =
     | 'RGBA'
     | 'SHADER';
 
+export type GenericNodeSocket = { input_hidden?: boolean };
+
 // TODO handle multiple links
-export interface LinkedSocket {
+export type GenericLinkedSocket = GenericNodeSocket & {
     type: 'linked';
     intended_type: InputType;
     links: {
         node: string;
         socket: string;
     }[];
-}
+};
 
-export interface NodeSocket {
+export type VectorSpace =
+    | 'UV'
+    | 'OBJECT'
+    | 'CAMERA'
+    | 'SCREEN'
+    | 'OBJECT_NORMAL'
+    | 'WORLD_REFLECTION'
+    | 'OBJECT_GENERATED'
+    | 'TANGENT'
+    | 'PRESERVE'
+    | 'INSTANCE'
+    | 'WORLD';
+
+export type LinkedSocket =
+    | GenericLinkedSocket
+    | (GenericLinkedSocket & {
+          intended_type: 'VECTOR';
+          vector_space: VectorSpace;
+      });
+
+type GenericValuedNodeSocket = GenericNodeSocket & {
     value: string | boolean | number | string[] | number[];
-    input_hidden?: boolean;
     type: InputType;
-}
+};
+export type NodeSocket =
+    | GenericValuedNodeSocket
+    | (GenericValuedNodeSocket & {
+          type: 'VECTOR';
+          vector_space: VectorSpace;
+          incoming_vector_space?: VectorSpace;
+      });
 
 export interface Node {
     id: string;
@@ -142,6 +172,7 @@ export interface Node {
         color_mode?: 'RGB' | string;
         interpolation?: 'EASE' | 'LINEAR' | 'B_SPLINE' | 'CONSTANT';
         hue_interpolation?: string;
+        vector_space?: VectorSpace;
     };
     internalNodeTree?: string;
 }
@@ -214,6 +245,16 @@ export function addCompiledInput(
         return;
     }
     compiledInputs.compiled[compiledInputs.current][reference] = compiled;
+}
+
+export function enterVectorSpace(
+    vectorSpace: VectorSpace,
+    compilationCache: CompilationCache
+) {
+    if (!compilationCache.shader) return;
+    if (vectorSpace === 'PRESERVE') return;
+
+    compilationCache.shader.currentVectorSpace = vectorSpace;
 }
 
 export function addContextualShaderInclude(
@@ -293,7 +334,7 @@ export function createNodeTreeCompiler<M extends LogicTreeMethods>(
         tree: NodeTree,
         n: Node,
         parameterReflection: TypeParameter,
-        socket: Node['inputs'][number],
+        socket: Node['inputs'][string],
         compilationCache: CompilationCache,
         type: 'input' | 'output' = 'input',
         parameterType: Type = parameterReflection.type
@@ -390,12 +431,40 @@ export function createNodeTreeCompiler<M extends LogicTreeMethods>(
 
         let reference: string | null = null;
 
+        let incomingVectorSpace: VectorSpace = 'PRESERVE';
+        let vectorSpace: VectorSpace = 'PRESERVE';
+
         if (socket.type === 'linked') {
             // TODO handle multiple inputs?
             // TODO convert to variable name
             const inputNodeId = socket.links[0].node;
             const inputNode = tree[inputNodeId];
             let socketReference = getParameterReference(socket.links[0].socket);
+            const inputSocketName = socket.links[0].socket;
+            const inputSocket = inputNode.outputs[inputSocketName];
+
+            if ('vector_space' in inputSocket || 'vector_space' in socket) {
+                incomingVectorSpace =
+                    'vector_space' in inputSocket
+                        ? inputSocket.vector_space
+                        : 'PRESERVE';
+                vectorSpace =
+                    'vector_space' in socket ? socket.vector_space : 'PRESERVE';
+
+                console.log(
+                    '[VECTOR_SPACE] L',
+                    `${getReference(inputNodeId)}.${socketReference} ->`,
+                    `${getReference(n)}.${parameterReflection.name}`,
+                    {
+                        incomingVectorSpace,
+                        vectorSpace,
+                        currentVectorSpace:
+                            compilationCache.shader.currentVectorSpace,
+                    }
+                );
+            }
+
+            enterVectorSpace(incomingVectorSpace, compilationCache);
 
             // TODO standardize readers that don't need to be compiled?
             if (inputNode.name === 'entity' || inputNode.name === 'delta') {
@@ -425,7 +494,16 @@ export function createNodeTreeCompiler<M extends LogicTreeMethods>(
                     inputNode.type === 'GROUP_INPUT'
                         ? socketReference
                         : reference + '.' + socketReference;
-                // console.log('check input', inputNode);
+
+                if (
+                    inputNode.type === 'GROUP_INPUT' &&
+                    inputSocket.type === 'VECTOR' &&
+                    incomingVectorSpace === 'PRESERVE' &&
+                    compilationCache.shader.currentVectorSpace !== 'UV' &&
+                    compilationCache.shader.currentVectorSpace !== 'PRESERVE'
+                ) {
+                    value = `${value}.xzy`;
+                }
 
                 if (inputNode.type === 'SEPXYZ') {
                     const passthroughCompile = compileNodeSocket(
@@ -438,12 +516,10 @@ export function createNodeTreeCompiler<M extends LogicTreeMethods>(
                     );
 
                     socketReference = socketReference.toLowerCase();
-                    // TODO happen at point of export??
+                    const { currentVectorSpace } = compilationCache.shader;
                     if (
-                        !passthroughCompile.value
-                            .toString()
-                            .toLowerCase()
-                            .includes('uv')
+                        currentVectorSpace !== 'UV' &&
+                        currentVectorSpace !== 'PRESERVE'
                     ) {
                         socketReference =
                             socketReference === 'y'
@@ -451,12 +527,13 @@ export function createNodeTreeCompiler<M extends LogicTreeMethods>(
                                 : socketReference === 'z'
                                 ? 'y'
                                 : socketReference;
-                    } else {
-                        if (socketReference === 'y') {
-                            passthroughCompile.value =
-                                '1.0 + ' + passthroughCompile.value;
-                        }
                     }
+                    //  else {
+                    //     if (socketReference === 'y') {
+                    //         passthroughCompile.value =
+                    //             '1.0 + ' + passthroughCompile.value;
+                    //     }
+                    // }
                     passthroughCompile.value += '.' + socketReference;
 
                     if (parameters.type === 'ShaderTree') {
@@ -475,6 +552,7 @@ export function createNodeTreeCompiler<M extends LogicTreeMethods>(
                     inputNode.type === 'REROUTE'
                     // inputNode.type === 'SHADERTORGB'
                 ) {
+                    // TODO reroute does not properly convert vec size...
                     return compileNodeSocket(
                         tree,
                         inputNode,
@@ -651,13 +729,45 @@ export function createNodeTreeCompiler<M extends LogicTreeMethods>(
                 value =
                     socket.type === 'INT' ? value.toString() : value.toFixed(4);
             } else if (socket.type === 'VECTOR' || socket.type === 'RGBA') {
+                if ('vector_space' in socket) {
+                    vectorSpace =
+                        'vector_space' in socket
+                            ? socket.vector_space
+                            : 'PRESERVE';
+
+                    // TODO for vec math (or similar) check if the other input is linked / has a vector_space of OBJECT and use it for incomingVectorSpace
+
+                    console.log(
+                        '[VECTOR_SPACE] ',
+                        `${getReference(n)}.${parameterReflection.name}`,
+                        {
+                            incomingVectorSpace,
+                            vectorSpace,
+                            currentVectorSpace:
+                                compilationCache.shader.currentVectorSpace,
+                        }
+                    );
+                }
                 if (parameters.type === 'LogicTree') {
                     value = `new Vector${
                         socket.type === 'VECTOR' ? '3' : '4'
                     }(${value.join(', ')})`;
                 } else {
                     // TODO if input is less than 3/4 just create and directly input the correct vector rather than converting in glsl
-                    value = `vec3(${(value as any as Array<number>)
+                    // TODO leverage vectorSpace
+                    let values = value as any as Array<number>;
+
+                    const { currentVectorSpace } = compilationCache.shader;
+
+                    if (
+                        currentVectorSpace !== 'UV' &&
+                        currentVectorSpace !== 'PRESERVE' &&
+                        !n.internalNodeTree
+                    ) {
+                        values = [values[0], values[2], values[1]];
+                    }
+
+                    value = `vec3(${values
                         .slice(0, 3)
                         .map((v) => v.toFixed(4))
                         .join(', ')})`;
@@ -762,7 +872,6 @@ export function createNodeTreeCompiler<M extends LogicTreeMethods>(
             methodReflection: TypeMethod
         ) {
             function handleInternalTree() {
-                // TODO rename internalNodeTree  to internalNodeTree
                 if (n.internalNodeTree) {
                     const internalNodeTree =
                         parameters.currentInternalTrees?.[n.internalNodeTree];
@@ -797,7 +906,8 @@ export function createNodeTreeCompiler<M extends LogicTreeMethods>(
                     const compiledInternalNodeTree = compileNodeTree(
                         internalNodeTree,
                         true,
-                        compilationCache.compiledInputs.current
+                        compilationCache.compiledInputs.current,
+                        compilationCache
                     );
                     // console.log(
                     //     '[compiledInternalNodeTree]',
@@ -1437,6 +1547,10 @@ export function createNodeTreeCompiler<M extends LogicTreeMethods>(
             delete compilationCache.inputTypes['groupInput'];
             compilationCache.inputTypes['vUv'] = typeOf<GLSL['vec2']>();
             compilationCache.shader = {
+                currentVectorSpace:
+                    parentCompilationCache?.shader.currentVectorSpace ||
+                    'PRESERVE',
+
                 vertex: [],
                 displace: [],
                 vertexIncludes: new Set(),

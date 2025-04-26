@@ -6,6 +6,44 @@
 
 import bpy
 
+def prepareAttributesForExport(object):
+    if not hasattr(object, 'modifiers'): return False
+
+    evaluated_object = object.evaluated_get(bpy.context.evaluated_depsgraph_get())
+    # if not 'attributes' in evaluated_object:
+    #     print('[WARN Sprixle.Export] no attributes in', object.name, evaluated_object)
+    #     return
+
+    def exportAttribute(name):
+        attribute = evaluated_object.data.attributes[name]
+
+        values = []
+        values = [str(attr.value) for attr in attribute.data]
+
+        print('[Sprixle.Export Attribute]', object.name, ':', name,'=', values)
+        object[name + '+attribute'] = f"[{','.join(values)}]"
+
+    for modifier in object.modifiers:
+        if not hasattr(modifier, 'node_group') or not modifier.node_group: continue
+        if modifier.node_group.name == 'Sprixle: Export Attribute':
+            exportAttribute(modifier['Socket_2'])
+            
+            continue
+
+        node_group = modifier.node_group
+
+        for node in node_group.nodes:
+            if not node.type == 'GROUP' or not node.node_tree.name == 'Sprixle: Export Attribute': continue
+
+            if (node.inputs[1].is_linked):
+                raise LookupError('Sprixle: Export Attribute node doesn\'t support linked Name parameter.')
+            exportAttribute(node.inputs[1].default_value)
+    
+        # print('baking', object, modifier)
+        
+
+        
+
 def prepareInstancesForExport(object):
     if not hasattr(object, 'modifiers'): return False
 
@@ -13,7 +51,7 @@ def prepareInstancesForExport(object):
         if not hasattr(modifier, 'node_group') or not modifier.node_group or not modifier.node_group.name == 'Sprixle: Export Instances': continue
     
         # print('baking', object, modifier)
-        print('SprixleExporter instances for', object.name)
+        print('[Sprixle.Export] instances for', object.name)
 
         modifier["Socket_2"] = False
         modifier.show_viewport = True
@@ -103,6 +141,7 @@ def export(sceneKey):
     # sceneCollection = scene.collection;
     instanceObjectsToClean = []
     for object in bpy.context.scene.objects:
+        prepareAttributesForExport(object)
         if prepareInstancesForExport(object): instanceObjectsToClean.append(object)
     
 #    break

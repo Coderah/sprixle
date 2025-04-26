@@ -1,4 +1,31 @@
-import { Material, Object3D } from 'three';
+import { BufferAttribute, Material, Mesh, Object3D } from 'three';
+
+export function applyExportedAttributes(mesh: Mesh) {
+    const { geometry } = mesh;
+
+    for (let key in mesh.userData) {
+        const features = getFeaturesFromName(key);
+
+        if (features.attribute) {
+            const list = JSON.parse(mesh.userData[key]);
+
+            if (typeof list[0] === 'number') {
+                // TODO determine float vs int?
+
+                geometry.setAttribute(
+                    features.reference,
+                    new BufferAttribute(new Float32Array(list), 1)
+                );
+            } else {
+                console.warn(
+                    '[applyExportedAttributes] need to add support for attribute',
+                    key,
+                    'of type'
+                );
+            }
+        }
+    }
+}
 
 export function getFeaturesFromName(
     o:
@@ -18,6 +45,7 @@ export function getFeaturesFromName(
 
     const features: {
         [key: string]: boolean | string;
+        reference: string;
     } = {
         reference: name.includes('+')
             ? name.substring(0, name.indexOf('+'))

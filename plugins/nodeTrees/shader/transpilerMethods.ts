@@ -339,16 +339,9 @@ export const transpilerMethods = {
         );
         addContextualShaderInclude(compilationCache, shaderIncludes.colorRamp);
 
-        const sampler_resolution = 1024.0;
-        const sampler_offset = 0.5 / sampler_resolution;
-        const sampler_scale = 1.0 - 1.0 / sampler_resolution;
-
         // console.log('[ColorRamp] compile', ...arguments);
         return [
-            `texture2D(${reference}, vec2(compute_color_map_coordinate(clamp(${Fac}, 0.0, 1.0)), ${(
-                compositeReference.y * sampler_scale +
-                sampler_offset
-            ).toFixed(4)}))`,
+            `texture2D(${reference}, vec2(compute_color_map_coordinate(clamp(${Fac}, 0.0, 1.0)), ${compositeReference.uv.y}))`,
         ];
     },
     EMISSION(Color: GLSL['vec3'], Strength: GLSL['float']): GLSL['vec3'] {

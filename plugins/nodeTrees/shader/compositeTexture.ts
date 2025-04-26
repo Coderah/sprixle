@@ -1,9 +1,12 @@
 import { memoize } from 'lodash';
 import {
     CanvasTexture,
+    ClampToEdgeWrapping,
     LinearFilter,
+    MirroredRepeatWrapping,
     NearestFilter,
     RepeatWrapping,
+    Vector2,
 } from 'three';
 import { CompilationCache } from '../createCompiler';
 
@@ -62,7 +65,8 @@ export class CompositeTexture {
         this.canvas.width = textureWidth;
         this.canvas.height = textureHeight;
 
-        this.canvasTexture.wrapS = this.canvasTexture.wrapT = RepeatWrapping;
+        this.canvasTexture.wrapS = this.canvasTexture.wrapT =
+            ClampToEdgeWrapping;
         this.canvasTexture.magFilter = this.canvasTexture.minFilter =
             LinearFilter;
     }
@@ -81,6 +85,10 @@ export class CompositeTexture {
         const result = {
             x: this.x,
             y: this.y,
+            uv: new Vector2(
+                this.x / this.textureWidth,
+                1 - this.y / this.textureHeight
+            ),
             texture: this.canvasTexture,
         };
 

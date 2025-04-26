@@ -94,16 +94,24 @@ export const transpilerMethods = {
         // TODO?
         attribute_type: 'INSTANCER' | 'OBJECT' | 'GEOMETRY',
         attribute_name: string,
+        linkedOutput: string,
         compilationCache: CompilationCache
-    ): GLSL['vec3'] {
+    ): If<'linkedOutput', { Vector: GLSL['vec3']; Fac: GLSL['float'] }> {
         const reference = camelCase(attribute_name);
         const varyingReference = camelCase(
             'v' + attribute_name[0].toUpperCase() + attribute_name.substring(1)
         );
-        const include = `varying vec3 ${varyingReference};`;
+
+        let type = 'float';
+
+        if (linkedOutput === 'Vector') {
+            type = 'vec3';
+        }
+
+        const include = `varying ${type} ${varyingReference};`;
 
         compilationCache.shader.vertexIncludes.add(
-            `attribute vec3 ${reference};`
+            `attribute ${type} ${reference};`
         );
         compilationCache.shader.vertexIncludes.add(include);
         compilationCache.shader.fragmentIncludes.add(include);

@@ -1153,6 +1153,17 @@ export function createNodeTreeCompiler<M extends LogicTreeMethods>(
                         return;
                     }
 
+                    if (isMethodTranspiler && p.name === 'linkedOutput') {
+                        const firstLinkedOutput = Object.keys(n.outputs).find(
+                            (o) => n.outputs[o].type === 'linked'
+                        );
+
+                        if (firstLinkedOutput) {
+                            compiledParameters.push(firstLinkedOutput);
+                        }
+                        return;
+                    }
+
                     if (input !== undefined) {
                         if (
                             !Array.isArray(input) &&

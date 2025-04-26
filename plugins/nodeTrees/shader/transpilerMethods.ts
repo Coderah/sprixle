@@ -143,7 +143,7 @@ export const transpilerMethods = {
         texture.colorSpace = SRGBColorSpace;
         texture.wrapS = texture.wrapT = RepeatWrapping;
         texture.magFilter = texture.minFilter = LinearFilter;
-        // texture.minFilter = LinearMipMapLinearFilter;
+        texture.minFilter = LinearMipMapLinearFilter;
         compilationCache.uniforms[uniformReference] = {
             value: texture,
         };

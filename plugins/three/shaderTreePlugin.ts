@@ -65,7 +65,7 @@ export function applyShaderTreePlugin<
         entity: EntityWithComponents<C, Manager<C>, 'materialName'>,
         transpiledShader: ReturnType<typeof compileShaderTree>
     ) {
-        const { compilationCache } = transpiledShader;
+        const { compilationCache, configuration } = transpiledShader;
 
         // TODO: allow passing in things like side, etc.
         compilationCache.uniforms.envMapIntensity = { value: 1.0 };
@@ -75,10 +75,12 @@ export function applyShaderTreePlugin<
             side: FrontSide,
             // TODO conditional
             transparent: true,
+            premultipliedAlpha: false,
             alphaTest: 0.1,
             // dithering: true,
             // depthWrite: false,
             // depthTest: false,
+            ...configuration,
 
             uniforms: compilationCache.uniforms,
             defines: Array.from(compilationCache.defines).reduce(

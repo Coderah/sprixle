@@ -9,7 +9,7 @@ import {
     typeOf,
     TypePropertySignature,
 } from '@deepkit/type';
-import { find } from 'lodash';
+import { find, camelCase } from 'lodash';
 import {
     Camera,
     Group,
@@ -1395,7 +1395,13 @@ export function createNodeTreeCompiler<M extends LogicTreeMethods>(
                         }
                     }
 
-                    if (result.length) result[result.length - 1] += ';';
+                    if (result.length) {
+                        result[result.length - 1] += ';';
+
+                        result[result.length - 1] +=
+                            '// vectorSpace = ' +
+                            compilationCache.shader.currentVectorSpace;
+                    }
                     // console.log(
                     //     '[nodeTree.isMethodTranspiler]',
                     //     result,
@@ -1621,7 +1627,33 @@ export function createNodeTreeCompiler<M extends LogicTreeMethods>(
 ${transpiled.join('\n')}`;
             }
 
+            const configurationNode = Object.values(nodeTree).find(
+                (n) => n.name === 'Configure Material'
+            );
+
+            const materialConfig = {
+                depthWrite: true,
+                depthTest: true,
+            };
+
+            if (configurationNode) {
+                for (let input in configurationNode.inputs) {
+                    const socket = configurationNode.inputs[input];
+
+                    if (Array.isArray(socket)) continue;
+
+                    if (socket.type === 'linked') {
+                        console.warn(
+                            "[ShaderTree] configuration doesn't support linked inputs."
+                        );
+                    } else if ('value' in socket) {
+                        materialConfig[camelCase(input)] = socket.value;
+                    }
+                }
+            }
+
             return {
+                configuration: materialConfig,
                 vertexShader,
                 fragmentShader,
                 transpiled,

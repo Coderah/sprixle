@@ -138,7 +138,7 @@ export const transpilerMethods = {
         addContextualShaderInclude(compilationCache, blenderVector);
         // TODO get from cache
         const texture = textureLoader.load('assets/textures/' + image);
-        texture.flipY = false;
+        texture.flipY = true;
         // TODO pull from node
         texture.colorSpace = SRGBColorSpace;
         texture.wrapS = texture.wrapT = RepeatWrapping;
@@ -303,6 +303,7 @@ export const transpilerMethods = {
             compilationCache,
             shaderIncludes.mappingNode
         );
+
         return [`mappingNode(${Vector}, ${Location}, ${Rotation}, ${Scale})`];
     },
     /** color ramp */
@@ -475,7 +476,7 @@ export const transpilerMethods = {
     UVMAP(compilationCache: CompilationCache): PartialSupport & GLSL['vec2'] {
         compilationCache.defines?.add('USE_UV');
 
-        return ['vUv'];
+        return ['vec2(vUv.x, 1.0 - vUv.y)'];
     },
     TEX_COORD(compilationCache: CompilationCache): GLSL<{
         Generated: GLSL['vec3'];

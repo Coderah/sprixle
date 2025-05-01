@@ -346,7 +346,10 @@ export function combineFragmentShader(
 
         // #include <alphatest_fragment>
         // TODO
-        if (gl_FragColor.a < .1) discard;
+        if (gl_FragColor.a < .1) {
+            discard;
+            return;
+        }
         
         // TODO
         // #include <envmap_fragment>

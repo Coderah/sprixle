@@ -21,6 +21,7 @@ import uuid from 'uuid-random';
 export type MaterialManagerComponentTypes = {
     object3D: Object3D;
     material: Material;
+    depthMaterial: Material;
     materialName: string;
     // TODO ability to tag for singleton use only?
     environmentMap: Texture;
@@ -63,14 +64,23 @@ export function applyMaterialManagerPlugin<
         );
 
         if (!existingMaterial) {
-            useMaterial(material);
+            useMaterial(material, object.customDepthMaterial);
             return;
         }
 
         object.material = existingMaterial.components.material;
+        if (existingMaterial.components.depthMaterial) {
+            object.customDepthMaterial =
+                existingMaterial.components.depthMaterial;
+            object.customDistanceMaterial =
+                existingMaterial.components.depthMaterial;
+        } else {
+            object.customDepthMaterial = undefined;
+            object.customDistanceMaterial = undefined;
+        }
     }
 
-    function useMaterial(material: Material) {
+    function useMaterial(material: Material, depthMaterial?: Material) {
         if (!material.name) {
             console.warn(
                 '[MaterialManagerPlugin] material has no name, an id will be generated. Re-use of this material will be impossible.',
@@ -82,13 +92,17 @@ export function applyMaterialManagerPlugin<
         applyEnvironmentMapToMaterial(material);
 
         // TODO @ts-ignore
-        em.quickEntity(
+        const newMaterialEntity = em.quickEntity(
             {
                 material,
                 materialName: material.name,
             },
             'material' + material.name
         );
+
+        if (depthMaterial) {
+            newMaterialEntity.components.depthMaterial = depthMaterial;
+        }
 
         return material;
     }
@@ -138,6 +152,7 @@ export function applyMaterialManagerPlugin<
                     '[MaterialManager] releasing material',
                     materialName
                 );
+                // TODO actually dispose?
                 em.deregisterEntity(materialEntity);
             }
         }
@@ -160,7 +175,7 @@ export function applyMaterialManagerPlugin<
     const materialConsumer = materialQuery.createConsumer();
     const materialSystem = em.createSystem(materialConsumer, {
         newOrUpdated(entity) {
-            const { material, materialName } = entity.components;
+            const { material, depthMaterial, materialName } = entity.components;
 
             // remove older instances
             for (let materialEntity of materialQuery) {
@@ -194,12 +209,20 @@ export function applyMaterialManagerPlugin<
                     object.material.dispose();
 
                     // TODO apply in more situations more appropriately
-                    console.log(
-                        '[materialManagerPlugin] swapped new material',
-                        object,
-                        material
-                    );
+                    // console.log(
+                    //     '[materialManagerPlugin] swapped new material',
+                    //     object,
+                    //     material
+                    // );
+
                     object.material = material;
+                    if (depthMaterial) {
+                        object.customDepthMaterial = depthMaterial;
+                        object.customDistanceMaterial = depthMaterial;
+                    } else {
+                        object.customDepthMaterial = undefined;
+                        object.customDistanceMaterial = undefined;
+                    }
                 });
             }
         },

@@ -50,6 +50,10 @@ import {
 } from 'typescript';
 import { BatchedMesh, Geometry } from 'three-stdlib';
 import { CompositeTexture } from './shader/compositeTexture';
+import {
+    combineDepthFragmentShader,
+    combineDepthVertexShader,
+} from './shader/combineCode.depth';
 
 export interface CompilationCache {
     defines: Set<string>;
@@ -1496,7 +1500,7 @@ export function createNodeTreeCompiler<M extends LogicTreeMethods>(
 
     function compileNodeTree(
         nodeTree: NodeTree,
-        internal = false,
+        internal: boolean | 'depth' = false,
         currentTarget = parameters.type === 'LogicTree'
             ? 0
             : shaderTargetInputs.Fragment,
@@ -1511,9 +1515,13 @@ export function createNodeTreeCompiler<M extends LogicTreeMethods>(
         const startingNodes = Object.values(nodeTree).filter((n) => {
             if (parameters.type === 'LogicTree') {
                 return n.type === 'SIMULATION_INPUT';
+            } else if (internal === 'depth') {
+                return n.name === 'Set Depth';
             } else {
                 return (
-                    n.type === 'OUTPUT_MATERIAL' || n.type === 'GROUP_OUTPUT'
+                    n.type === 'OUTPUT_MATERIAL' ||
+                    n.type === 'GROUP_OUTPUT' ||
+                    n.name === 'Set Depth'
                 );
             }
         });
@@ -1604,12 +1612,33 @@ export function createNodeTreeCompiler<M extends LogicTreeMethods>(
             let vertexShader = '';
             let fragmentShader = '';
 
+            // TODO make proper return types to deal with circular.
+            let depthTranspiled: null | ReturnType<typeof compileNodeTree> =
+                null;
+
             if (!internal) {
+                // const setDepthNode = Object.values(nodeTree).find(
+                //     (n) => n.name === 'Set Depth'
+                // );
+
+                // if (setDepthNode) {
+                //     depthTranspiled = compileNodeTree(nodeTree, 'depth');
+                // }
+
                 vertexShader = combineVertexShader(
                     transpiled,
                     compilationCache
                 );
                 fragmentShader = combineFragmentShader(
+                    transpiled,
+                    compilationCache
+                );
+            } else if (internal === 'depth') {
+                vertexShader = combineDepthVertexShader(
+                    transpiled,
+                    compilationCache
+                );
+                fragmentShader = combineDepthFragmentShader(
                     transpiled,
                     compilationCache
                 );
@@ -1634,6 +1663,9 @@ ${transpiled.join('\n')}`;
             const materialConfig = {
                 depthWrite: true,
                 depthTest: true,
+                transparent: !!Object.values(nodeTree).find(
+                    (n) => n.type === 'BSDF_TRANSPARENT'
+                ),
             };
 
             if (configurationNode) {
@@ -1652,13 +1684,24 @@ ${transpiled.join('\n')}`;
                 }
             }
 
-            return {
-                configuration: materialConfig,
-                vertexShader,
-                fragmentShader,
-                transpiled,
-                compilationCache,
-            };
+            if (!internal) {
+                return {
+                    configuration: materialConfig,
+                    vertexShader,
+                    fragmentShader,
+                    transpiled,
+                    compilationCache,
+                    depthTranspiled,
+                };
+            } else {
+                return {
+                    configuration: materialConfig,
+                    vertexShader,
+                    fragmentShader,
+                    transpiled,
+                    compilationCache,
+                };
+            }
         }
 
         let fn: undefined | Function;

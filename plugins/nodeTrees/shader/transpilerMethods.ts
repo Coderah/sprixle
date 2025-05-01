@@ -29,6 +29,13 @@ import { getReference } from '../util';
 import gpu_shader_material_layer_weight from './blender/gpu_shader_material_layer_weight';
 import { getCompositeTexture } from './compositeTexture';
 import gpu_shader_common_mix_rgb from './blender/gpu_shader_common_mix_rgb';
+import { glsl } from '../../../shader/util';
+import {
+    cameraFarUniform,
+    cameraNearUniform,
+    depthUniform,
+    resolutionUniform,
+} from './uniforms';
 
 const mathOperationSymbols = {
     MULTIPLY: '*',
@@ -656,8 +663,66 @@ export const transpilerMethods = {
         return [result];
     },
 
+    'Set Depth'(
+        Depth: GLSL['float'],
+        DepthScale: GLSL['float'],
+        compilationCache: CompilationCache
+    ) {
+        addContextualShaderInclude(
+            compilationCache,
+            'uniform sampler2D depthTexture;'
+        );
+        compilationCache.uniforms.depthTexture = depthUniform;
+
+        addContextualShaderInclude(
+            compilationCache,
+            'uniform vec2 resolution;'
+        );
+        compilationCache.uniforms.resolution = resolutionUniform;
+
+        addContextualShaderInclude(
+            compilationCache,
+            glsl`uniform float cameraFar;
+            uniform float cameraNear;`
+        );
+        compilationCache.uniforms.cameraNear = cameraNearUniform;
+        compilationCache.uniforms.cameraFar = cameraFarUniform;
+
+        addContextualShaderInclude(
+            compilationCache,
+            glsl`
+            float normalizedToViewDepth(float ndcDepth) {
+                return (2.0 * cameraNear * cameraFar) / (cameraFar + cameraNear - (2.0 * ndcDepth - 1.0) * (cameraFar- cameraNear));
+            }
+        `
+        );
+
+        return [
+            glsl`
+            vec2 sUv=gl_FragCoord.xy / resolution;
+            vec4 sampledDepth = texture2D(depthTexture, sUv);
+            float sceneDepth = unpackRGBAToDepth(sampledDepth);
+
+            float fragDepth = gl_FragCoord.z - (1.0 - ${Depth}) *.0045;
+
+            float tolerance = 0.0;
+            float depthDiff = (sceneDepth + tolerance) - fragDepth;
+
+            if (depthDiff < 0.0) {
+                discard;
+                return;
+            }
+            // if (gl_FragColor.a > .1) {
+            // gl_FragColor.rgb = vec3(fragDepth);
+            // }
+            `,
+        ];
+
+        return [`fragCoordZ = ${Depth} * ${DepthScale}`];
+    },
+
     'Per Vertex: Vector': {
-        0: function (
+        vertex(
             Vector: GLSL['vec3'],
             node: Node,
             compilationCache: CompilationCache
@@ -675,7 +740,7 @@ export const transpilerMethods = {
 
             return [`${reference} = ${Vector}`];
         },
-        1: function (node: Node): GLSL['vec3'] {
+        fragment(node: Node): GLSL['vec3'] {
             const reference = getReference(
                 'v' + node.id[0].toUpperCase() + node.id.substring(1)
             );

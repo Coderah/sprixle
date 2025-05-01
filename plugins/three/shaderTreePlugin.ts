@@ -6,6 +6,7 @@ import {
 } from '@deepkit/type';
 import {
     AddOperation,
+    BasicDepthPacking,
     DoubleSide,
     FrontSide,
     InstancedMesh,
@@ -13,7 +14,9 @@ import {
     MixOperation,
     MultiplyOperation,
     Object3D,
+    ShaderLib,
     ShaderMaterial,
+    UniformsUtils,
     Vector3,
 } from 'three';
 import {
@@ -65,7 +68,8 @@ export function applyShaderTreePlugin<
         entity: EntityWithComponents<C, Manager<C>, 'materialName'>,
         transpiledShader: ReturnType<typeof compileShaderTree>
     ) {
-        const { compilationCache, configuration } = transpiledShader;
+        const { compilationCache, configuration, depthTranspiled } =
+            transpiledShader;
 
         // TODO: allow passing in things like side, etc.
         compilationCache.uniforms.envMapIntensity = { value: 1.0 };
@@ -73,8 +77,6 @@ export function applyShaderTreePlugin<
             lights: compilationCache.features.has('lights'),
             // TODO control
             side: FrontSide,
-            // TODO conditional
-            transparent: true,
             premultipliedAlpha: false,
             alphaTest: 0.1,
             // dithering: true,
@@ -140,8 +142,38 @@ export function applyShaderTreePlugin<
             }
         };
 
+        if (depthTranspiled) {
+            const depthMaterial = new ShaderMaterial({
+                premultipliedAlpha: false,
+                alphaTest: 0.1,
+                // dithering: true,
+                // depthWrite: false,
+                // depthTest: false,
+                ...depthTranspiled.configuration,
+
+                uniforms: depthTranspiled.compilationCache.uniforms,
+                defines: Array.from(
+                    depthTranspiled.compilationCache.defines
+                ).reduce(
+                    (defines, v) => {
+                        const [define, value = ''] = v.split(/ ?= ?/);
+                        defines[define] = value;
+                        return defines;
+                    },
+                    {}
+                    // { USE_POINTS: '', USE_POINTS_UV: '' }
+                ),
+                vertexShader: depthTranspiled.vertexShader,
+                fragmentShader: depthTranspiled.fragmentShader,
+            });
+
+            depthMaterial.name = entity.components.materialName + ' Depth';
+
+            entity.components.depthMaterial = depthMaterial;
+        }
+
         entity.components.material = material;
-        em.removeComponent(entity, 'shaderTree');
+        delete entity.components['shaderTree'];
 
         console.log('[shaderTreePlugin] created material', material);
     }
@@ -159,33 +191,13 @@ export function applyShaderTreePlugin<
 
             const compiledShaderTree = compileShaderTree(shaderTree);
 
-            let fragmentLog = compiledShaderTree.fragmentShader;
-            for (let shaderName in blenderShaders) {
-                const replaceableShaderCode = blenderShaders[
-                    shaderName
-                ].replace(includesRegex, '');
-                fragmentLog = fragmentLog.replace(
-                    replaceableShaderCode,
-                    `#include <${shaderName}>`
+            logShader(materialName, compiledShaderTree);
+            if (compiledShaderTree.depthTranspiled) {
+                logShader(
+                    'DEPTH ' + materialName,
+                    compiledShaderTree.depthTranspiled
                 );
             }
-
-            let vertexLog = compiledShaderTree.vertexShader;
-            for (let shaderName in blenderShaders) {
-                const replaceableShaderCode = blenderShaders[
-                    shaderName
-                ].replace(includesRegex, '');
-                vertexLog = vertexLog.replace(
-                    replaceableShaderCode,
-                    `#include <${shaderName}>`
-                );
-            }
-
-            console.groupCollapsed('[transpiledShaderTree] logs', materialName);
-            console.log(compiledShaderTree.compilationCache);
-            console.log('vertex', vertexLog);
-            console.log('fragment', fragmentLog);
-            console.groupEnd();
 
             // if (compiledShaderTree.initFn) {
             //     compiledShaderTree.initFn.call(entity.components.ShaderTreeCache, delta, methods, entity, {
@@ -208,6 +220,41 @@ export function applyShaderTreePlugin<
             shaderTree: tree,
         });
     });
+
+    function logShader(
+        materialName: string,
+        compiledShaderTree: ReturnType<typeof compileShaderTree>
+    ) {
+        let fragmentLog = compiledShaderTree.fragmentShader;
+        for (let shaderName in blenderShaders) {
+            const replaceableShaderCode = blenderShaders[shaderName].replace(
+                includesRegex,
+                ''
+            );
+            fragmentLog = fragmentLog.replace(
+                replaceableShaderCode,
+                `#include <${shaderName}>`
+            );
+        }
+
+        let vertexLog = compiledShaderTree.vertexShader;
+        for (let shaderName in blenderShaders) {
+            const replaceableShaderCode = blenderShaders[shaderName].replace(
+                includesRegex,
+                ''
+            );
+            vertexLog = vertexLog.replace(
+                replaceableShaderCode,
+                `#include <${shaderName}>`
+            );
+        }
+
+        console.groupCollapsed('[transpiledShaderTree] logs', materialName);
+        console.log(compiledShaderTree.compilationCache);
+        console.log('vertex', vertexLog);
+        console.log('fragment', fragmentLog);
+        console.groupEnd();
+    }
 
     return shaderTreeSystem;
 }

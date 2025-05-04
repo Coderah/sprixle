@@ -2,19 +2,17 @@ import {
     metaAnnotation,
     ReflectionClass,
     ReflectionKind,
-    ReflectionMethod,
-    ReflectionParameter,
     Type,
     TypeMethod,
     typeOf,
     TypePropertySignature,
 } from '@deepkit/type';
-import { find, camelCase } from 'lodash';
+import { camelCase, find } from 'lodash';
 import {
+    BufferGeometry,
     Camera,
     Group,
     InstancedMesh,
-    Material,
     Mesh,
     Object3D,
     Scene,
@@ -25,6 +23,8 @@ import {
 import staticLogicNodeTranspilers from './logic/staticNodeTranspilers';
 import { transpilerMethods as logicTranspilerMethods } from './logic/transpilerMethods';
 
+import { BatchedMesh } from 'three-stdlib';
+import { TypeParameter, UnionOrIntersectionType } from 'typescript';
 import { uniformTime } from '../../render/const';
 import { glsl } from '../../shader/util';
 import { ColorStop } from './shader/colorRamp';
@@ -32,6 +32,11 @@ import {
     combineFragmentShader,
     combineVertexShader,
 } from './shader/combineCode';
+import {
+    combineDepthFragmentShader,
+    combineDepthVertexShader,
+} from './shader/combineCode.depth';
+import { CompositeTexture } from './shader/compositeTexture';
 import GLSL, { convertVecSize, dynamicNodeToType } from './shader/GLSL';
 import staticShaderNodeTranspilers from './shader/staticNodeTranspilers';
 import { transpilerMethods as shaderTranspilerMethods } from './shader/transpilerMethods';
@@ -42,18 +47,6 @@ import {
     getReturnType,
     getStructReference,
 } from './util';
-import {
-    LiteralType,
-    ObjectType,
-    TypeParameter,
-    UnionOrIntersectionType,
-} from 'typescript';
-import { BatchedMesh, Geometry } from 'three-stdlib';
-import { CompositeTexture } from './shader/compositeTexture';
-import {
-    combineDepthFragmentShader,
-    combineDepthVertexShader,
-} from './shader/combineCode.depth';
 
 export interface CompilationCache {
     defines: Set<string>;
@@ -78,7 +71,7 @@ export interface CompilationCache {
                 renderer: WebGLRenderer,
                 scene: Scene,
                 camera: Camera,
-                geometry: Geometry,
+                geometry: BufferGeometry,
                 object: Object3D,
                 group: Group
             ) => void

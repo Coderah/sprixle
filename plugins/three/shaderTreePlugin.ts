@@ -2,42 +2,23 @@ import {
     ReceiveType,
     ReflectionClass,
     resolveReceiveType,
-    typeOf,
 } from '@deepkit/type';
-import {
-    AddOperation,
-    BasicDepthPacking,
-    DoubleSide,
-    FrontSide,
-    InstancedMesh,
-    Material,
-    MixOperation,
-    MultiplyOperation,
-    Object3D,
-    ShaderLib,
-    ShaderMaterial,
-    UniformsUtils,
-    Vector3,
-} from 'three';
+import { FrontSide, InstancedMesh, ShaderMaterial } from 'three';
+import { BatchedMesh } from 'three-stdlib';
+import { UnionOrIntersectionType } from 'typescript';
+import { blenderEvents } from '../../blender/realtime';
 import {
     defaultComponentTypes,
-    Entity,
     EntityWithComponents,
     Manager,
 } from '../../ecs/manager';
-import { Pipeline } from '../../ecs/system';
-import { interval } from '../../util/timing';
 import {
-    CompilationCache,
     createNodeTreeCompiler,
     NodeTree,
     ShaderTreeMethods,
 } from '../nodeTrees/createCompiler';
-import { blenderEvents } from '../../blender/realtime';
-import { MaterialManagerComponentTypes } from './materialManagerPlugin';
-import { combineVertexShader } from '../nodeTrees/shader/combineCode';
 import blenderShaders, { includesRegex } from '../nodeTrees/shader/blender';
-import { UnionOrIntersectionType } from 'typescript';
+import { MaterialManagerComponentTypes } from './materialManagerPlugin';
 
 export type ShaderTreeComponentTypes = {
     shaderTree: NodeTree;

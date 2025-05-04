@@ -91,9 +91,9 @@ export class BatchedMeshManager extends Object3D {
     private _materialCache: Map<Material | Material[], string> = new Map();
     _geometryCache: Map<BufferGeometry, number> = new Map();
 
-    private maxInstanceCount: number;
-    private maxVertexCount: number;
-    private maxIndexCount: number;
+    maxInstanceCount: number;
+    maxVertexCount: number;
+    maxIndexCount: number;
 
     constructor(
         maxInstanceCount = DEFAULT_MAX_INSTANCE_COUNT,
@@ -136,6 +136,7 @@ export class BatchedMeshManager extends Object3D {
                         this.maxIndexCount,
                         material
                     );
+                    batchedMesh.layers.mask = obj.layers.mask;
                     this._batchedMeshes.set(materialKey, batchedMesh);
                     this.add(batchedMesh); // Add the BatchedMesh to the manager's scene graph
                 }

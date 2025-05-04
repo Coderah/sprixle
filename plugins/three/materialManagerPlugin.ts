@@ -44,9 +44,10 @@ function objectWithMaterial(o: Object3D) {
 export function applyMaterialManagerPlugin<
     M extends Manager<ComponentTypes>,
     ComponentTypes extends defaultComponentTypes & MaterialManagerComponentTypes
->(em: M) {
+>(em: M, components: Array<keyof ComponentTypes> = ['object3D']) {
     const objectQuery = em.createQuery({
-        includes: ['object3D'],
+        includes: components,
+        flexible: true,
     });
 
     const materialQuery = em.createQuery({
@@ -134,14 +135,17 @@ export function applyMaterialManagerPlugin<
         const inUseMaterials = new Set<string>();
 
         for (let entity of objectQuery) {
-            const { object3D } = entity.components;
+            for (let component of components) {
+                const object3D = entity.components[component];
+                if (!object3D) continue;
 
-            object3D.traverse((o) => {
-                const object = objectWithMaterial(o);
-                if (!object) return;
+                object3D.traverse((o) => {
+                    const object = objectWithMaterial(o);
+                    if (!object) return;
 
-                inUseMaterials.add(object.material.name);
-            });
+                    inUseMaterials.add(object.material.name);
+                });
+            }
         }
 
         for (let materialEntity of materialQuery) {
@@ -161,14 +165,18 @@ export function applyMaterialManagerPlugin<
     const objectSystem = em.createSystem(objectQuery.createConsumer(), {
         forNew(entity) {
             // TODO traverse
-            entity.components.object3D.traverse((o) => {
-                const object = objectWithMaterial(o);
+            for (let component of components) {
+                const object3D = entity.components[component];
+                if (!object3D) continue;
+                object3D.traverse((o) => {
+                    const object = objectWithMaterial(o);
 
-                if (!object) return;
+                    if (!object) return;
 
-                // TODO dedupe work in materialSystem somehow?
-                reuseMaterial(object);
-            });
+                    // TODO dedupe work in materialSystem somehow?
+                    reuseMaterial(object);
+                });
+            }
         },
     });
 
@@ -196,34 +204,38 @@ export function applyMaterialManagerPlugin<
 
             applyEnvironmentMapToMaterial(material);
             for (let objectEntity of objectQuery) {
-                objectEntity.components.object3D.traverse((o) => {
-                    const object = objectWithMaterial(o);
+                for (let component of components) {
+                    const object3D = objectEntity.components[component];
+                    if (!object3D) continue;
+                    object3D.traverse((o) => {
+                        const object = objectWithMaterial(o);
 
-                    if (
-                        !object ||
-                        object.material.name !== materialName ||
-                        object.material === material
-                    )
-                        return;
+                        if (
+                            !object ||
+                            object.material.name !== materialName ||
+                            object.material === material
+                        )
+                            return;
 
-                    object.material.dispose();
+                        object.material.dispose();
 
-                    // TODO apply in more situations more appropriately
-                    // console.log(
-                    //     '[materialManagerPlugin] swapped new material',
-                    //     object,
-                    //     material
-                    // );
+                        // TODO apply in more situations more appropriately
+                        // console.log(
+                        //     '[materialManagerPlugin] swapped new material',
+                        //     object,
+                        //     material
+                        // );
 
-                    object.material = material;
-                    if (depthMaterial) {
-                        object.customDepthMaterial = depthMaterial;
-                        object.customDistanceMaterial = depthMaterial;
-                    } else {
-                        object.customDepthMaterial = undefined;
-                        object.customDistanceMaterial = undefined;
-                    }
-                });
+                        object.material = material;
+                        if (depthMaterial) {
+                            object.customDepthMaterial = depthMaterial;
+                            object.customDistanceMaterial = depthMaterial;
+                        } else {
+                            object.customDepthMaterial = undefined;
+                            object.customDistanceMaterial = undefined;
+                        }
+                    });
+                }
             }
         },
         removed(entity) {

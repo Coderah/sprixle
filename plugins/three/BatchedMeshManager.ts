@@ -6,6 +6,9 @@ import {
     BatchedMesh,
     Matrix4,
     Group,
+    Raycaster,
+    Intersection,
+    Ray,
 } from 'three';
 
 // Define some default values for max counts if not provided
@@ -55,7 +58,7 @@ export class BatchedObject3DRef extends Object3D {
     updateMatrixWorld(force?: boolean): void {
         super.updateMatrixWorld(force);
         if (this._manager && this._batchId !== -1 && this._geometryId !== -1) {
-            this._manager._updateInstanceMatrix(
+            this._manager.updateInstanceMatrix(
                 this,
                 this._geometryId,
                 this._batchId
@@ -68,6 +71,35 @@ export class BatchedObject3DRef extends Object3D {
 
     //     return this;
     // }
+
+    /**
+     * Intersects the object with the ray.
+     * @param raycaster The raycaster to use for intersection.
+     * @param intersects An array to store the intersection results.
+     */
+    raycast(raycaster: Raycaster, intersects: Intersection[]): void {
+        if (this._manager && this._geometryId !== -1 && this._batchId !== -1) {
+            const material = this._material;
+            const materialKey = this._manager.getMaterialKey(material);
+            const batchedMesh = this._manager.batchedMeshes.get(materialKey);
+
+            if (batchedMesh) {
+                // const worldMatrixInverse = new Matrix4().copy(batchedMesh.matrixWorld).invert();
+                // const ray = new Ray().copy(raycaster.ray).applyMatrix4(worldMatrixInverse);
+
+                const localIntersects = raycaster.intersectObject(batchedMesh);
+
+                for (let i = 0; i < localIntersects.length; i++) {
+                    const intersection = localIntersects[i];
+                    if (intersection.batchId === this._batchId) {
+                        intersection.object = this;
+                        intersection.batchId = undefined; // Remove the internal instanceId
+                        intersects.push(intersection);
+                    }
+                }
+            }
+        }
+    }
 
     /**
      * Disposes of this batched ref and its entire hierarchy
@@ -87,7 +119,7 @@ export class BatchedObject3DRef extends Object3D {
  * rendering of object hierarchies.
  */
 export class BatchedMeshManager extends Object3D {
-    private _batchedMeshes: Map<string, BatchedMesh> = new Map();
+    batchedMeshes: Map<string, BatchedMesh> = new Map();
     private _materialCache: Map<Material | Material[], string> = new Map();
     _geometryCache: Map<BufferGeometry, number> = new Map();
 
@@ -125,9 +157,9 @@ export class BatchedMeshManager extends Object3D {
                 });
                 const geometry = obj.geometry as BufferGeometry; // Explicitly cast to BufferGeometry
                 const material = obj.material;
-                const materialKey = this._getMaterialKey(material);
+                const materialKey = this.getMaterialKey(material);
 
-                let batchedMesh = this._batchedMeshes.get(materialKey);
+                let batchedMesh = this.batchedMeshes.get(materialKey);
 
                 if (!batchedMesh) {
                     batchedMesh = new BatchedMesh(
@@ -137,7 +169,7 @@ export class BatchedMeshManager extends Object3D {
                         material
                     );
                     batchedMesh.layers.mask = obj.layers.mask;
-                    this._batchedMeshes.set(materialKey, batchedMesh);
+                    this.batchedMeshes.set(materialKey, batchedMesh);
                     this.add(batchedMesh); // Add the BatchedMesh to the manager's scene graph
                 }
 
@@ -145,6 +177,8 @@ export class BatchedMeshManager extends Object3D {
                 if (geometryId === undefined) {
                     geometryId = batchedMesh.addGeometry(geometry);
                     this._geometryCache.set(geometry, geometryId);
+
+                    // batchedMesh.computeBoundsTree(geometryId);
                 }
                 console.log('[BatchedMeshManager] geometryId', {
                     batchedMesh,
@@ -185,9 +219,11 @@ export class BatchedMeshManager extends Object3D {
                 }
                 return cloned;
             } else {
-                throw new Error(
-                    'BatchedMeshManager: Only Mesh, Group, and Object3D are supported for batching.'
-                );
+                // TODO handle first object not loopable
+                return obj;
+                // throw new Error(
+                //     'BatchedMeshManager: Only Mesh, Group, and Object3D are supported for batching.'
+                // );
             }
         };
 
@@ -197,8 +233,8 @@ export class BatchedMeshManager extends Object3D {
     getBatchedMesh(batchedRef: BatchedObject3DRef) {
         const material = batchedRef._material;
         if (material) {
-            const materialKey = this._getMaterialKey(material);
-            const batchedMesh = this._batchedMeshes.get(materialKey);
+            const materialKey = this.getMaterialKey(material);
+            const batchedMesh = this.batchedMeshes.get(materialKey);
 
             return batchedMesh;
         }
@@ -225,7 +261,7 @@ export class BatchedMeshManager extends Object3D {
      * @param geometryId The ID of the geometry in the BatchedMesh.
      * @param batchId The ID of the instance in the BatchedMesh.
      */
-    _updateInstanceMatrix(
+    updateInstanceMatrix(
         batchedRef: BatchedObject3DRef,
         geometryId: number,
         batchId: number
@@ -236,7 +272,7 @@ export class BatchedMeshManager extends Object3D {
         );
     }
 
-    private _getMaterialKey(material: Material | Material[]): string {
+    getMaterialKey(material: Material | Material[]): string {
         if (!this._materialCache.has(material)) {
             let key: string;
             if (Array.isArray(material)) {

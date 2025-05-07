@@ -56,8 +56,15 @@ export class BatchedObject3DRef extends Object3D {
      * @override
      */
     updateMatrixWorld(force?: boolean): void {
+        const needsUpdate = this.matrixWorldNeedsUpdate || force;
+
         super.updateMatrixWorld(force);
-        if (this._manager && this._batchId !== -1 && this._geometryId !== -1) {
+        if (
+            needsUpdate &&
+            this._manager &&
+            this._batchId !== -1 &&
+            this._geometryId !== -1
+        ) {
             this._manager.updateInstanceMatrix(
                 this,
                 this._geometryId,
@@ -169,6 +176,9 @@ export class BatchedMeshManager extends Object3D {
                         material
                     );
                     batchedMesh.layers.mask = obj.layers.mask;
+                    batchedMesh.sortObjects = false;
+                    batchedMesh.perObjectFrustumCulled = false;
+                    // batchedMesh.frustumCulled = false;
                     this.batchedMeshes.set(materialKey, batchedMesh);
                     this.add(batchedMesh); // Add the BatchedMesh to the manager's scene graph
                 }

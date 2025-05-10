@@ -17,6 +17,10 @@ export interface System<
     interval?: ReturnType<typeof interval>;
     /** runs when initing or resetting a pipeline, can be run to explicitly init the system  */
     init?();
+
+    /** should this system run this tick? */
+    condition?(): boolean;
+
     /** Runs every frame */
     tick?(delta: number): void;
 
@@ -138,6 +142,8 @@ export class Pipeline<ExactComponentTypes extends defaultComponentTypes> {
     useInternalTime: boolean = false;
 
     getTimeScale?: () => number;
+    /** should this pipeline run this tick? */
+    condition = () => true;
 
     constructor(
         manager: Manager<ExactComponentTypes>,
@@ -193,6 +199,7 @@ export class Pipeline<ExactComponentTypes extends defaultComponentTypes> {
         if (this.getTimeScale) delta = delta * this.getTimeScale();
         if (delta <= 0) return;
         if (this.useInternalTime) this.now += delta;
+        if (!this.condition()) return;
         this.systems.forEach((system) => {
             let systemDelta = delta;
             if (system.interval) {
@@ -200,6 +207,7 @@ export class Pipeline<ExactComponentTypes extends defaultComponentTypes> {
                 if (!intervalDelta) return;
                 systemDelta = intervalDelta;
             }
+            if (system.condition && !system.condition()) return;
             if (system.tick) system.tick(systemDelta);
 
             if (!('source' in system)) return;

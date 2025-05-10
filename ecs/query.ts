@@ -19,7 +19,7 @@ type QueryTimeSlicingParameters = (
           percentage: number;
       }
 ) & {
-    /** @todo */
+    /** [NOT IMPLEMENTED @todo */
     sliceNew?: boolean;
 };
 
@@ -488,6 +488,7 @@ export class Query<
         return this.lastEntity;
     }
 
+    // TODO iterator
     get(
         indexedValue: ExactComponentTypes[IndexedComponent]
     ): Set<typeof this.Entity> {

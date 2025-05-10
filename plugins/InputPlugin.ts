@@ -190,7 +190,7 @@ export function applyInputPlugin<
             const handleMouseMove = (event: MouseEvent | TouchEvent) => {
                 if (event instanceof MouseEvent) {
                     screenMousePosition.set(event.clientX, event.clientY);
-                } else {
+                } else if (event.touches) {
                     // const bounding = domElement.getBoundingClientRect();
                     screenMousePosition.set(
                         event.touches[0].clientX,

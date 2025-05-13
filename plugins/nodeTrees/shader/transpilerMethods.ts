@@ -503,6 +503,7 @@ export const transpilerMethods = {
             compilationTarget === shaderTargetInputs.Vertex ||
             compilationTarget === shaderTargetInputs.Displacement
         ) {
+            // TODO evaluate if objectNormal would be more appropriate in place of vNormal for displacement target
             return [
                 'position, vec2(uv.x, 1.0 - uv.y), vNormal, position, reflect(normalize(vViewPosition), normalize(vNormal))',
             ] as any;

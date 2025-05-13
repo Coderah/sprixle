@@ -125,26 +125,6 @@ void main() {
 	#include <normal_vertex>
     #endif
 
-    #ifdef USE_GEOMETRY
-
-    vWorldNormal = objectNormal;
-
-    // #ifdef USE_BATCHING
-
-	// 	vWorldNormal = batchingMatrix * vWorldNormal;
-
-	// #endif
-
-	// #ifdef USE_INSTANCING
-
-	// 	vWorldNormal = instanceMatrix * vWorldNormal;
-
-	// #endif
-    
-    // TODO it seems likely this does not match blenders implementation
-    vWorldNormal =  normalize(mat3(modelMatrix) * vWorldNormal);
-
-    #endif
 
     #ifdef USE_OBJECT_NORMAL
 
@@ -226,6 +206,27 @@ void main() {
     #endif
 
     #include <envmap_vertex>
+
+    #ifdef USE_GEOMETRY
+
+    // vec4 worldNormal = modelMatrix * vec4(objectNormal, 1.0);
+
+    // #ifdef USE_BATCHING
+
+	// 	vWorldNormal = batchingMatrix * vWorldNormal;
+
+	// #endif
+
+	// #ifdef USE_INSTANCING
+
+	// 	vWorldNormal = instanceMatrix * vWorldNormal;
+
+	// #endif
+    
+    // TODO it seems likely this does not match blenders implementation
+    vWorldNormal =  normalize(worldNormal);
+
+    #endif
 
 	#ifndef USE_POINTS
         #include <shadowmap_vertex>

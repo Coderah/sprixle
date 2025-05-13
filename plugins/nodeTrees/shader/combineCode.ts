@@ -95,9 +95,15 @@ varying vec3 vObjectLocation;
 
 #endif
 
+${Array.from(compilationCache.shader.vertexIncludes)
+    .filter((a) => a.trimStart().startsWith('struct'))
+    .join('\n')}
+
 ${Array.from(compilationCache.shader.vertexFunctionStubs).join('\n')}
 
-${Array.from(compilationCache.shader.vertexIncludes).join('\n')}
+${Array.from(compilationCache.shader.vertexIncludes)
+    .filter((a) => !a.trimStart().startsWith('struct'))
+    .join('\n')}
 
 void main() {
 

@@ -439,7 +439,7 @@ export const transpilerMethods = {
         return [Shader];
     },
     OUTPUT_MATERIAL: {
-        0: function (
+        displacement: function (
             Displacement: GLSL['vec3'] = null
         ): string[] & VertexShader<'displacement'> {
             if (Displacement) {
@@ -448,7 +448,7 @@ export const transpilerMethods = {
 
             return [];
         },
-        1: function (Surface: GLSL['vec4']) {
+        fragment: function (Surface: GLSL['vec4']) {
             return [`gl_FragColor = ${Surface}`];
         },
     },
@@ -498,9 +498,10 @@ export const transpilerMethods = {
 
         // TODO support and generate Generated uvs by bounding box, detect generated slot is used via node parameter
 
+        const compilationTarget = compilationCache.compiledInputs.current;
         if (
-            compilationCache.compiledInputs.current ===
-            shaderTargetInputs.Vertex
+            compilationTarget === shaderTargetInputs.Vertex ||
+            compilationTarget === shaderTargetInputs.Displacement
         ) {
             return [
                 'position, vec2(uv.x, 1.0 - uv.y), vNormal, position, reflect(normalize(vViewPosition), normalize(vNormal))',
@@ -517,8 +518,13 @@ export const transpilerMethods = {
         Backfacing: GLSL['float'];
     }> {
         compilationCache.defines.add('USE_GEOMETRY');
+        const compilationTarget = compilationCache.compiledInputs.current;
         return [
-            'vWorldPosition, vWorldNormal, gl_FrontFacing ? 0.0 : 1.0',
+            `vWorldPosition, vWorldNormal, ${
+                compilationTarget === shaderTargetInputs.Fragment
+                    ? 'gl_FrontFacing ? 0.0 : 1.0'
+                    : '0.0'
+            }`,
         ] as any;
     },
     VECT_MATH(
@@ -661,6 +667,17 @@ export const transpilerMethods = {
         if (use_clamp) result = `clamp(${result}, 0., 1.)`;
 
         return [result];
+    },
+
+    DISPLACEMENT(
+        Height: GLSL['float'],
+        Midlevel: GLSL['float'],
+        Scale: GLSL['float'],
+        Normal: GLSL['vec3'] = 'objectNormal'
+    ): GLSL['vec3'] {
+        return [
+            `((${Height} - ${Midlevel}) * ${Scale}) * normalize(${Normal})`,
+        ];
     },
 
     'Set Depth'(

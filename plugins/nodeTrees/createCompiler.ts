@@ -51,7 +51,7 @@ import {
 export interface CompilationCache {
     defines: Set<string>;
     compiledInputs: {
-        current: number;
+        current: shaderTargetInputs;
         compiled: Record<string, string>[];
     };
     inputTypes: Record<string, Type>;
@@ -201,7 +201,8 @@ interface LogicTreeCompilerParameters<M extends LogicTreeMethods> {
     currentInternalTrees?: {
         [key: string]: NodeTree;
     };
-    compiledInternalTrees?: Set<string>;
+    /** maps internalTree to a set of targets its been compiled for */
+    compiledInternalTrees?: Map<string, Set<number>>;
 }
 
 type ShaderTreeCompilerParameters = {
@@ -211,7 +212,8 @@ type ShaderTreeCompilerParameters = {
     currentInternalTrees?: {
         [key: string]: NodeTree;
     };
-    compiledInternalTrees?: Set<string>;
+    /** maps internalTree to a set of targets its been compiled for */
+    compiledInternalTrees?: Map<string, Set<shaderTargetInputs>>;
 };
 
 function getNext(tree: NodeTree, n: NodeTree[keyof NodeTree]) {
@@ -882,7 +884,10 @@ export function createNodeTreeCompiler<M extends LogicTreeMethods>(
                     if (
                         parameters.compiledInternalTrees?.has(
                             n.internalNodeTree
-                        )
+                        ) &&
+                        parameters.compiledInternalTrees
+                            ?.get(n.internalNodeTree)
+                            .has(compilationCache.compiledInputs.current)
                     ) {
                         console.warn(
                             'skipping recompile of internal tree',
@@ -897,13 +902,30 @@ export function createNodeTreeCompiler<M extends LogicTreeMethods>(
                         );
                         return;
                     }
-                    parameters.compiledInternalTrees.add(n.internalNodeTree);
+
+                    if (
+                        !parameters.compiledInternalTrees?.has(
+                            n.internalNodeTree
+                        )
+                    ) {
+                        parameters.compiledInternalTrees.set(
+                            n.internalNodeTree,
+                            new Set()
+                        );
+                    }
+
+                    const compilationTarget =
+                        compilationCache.compiledInputs.current;
+
+                    parameters.compiledInternalTrees
+                        .get(n.internalNodeTree)
+                        .add(compilationTarget);
 
                     // TODO implement prefix or nesting for cache stuff
                     const compiledInternalNodeTree = compileNodeTree(
                         internalNodeTree,
                         true,
-                        compilationCache.compiledInputs.current,
+                        compilationTarget,
                         compilationCache
                     );
                     // console.log(
@@ -976,6 +998,7 @@ export function createNodeTreeCompiler<M extends LogicTreeMethods>(
                                 structReference
                             )}
                         }`;
+
                         addContextualShaderFunctionStub(
                             compilationCache,
                             `${structReference} ${functionReference}(${functionArguments});`
@@ -1502,7 +1525,7 @@ export function createNodeTreeCompiler<M extends LogicTreeMethods>(
         // Handle root-level stuff
         if (nodeTree.$internalTrees) {
             parameters.currentInternalTrees = nodeTree.$internalTrees;
-            parameters.compiledInternalTrees = new Set();
+            parameters.compiledInternalTrees = new Map();
         }
 
         const startingNodes = Object.values(nodeTree).filter((n) => {
@@ -1636,11 +1659,17 @@ export function createNodeTreeCompiler<M extends LogicTreeMethods>(
                     compilationCache
                 );
             } else {
-                vertexShader = Object.values(
-                    compilationCache.compiledInputs.compiled[
-                        shaderTargetInputs.Vertex
-                    ]
-                ).join('\n');
+                vertexShader =
+                    Object.values(
+                        compilationCache.compiledInputs.compiled[
+                            shaderTargetInputs.Displacement
+                        ]
+                    ).join('\n') +
+                    Object.values(
+                        compilationCache.compiledInputs.compiled[
+                            shaderTargetInputs.Vertex
+                        ]
+                    ).join('\n');
                 fragmentShader = `${Object.values(
                     compilationCache.compiledInputs.compiled[
                         shaderTargetInputs.Fragment

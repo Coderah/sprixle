@@ -210,7 +210,10 @@ export class Pipeline<ExactComponentTypes extends defaultComponentTypes> {
             if (system.condition && !system.condition()) return;
             if (system.tick) system.tick(systemDelta);
 
-            if (!('source' in system)) return;
+            if (!('source' in system)) {
+                this.manager.subTick();
+                return;
+            }
             const { source } = system;
 
             if (source instanceof Query) {

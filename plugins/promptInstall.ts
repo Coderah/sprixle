@@ -38,24 +38,12 @@ export function promptInstall(): boolean {
             'beforeinstallprompt',
             (event: BeforeInstallPromptEvent) => {
                 // Prevent the browser's default install prompt
-                event.preventDefault();
                 const deferredPrompt = event;
 
                 // Optionally, you can show a custom install button or UI here
                 console.log('Ready to install the app!');
 
-                // For demonstration purposes, let's automatically trigger the prompt after a short delay
-                setTimeout(async () => {
-                    if (deferredPrompt) {
-                        deferredPrompt.prompt();
-                        const { outcome } = await deferredPrompt.userChoice;
-                        console.log(
-                            `User response to the install prompt: ${outcome}`
-                        );
-                        // We've used the prompt, and can't use it again directly, so nullify it
-                        (deferredPrompt as any) = null;
-                    }
-                }, 3000); // Adjust the delay as needed
+                // deferredPrompt.prompt();
             }
         );
     }

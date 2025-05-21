@@ -127,7 +127,6 @@ export class BatchedObject3DRef extends Object3D {
  */
 export class BatchedMeshManager extends Object3D {
     batchedMeshes: Map<string, BatchedMesh> = new Map();
-    private _materialCache: Map<Material | Material[], string> = new Map();
     _geometryCache: Map<BufferGeometry, number> = new Map();
 
     maxInstanceCount: number;
@@ -158,10 +157,10 @@ export class BatchedMeshManager extends Object3D {
     batch(object: Object3D): Object3D {
         const processObject = (obj: Object3D): Object3D => {
             if (obj instanceof Mesh) {
-                console.log('[BatchedMeshManager] batching within hierarchy', {
-                    topLevel: object.userData.name,
-                    object: obj.userData.name,
-                });
+                // console.log('[BatchedMeshManager] batching within hierarchy', {
+                //     topLevel: object.userData.name,
+                //     object: obj.userData.name,
+                // });
                 const geometry = obj.geometry as BufferGeometry; // Explicitly cast to BufferGeometry
                 const material = obj.material;
                 const materialKey = this.getMaterialKey(material);
@@ -190,11 +189,11 @@ export class BatchedMeshManager extends Object3D {
 
                     // batchedMesh.computeBoundsTree(geometryId);
                 }
-                console.log('[BatchedMeshManager] geometryId', {
-                    batchedMesh,
-                    geometryId,
-                    geometry,
-                });
+                // console.log('[BatchedMeshManager] geometryId', {
+                //     batchedMesh,
+                //     geometryId,
+                //     geometry,
+                // });
 
                 const batchId = batchedMesh.addInstance(geometryId);
 
@@ -283,18 +282,12 @@ export class BatchedMeshManager extends Object3D {
     }
 
     getMaterialKey(material: Material | Material[]): string {
-        if (!this._materialCache.has(material)) {
-            let key: string;
-            if (Array.isArray(material)) {
-                key = `materials-${this._materialCache.size}-${material
-                    .map((m) => m.uuid)
-                    .join('-')}`;
-            } else {
-                key = `material-${this._materialCache.size}-${material.uuid}`;
-            }
-            this._materialCache.set(material, key);
-            return key;
+        let key: string;
+        if (Array.isArray(material)) {
+            key = `materials-${material.map((m) => m.name).join('-')}`;
+        } else {
+            key = `material-${material.name}`;
         }
-        return this._materialCache.get(material)!;
+        return key;
     }
 }

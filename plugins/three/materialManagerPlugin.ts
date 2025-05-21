@@ -17,6 +17,7 @@ import {
 import { defaultComponentTypes, Manager } from '../../ecs/manager';
 import { Pipeline } from '../../ecs/system';
 import uuid from 'uuid-random';
+import { BatchedObject3DRef } from './BatchedMeshManager';
 
 export type MaterialManagerComponentTypes = {
     object3D: Object3D;
@@ -28,6 +29,10 @@ export type MaterialManagerComponentTypes = {
 };
 
 function objectWithMaterial(o: Object3D) {
+    if (o instanceof BatchedObject3DRef) {
+        return o._manager.getBatchedMesh(o);
+    }
+
     if (
         !(
             (o instanceof Mesh ||
@@ -36,8 +41,10 @@ function objectWithMaterial(o: Object3D) {
                 o instanceof Points) &&
             o.material
         )
-    )
+    ) {
         return null;
+    }
+
     return o;
 }
 

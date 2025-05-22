@@ -87,6 +87,22 @@ export type InputComponents = {
     activeInputMode: 'touch' | 'pointer' | 'keyboard' | 'gamepad';
 };
 
+export function collapseVectorToDirection(vec2: Vector2, deadzone = 0) {
+    if (Math.abs(vec2.x) > Math.abs(vec2.y)) {
+        if (vec2.x > deadzone) {
+            return vec2.set(1, 0);
+        } else if (vec2.x < -deadzone) {
+            return vec2.set(-1, 0);
+        }
+    } else {
+        if (vec2.y > deadzone) {
+            return vec2.set(0, 1);
+        } else if (vec2.y < -deadzone) {
+            return vec2.set(0, -1);
+        }
+    }
+}
+
 export function applyInputPlugin<
     ComponentTypes extends defaultComponentTypes & InputComponents
 >(manager: Manager<ComponentTypes>, options?: InputPluginOptions) {
@@ -112,7 +128,20 @@ export function applyInputPlugin<
         return 'input' + inputName;
     }
 
+    function setupRaycastFromMousePosition(
+        mousePosition = screenMousePosition
+    ) {
+        ndcMousePosition.set(
+            (mousePosition.x / window.innerWidth) * 2 - 1,
+            -(mousePosition.y / window.innerHeight) * 2 + 1
+        );
+        inputRaycaster.setFromCamera(ndcMousePosition, options.threeCamera);
+
+        return inputRaycaster;
+    }
+
     return {
+        setupRaycastFromMousePosition,
         inputActiveModeSystem: manager.createSystem(
             rawInputQuery.createConsumer(),
             {
@@ -386,15 +415,7 @@ export function applyInputPlugin<
 
                 tick() {
                     if (options?.useThreeForWorldPosition) {
-                        ndcMousePosition.set(
-                            (screenMousePosition.x / window.innerWidth) * 2 - 1,
-                            -(screenMousePosition.y / window.innerHeight) * 2 +
-                                1
-                        );
-                        inputRaycaster.setFromCamera(
-                            ndcMousePosition,
-                            options.threeCamera
-                        );
+                        setupRaycastFromMousePosition();
                         inputPlane.setComponents(
                             0,
                             1,

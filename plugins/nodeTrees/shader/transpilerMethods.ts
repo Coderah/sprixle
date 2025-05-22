@@ -652,6 +652,7 @@ export const transpilerMethods = {
         'operation',
         {
             GREATER_THAN: GLSL['bool'];
+            LESS_THAN: GLSL['bool'];
             else: GLSL['float'];
         }
     > {

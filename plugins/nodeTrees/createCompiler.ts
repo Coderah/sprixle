@@ -1023,6 +1023,11 @@ export function createNodeTreeCompiler<M extends LogicTreeMethods>(
                                 compilationCache.shader.vertexIncludes
                             );
 
+                        compilationCache.shader.vertex.push(
+                            ...compiledInternalNodeTree.compilationCache.shader
+                                .vertex
+                        );
+
                         compilationCache.features =
                             compilationCache.features.union(
                                 compiledInternalNodeTree.compilationCache

@@ -1,5 +1,5 @@
-import { Entity } from '@deepkit/type';
 import { camelCase } from 'lodash';
+import { Entity } from '../../../ecs/manager';
 
 const mathOperationSymbols = {
     MULTIPLY: '*',

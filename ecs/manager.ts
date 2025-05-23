@@ -8,8 +8,15 @@ import uuid from 'uuid-random';
 import { memoizedGlobalNow, now } from '../util/now';
 import { keys } from './dict';
 import './object.extensions.ts';
-import { Query, QueryName, QueryParametersInput, QueryState } from './query';
+import {
+    Consumer,
+    Query,
+    QueryName,
+    QueryParametersInput,
+    QueryState,
+} from './query';
 import { ConsumerSystem, QuerySystem, System } from './system';
+import { endPerformanceMeasure, startPerformanceMeasure } from './performance';
 
 export type Keys<T> = keyof T;
 export type entityId = string;
@@ -267,8 +274,17 @@ export class Manager<ExactComponentTypes extends defaultComponentTypes> {
         | QuerySystem<ExactComponentTypes, Includes>
         | ConsumerSystem<ExactComponentTypes, Includes> {
         if (system) {
+            if (!system.tag) {
+                if (sourceOrSystem instanceof Query) {
+                    system.tag = `System[${sourceOrSystem.queryName}]`;
+                } else if (sourceOrSystem instanceof Consumer) {
+                    system.tag = `System[CONSUMER:${sourceOrSystem.query.queryName}]`;
+                }
+            }
             return { source: sourceOrSystem, ...system };
         } else {
+            if (!sourceOrSystem.tag)
+                sourceOrSystem.tag = 'UntaggedSystem[' + now() + ']';
             return sourceOrSystem;
         }
     }
@@ -417,6 +433,7 @@ export class Manager<ExactComponentTypes extends defaultComponentTypes> {
 
     /** to be called after each system */
     subTick() {
+        startPerformanceMeasure(this);
         const { state } = this;
         state.stagedUpdates.forEach((componentUpdates, componentType) => {
             componentUpdates.forEach((entityId) => {
@@ -443,12 +460,14 @@ export class Manager<ExactComponentTypes extends defaultComponentTypes> {
 
             componentUpdates.clear();
         });
+        endPerformanceMeasure(this);
     }
 
     tickHandlers = new Set<() => void>();
 
     /** to be called after each set of systems (end of a frame) */
     tick() {
+        startPerformanceMeasure(this);
         this.subTick();
 
         const { state } = this;
@@ -470,6 +489,7 @@ export class Manager<ExactComponentTypes extends defaultComponentTypes> {
         });
 
         memoizedGlobalNow.cache.clear?.();
+        endPerformanceMeasure(this);
     }
 
     // TODO handle deserialized (no proxy or flagUpdate)

@@ -226,6 +226,7 @@ export const createZUISystem = <
 
     // TODO performance check
     const pipeline = new Pipeline(em);
+    pipeline.tag = 'zUIPipeline';
 
     if (parameters.use3DTransforms) {
         pipeline.systems.add(

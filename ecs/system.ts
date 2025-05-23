@@ -1,4 +1,5 @@
-import { setTimeActivePipeline } from '../util/now';
+import { throttleLog } from '../util/log';
+import { now, setTimeActivePipeline } from '../util/now';
 import { interval } from '../util/timing';
 import {
     EntityWithComponents,
@@ -6,6 +7,7 @@ import {
     Manager,
     defaultComponentTypes,
 } from './manager';
+import { endPerformanceMeasure, startPerformanceMeasure } from './performance';
 import { Consumer, Query } from './query';
 
 export interface System<
@@ -13,6 +15,8 @@ export interface System<
     TManager extends Manager<ExactComponentTypes>,
     Includes extends Keys<ExactComponentTypes>[]
 > {
+    /** tag is optional and utilized for logging, if the system has a source, the source Query.queryName will be utilized. */
+    tag?: string;
     /** holds all updates and only runs when this interval passes */
     interval?: ReturnType<typeof interval>;
     /** runs when initing or resetting a pipeline, can be run to explicitly init the system  */
@@ -145,6 +149,9 @@ export class Pipeline<ExactComponentTypes extends defaultComponentTypes> {
     /** should this pipeline run this tick? */
     condition = () => true;
 
+    /** can be overridden to add better detail to performance timeline */
+    tag = `UntaggedPipeline[${now()}]`;
+
     constructor(
         manager: Manager<ExactComponentTypes>,
         ...systems: Array<AnySystem<ExactComponentTypes>>
@@ -200,6 +207,8 @@ export class Pipeline<ExactComponentTypes extends defaultComponentTypes> {
         if (delta <= 0) return;
         if (this.useInternalTime) this.now += delta;
         if (!this.condition()) return;
+        startPerformanceMeasure(this);
+
         this.systems.forEach((system) => {
             let systemDelta = delta;
             if (system.interval) {
@@ -208,10 +217,14 @@ export class Pipeline<ExactComponentTypes extends defaultComponentTypes> {
                 systemDelta = intervalDelta;
             }
             if (system.condition && !system.condition()) return;
+
+            startPerformanceMeasure(system, { systemDelta });
+
             if (system.tick) system.tick(systemDelta);
 
             if (!('source' in system)) {
                 this.manager.subTick();
+                endPerformanceMeasure(system);
                 return;
             }
             const { source } = system;
@@ -243,8 +256,11 @@ export class Pipeline<ExactComponentTypes extends defaultComponentTypes> {
                     source.deletedEntities.clear();
                 }
             }
+            endPerformanceMeasure(system);
             this.manager.subTick();
         });
+
+        endPerformanceMeasure(this);
     }
 
     /** cleanup an entity before tick finishes */

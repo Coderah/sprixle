@@ -250,10 +250,13 @@ export function applyMaterialManagerPlugin<
         },
     });
 
+    const materialPipeline = new Pipeline(em, materialSystem, objectSystem);
+    materialPipeline.tag = 'materialPipeline';
+
     return {
         useMaterial,
         reuseMaterial,
         garbageCollectMaterials,
-        materialPipeline: new Pipeline(em, materialSystem, objectSystem),
+        materialPipeline,
     };
 }

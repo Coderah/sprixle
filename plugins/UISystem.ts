@@ -32,6 +32,7 @@ export const createUISystem = <
     }
 ) => {
     const pipeline = new Pipeline(em);
+    pipeline.tag = 'UIPipeline';
 
     function add<
         Includes extends Keys<ComponentTypes>[],

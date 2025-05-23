@@ -1,15 +1,19 @@
+global['window'] = global;
+
 import { buildDocumentation, documentationToMarkdown } from 'tsdoc-markdown';
 // const findFiles = require('file-regex');
 import findFiles from 'file-regex';
 import { inspect } from 'util';
 
 import { transpilerMethods as shaderTranspilerMethods } from './plugins/nodeTrees/shader/transpilerMethods';
+import { transpilerMethods as logicTranspilerMethods } from './plugins/nodeTrees/logic/transpilerMethods';
 import { metaAnnotation, ReflectionClass, typeOf } from '@deepkit/type';
 import path from 'path';
 import { mkdirSync, writeFileSync } from 'fs';
 import fuzzy from 'fuzzy';
 
 shaderTranspilerMethods;
+logicTranspilerMethods;
 
 const blenderNodeLinks = {};
 
@@ -137,23 +141,24 @@ const shaderNodeFiles = ['./plugins/nodeTrees/shader/transpilerMethods.ts'];
 
     // });
 
-    // mkdoc(pluginFiles, '/plugins.md', (entry) =>
-    //     entry.name.startsWith('apply')
-    // );
+    mkdoc(pluginFiles, '/plugins.md', (entry) => entry.name.endsWith('Plugin'));
 
     mkdir('./Sprixle Docs/plugins/shaderTree');
+    mkdir('./Sprixle Docs/plugins/logicTree');
 
+    const supportedLogicNodesType = typeOf<typeof logicTranspilerMethods>();
     const supportedShaderNodesType = typeOf<typeof shaderTranspilerMethods>();
 
     const blenderNFilter = Object.keys(blenderNodeLinks);
 
-    const supportedNodeList = supportedShaderNodesType.types
+    const supportedShaderNodeList = supportedShaderNodesType.types
         .sort((a, b) => (a.name > b.name ? 1 : -1))
         .map((t) => {
             let result = t.name;
 
             result = result
                 .replace('VECT_MATH', 'VECTOR_MATH')
+                .replace('EEVEE_SPECULAR', 'SPECULAR_BSDF')
                 .replace(/(?:([A-Z])([A-Z]*))/g, (n, n1, n2) => {
                     if (n === 'BSDF') return n;
 
@@ -174,6 +179,7 @@ const shaderNodeFiles = ['./plugins/nodeTrees/shader/transpilerMethods.ts'];
                     : result
                           .replace('Output_', 'output/')
                           .replace('BSDF_', 'shader/')
+                          .replace('Specular_', 'shader/specular_')
                           .replace('New_', '')
                           .replace('Mix_Shader', 'shader/mix')
                           .replace('Mix', 'converter/mix'),
@@ -184,22 +190,27 @@ const shaderNodeFiles = ['./plugins/nodeTrees/shader/transpilerMethods.ts'];
 
             if (urlKey) {
                 result = `[${result}](${blenderNodeLinks[urlKey]})`;
+            } else {
+                result = `${result} * From Asset library`;
             }
 
-            if (metaAnnotation.getForName(t.return, 'PartialSupport')) {
-                result += ' * Partially Supported';
-            }
+            if (t.return) {
+                if (metaAnnotation.getForName(t.return, 'PartialSupport')) {
+                    result += ' * Partially Supported';
+                }
 
-            if (metaAnnotation.getForName(t.return, 'StubbedSupport')) {
-                result += ' * Support is stubbed';
+                if (metaAnnotation.getForName(t.return, 'StubbedSupport')) {
+                    result += ' * Support is stubbed';
+                }
             }
 
             return '* ' + result;
         });
 
     // TODO sort
-    supportedNodeList.push(
-        '* [Separate XYZ](https://docs.blender.org/manual/en/latest/compositing/types/vector/separate_xyz.html)'
+    supportedShaderNodeList.push(
+        '* [Separate XYZ](https://docs.blender.org/manual/en/latest/compositing/types/vector/separate_xyz.html)',
+        `* Configure Material * From Asset library`
     );
 
     // @ts-ignore
@@ -207,7 +218,34 @@ const shaderNodeFiles = ['./plugins/nodeTrees/shader/transpilerMethods.ts'];
         './Sprixle Docs/plugins/shaderTree/supported-nodes.md',
         `### Blender
 
-${supportedNodeList.join('\n')}`
+${supportedShaderNodeList.join('\n')}`
+    );
+
+    const supportedLogicNodeList = supportedLogicNodesType.types
+        .sort((a, b) => (a.name > b.name ? 1 : -1))
+        .map((t) => {
+            let result = t.name;
+
+            result = result.replace(/_/g, ' ');
+
+            if (t.return) {
+                if (metaAnnotation.getForName(t.return, 'PartialSupport')) {
+                    result += ' * Partially Supported';
+                }
+
+                if (metaAnnotation.getForName(t.return, 'StubbedSupport')) {
+                    result += ' * Support is stubbed';
+                }
+            }
+
+            return '* ' + result;
+        });
+
+    writeFileSync(
+        './Sprixle Docs/plugins/logicTree/implemented-nodes.md',
+        `### Sprixle
+        
+${supportedLogicNodeList.join('\n')}`
     );
 })();
 

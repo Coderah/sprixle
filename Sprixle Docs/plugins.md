@@ -5,8 +5,8 @@
 - [applyInputPlugin](#applyinputplugin)
 - [applyStateMachinePlugin](#applystatemachineplugin)
 - [applyTweenPlugin](#applytweenplugin)
-- [applyMaterialManagerPlugin](#applymaterialmanagerplugin)
 - [applyLogicTreePlugin](#applylogictreeplugin)
+- [applyMaterialManagerPlugin](#applymaterialmanagerplugin)
 - [applyShaderTreePlugin](#applyshadertreeplugin)
 
 ### applyDeathEffectPlugin
@@ -15,13 +15,13 @@ Creates a system for death side-effects, an entities death can cause components 
 
 | Function | Type |
 | ---------- | ---------- |
-| `applyDeathEffectPlugin` | `<M extends Manager<ComponentTypes>, ComponentTypes extends defaultComponentTypes and DeathEffectComponents<ComponentTypes>>(manager: M) => { deathEffectQuery: Query<ComponentTypes, "deathEffect"[], Manager<...>, EntityWithComponents<...>>; deathEffectSystem: ConsumerSystem<...>; }` |
+| `applyDeathEffectPlugin` | `<M extends Manager<ComponentTypes>, ComponentTypes extends defaultComponentTypes and DeathEffectComponents<ComponentTypes>>(manager: M) => { deathEffectQuery: Query<ComponentTypes, "deathEffect"[], M, keyof ComponentTypes, EntityWithComponents<...>> or Query<...>; deathEffectSystem: ConsumerSystem<...>; }` |
 
 ### applyEditorUIPlugin
 
 | Function | Type |
 | ---------- | ---------- |
-| `applyEditorUIPlugin` | `<ComponentTypes extends defaultComponentTypes>(manager: Manager<ComponentTypes>) => { pipeline: Pipeline<ComponentTypes>; tweakpane: Pane; addDeltaGraph(): { ...; }; addComponentBinding<Component extends keyof ComponentTypes>(component: Component, options?: Partial<...>, query?: Query<...>, parent?: Pane or ... 1 mor...` |
+| `applyEditorUIPlugin` | `<ComponentTypes extends defaultComponentTypes>(manager: Manager<ComponentTypes>) => { pipeline: Pipeline<ComponentTypes>; tweakpane: Pane; addDeltaGraph(): { ...; }; addComponentBinding<Component extends keyof ComponentTypes>(component: Component, options?: Partial<...>, query?: Query<...>, parent?: Pane or ... 2 mor...` |
 
 ### applyInputPlugin
 
@@ -39,13 +39,7 @@ Creates a system for death side-effects, an entities death can cause components 
 
 | Function | Type |
 | ---------- | ---------- |
-| `applyTweenPlugin` | `<ComponentTypes extends defaultComponentTypes and TweenComponents<ComponentTypes>>(manager: Manager<ComponentTypes>) => { tweenerQuery: Query<ComponentTypes, "tweenTargetId"[], Manager<...>, EntityWithComponents<...>>; tweenSystem: QuerySystem<...>; tween<C extends Keys<ComponentTypes>, V extends number or number[]>(en...` |
-
-### applyMaterialManagerPlugin
-
-| Function | Type |
-| ---------- | ---------- |
-| `applyMaterialManagerPlugin` | `<M extends Manager<ComponentTypes>, ComponentTypes extends defaultComponentTypes and MaterialManagerComponenTypes>(em: M) => { useMaterial: (material: Material) => Material; reuseMaterial: (object: Object3D<...> or null) => void; garbageCollectMaterials: () => void; materialPipeline: Pipeline<...>; }` |
+| `applyTweenPlugin` | `<ComponentTypes extends defaultComponentTypes and TweenComponents<ComponentTypes>>(manager: Manager<ComponentTypes>) => { tweenerQuery: Query<ComponentTypes, "tweenTargetId"[], Manager<...>, keyof ComponentTypes, EntityWithComponents<...>> or Query<...>; tweenSystem: QuerySystem<...>; tween<C extends Keys<ComponentType...` |
 
 ### applyLogicTreePlugin
 
@@ -53,12 +47,18 @@ Creates a system for death side-effects, an entities death can cause components 
 | ---------- | ---------- |
 | `applyLogicTreePlugin` | `<C extends defaultComponentTypes and LogicTreeComponentTypes<C>, M extends LogicTreeMethods>(em: Manager<C>, methods: M, methodsType?: ReceiveType<M> or undefined) => { ...; }` |
 
+### applyMaterialManagerPlugin
+
+| Function | Type |
+| ---------- | ---------- |
+| `applyMaterialManagerPlugin` | `<M extends Manager<ComponentTypes>, ComponentTypes extends defaultComponentTypes and MaterialManagerComponentTypes>(em: M, components?: (keyof ComponentTypes)[]) => { useMaterial: (material: Material, depthMaterial?: Material or undefined) => Material; reuseMaterial: (object: Mesh<...> or ... 3 more ... or undefined) => ...` |
+
 ### applyShaderTreePlugin
 
 This plugin handles compiling and applying ShaderTree format (from blender addon)
 
 | Function | Type |
 | ---------- | ---------- |
-| `applyShaderTreePlugin` | `<C extends defaultComponentTypes and ShaderTreeComponentTypes, M extends {}>(em: Manager<C>, transpilerMethods: M, methodsType?: ReceiveType<M> or undefined) => ConsumerSystem<...>` |
+| `applyShaderTreePlugin` | `<C extends defaultComponentTypes and ShaderTreeComponentTypes, M extends ShaderTreeMethods>(em: Manager<C>, methods: M, methodsType?: ReceiveType<M> or undefined) => ConsumerSystem<...>` |
 
 

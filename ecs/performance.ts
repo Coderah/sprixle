@@ -35,6 +35,9 @@ if (process.env.NODE_ENV !== 'production') {
     window['stopTrackingPerformance'] = function () {
         startPerformanceMeasure = noop;
         endPerformanceMeasure = noop;
+
+        performance.clearMarks();
+        performance.clearMeasures();
     };
 }
 

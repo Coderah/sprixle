@@ -1,5 +1,6 @@
 # manager
 * manager should support threading by handling component updates & requests
+* automatic entity & component pooling (reduce garbage collection)
 
 # systems & pipelines
 

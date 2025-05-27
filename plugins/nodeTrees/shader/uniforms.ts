@@ -1,4 +1,9 @@
 import { DepthTexture, Texture, Vector2 } from 'three';
+import { now } from '../../../util/now';
+
+export const uniformTime = {
+    value: now(),
+};
 
 export const depthUniform = {
     value: new Texture(),

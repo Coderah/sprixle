@@ -282,5 +282,12 @@ export function applyRendererPlugin<
     );
     rendererPipeline.tag = 'rendererPipeline';
 
-    return { rendererPipeline, configurationEntity };
+    return {
+        rendererPipeline,
+        configurationEntity,
+        checks: {
+            maxAnisotropy,
+            canRenderToFloatType,
+        },
+    };
 }

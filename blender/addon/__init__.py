@@ -14,6 +14,7 @@
 from . import auto_load
 from . import node_trees
 from . import exporter
+from . import animation_clips
 from deepdiff import DeepDiff
 import bpy
 from bpy.app.handlers import persistent
@@ -69,6 +70,12 @@ def handleDepsGraphUpdate(scene, graph):
                     "type": 'shaderTree',
                     "data": data
                 }, indent=0))
+
+        if isinstance(update.id, bpy.types.Scene):
+            scene = bpy.data.scenes[update.id.name]
+            (data, name) = node_trees.serialize(scene)
+
+            print('serialized scene compositor tree on change', update.id.name)
         
         elif isinstance(update.id, bpy.types.Material):
             material = bpy.data.materials[update.id.name]
@@ -136,6 +143,8 @@ def prepAllNodeTrees():
             if data:
                 materials[name] = data
 
+    (sceneData, compositorName) = node_trees.serialize(bpy.context.scene)
+    materials[compositorName] = sceneData
 
     return (logicObjects, materials)
     
@@ -150,7 +159,6 @@ def new_client(client, server):
     }))
 
     (logicObjects, materials) = prepAllNodeTrees()
-
 
     for material in materials:
         print('sending shaderTree', material)
@@ -192,7 +200,8 @@ class SprixleExport(bpy.types.Operator):
 
     def execute(self, context):        # execute() is called when running the operator.
         prepAllNodeTrees()
-
+        animation_clips.prepare_animation_properties()
+        
         exporter.export(bpy.context.scene.name)
 
         global server
@@ -218,7 +227,7 @@ class SprixleInfoPanel(bpy.types.Panel):
 
     def draw(self, context):
         global active_scene
-        self.layout.label(text="Addon Version: 0.0.5")
+        self.layout.label(text="Addon Version: 0.0.8")
 
         self.layout.operator(SprixleExport.bl_idname, text="Export Scene", icon="EXPORT")
 
@@ -232,7 +241,7 @@ class SprixleInfoPanelInTree(bpy.types.Panel):
 
     def draw(self, context):
         global active_scene
-        self.layout.label(text="Addon Version: 0.0.5")
+        self.layout.label(text="Addon Version: 0.0.8")
 
         self.layout.operator(SprixleExport.bl_idname, text="Export Scene", icon="EXPORT")
 

@@ -136,15 +136,18 @@ def serialize(target):
         modifier = target
         node_group = modifier.node_tree
         name = target.name
-    elif isinstance(target, bpy.types.World):
+    elif isinstance(target, bpy.types.World) or isinstance(target, bpy.types.Scene):
         modifier = target
         node_group = modifier.node_tree
-        name = target.name
+        if not node_group: return (None, None)
+        name = node_group.name or target.name
 
     if not modifier or not node_group: return (None, None)
 
     def serialize_tree(node_tree, internal_trees = None):
         nodes_data = {}
+
+        nodes_data['$treeType'] = 'composition' if isinstance(target, bpy.types.Scene) else 'environment' if isinstance(target, bpy.types.World) else 'material'
 
         if internal_trees == None:
             internal_trees = {}
@@ -356,7 +359,8 @@ def serialize(target):
 
                 for internalN in internal_trees[node_data['name']]:
                     internalNode = internal_trees[node_data['name']][internalN]
-                    if internalNode['type'] == 'GROUP_INPUT':
+                    # print("internalNode", node_data['name'], internal_trees[node_data['name']], internalN, internalNode)
+                    if "type" in internalNode and internalNode['type'] == 'GROUP_INPUT':
                         for outputN in internalNode['outputs']:
                             if not outputN: continue
 
@@ -382,6 +386,8 @@ def serialize(target):
         target['shaderTree'] = output
     elif isinstance(target, bpy.types.World):
         bpy.context.scene['worldShaderTree'] = output
+    elif isinstance(target, bpy.types.Scene):
+        bpy.context.scene['compositionShaderTree'] = output
     else:
         bpy.context.scene[name] = output
         target['logicTree'] = name

@@ -144,7 +144,8 @@ def prepAllNodeTrees():
                 materials[name] = data
 
     (sceneData, compositorName) = node_trees.serialize(bpy.context.scene)
-    materials[compositorName] = sceneData
+    if sceneData:
+        materials[compositorName] = sceneData
 
     return (logicObjects, materials)
     

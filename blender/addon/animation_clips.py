@@ -35,7 +35,7 @@ def export_actions_to_scene(scene):
             continue
 
         animation_data = material.node_tree.animation_data
-        if not animation_data: continue
+        if not animation_data or not animation_data.action: continue
 
         material['shader_animation'] = json.dumps({
                         "action_name": animation_data.action.name,

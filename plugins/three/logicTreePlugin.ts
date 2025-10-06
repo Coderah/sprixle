@@ -19,7 +19,7 @@ import { blenderEvents } from '../../blender/realtime';
 import { UnionOrIntersectionType } from 'typescript';
 
 export type LogicTreeComponentTypes<ComponentTypes> = {
-    mesh: Object3D;
+    object3D: Object3D;
     logicTree: NodeTree;
     logicTreeName: string;
     compiledLogicTree: (
@@ -59,7 +59,7 @@ export function applyLogicTreePlugin<
     });
 
     const logicTreeRunnersQuery = em.createQuery({
-        includes: ['mesh', 'logicTreeName'],
+        includes: ['object3D', 'logicTreeName'],
         excludes: ['logicTree', 'compiledLogicTree'],
     });
 
@@ -147,7 +147,11 @@ ${transpiled.reduce((r, c) => (c ? r + '\n' + c : r), '')}
         // TODO remove in favor of interval node within logicTrees
         interval: interval(1000 / 30),
         all(entity, delta) {
-            let { logicTreeName, logicTreeCache, mesh } = entity.components;
+            let {
+                logicTreeName,
+                logicTreeCache,
+                object3D: mesh,
+            } = entity.components;
 
             if (!logicTreeCache) {
                 logicTreeCache = entity.components.logicTreeCache = {};
@@ -224,7 +228,7 @@ ${transpiled.reduce((r, c) => (c ? r + '\n' + c : r), '')}
                     methods,
                     existingEntity,
                     {
-                        Geometry: existingEntity.components.mesh,
+                        Geometry: existingEntity.components.object3D,
                     }
                 );
             }

@@ -83,6 +83,7 @@ const mathFunctions = {
 
 const mixFunctions = {
     RGBA: {
+        MIX: 'mix_blend',
         DARKEN: 'mix_dark',
         LIGHTEN: 'mix_light',
         VALUE: 'mix_val',
@@ -505,12 +506,12 @@ export const transpilerMethods = {
         ) {
             // TODO evaluate if objectNormal would be more appropriate in place of vNormal for displacement target
             return [
-                'position, vec2(uv.x, 1.0 - uv.y), vNormal, position, reflect(normalize(vViewPosition), normalize(vNormal))',
+                'position, vec2(uv.x, uv.y), vNormal, position, reflect(normalize(vViewPosition), normalize(vNormal))',
             ] as any;
         }
 
         return [
-            'vPosition, vec2(vUv.x, 1.0 - vUv.y), vNormal, vPosition, reflect(normalize(vViewPosition), normalize(vNormal))',
+            'vPosition, vec2(vUv.x, vUv.y), vNormal, vPosition, reflect(normalize(vViewPosition), normalize(vNormal))',
         ] as any;
     },
     NEW_GEOMETRY(compilationCache: CompilationCache): GLSL<{

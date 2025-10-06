@@ -7,6 +7,7 @@ import { each } from 'lodash';
 import uuid from 'uuid-random';
 import { memoizedGlobalNow, now } from '../util/now';
 import { keys } from './dict';
+import { Vector2, Vector3 } from 'three';
 import './object.extensions.ts';
 import {
     Consumer,
@@ -294,8 +295,23 @@ export class Manager<ExactComponentTypes extends defaultComponentTypes> {
 
         const manager = this;
 
-        function flagUpdate(componentType: keyof ExactComponentTypes) {
+        function flagUpdate(
+            entity: typeof this.Entity,
+            componentType: keyof ExactComponentTypes
+        ) {
             manager.state.stagedUpdates.get(componentType)?.add(id);
+
+            const value = entity.components[componentType];
+            if (
+                value &&
+                (value instanceof Vector2 || value instanceof Vector3)
+            ) {
+                if (!entity.previousComponents[componentType]) {
+                    entity.previousComponents[componentType] = value.clone();
+                } else {
+                    entity.previousComponents[componentType].copy(value);
+                }
+            }
         }
 
         const components = {
@@ -310,32 +326,63 @@ export class Manager<ExactComponentTypes extends defaultComponentTypes> {
                 set(target, componentType, value = null) {
                     // TODO handle setting undefined (should removeComponent)
 
-                    const reflectionType =
-                        manager.componentsReflection.getProperty(componentType);
+                    try {
+                        const reflectionType =
+                            manager.componentsReflection.hasProperty(
+                                componentType
+                            )
+                                ? manager.componentsReflection.getProperty(
+                                      componentType
+                                  )
+                                : manager.componentsReflection.getMethod(
+                                      componentType
+                                  );
 
-                    if (
-                        reflectionType.type.decorators?.find(
-                            (d) => d.typeName === 'SingletonComponent'
-                        ) &&
-                        manager.state.entityMap.get(componentType as any)
-                            ?.size > 1
-                    ) {
-                        throw new Error(
-                            `[Entity.components.${
-                                componentType as string
-                            }] singleton component being used more than once.`
+                        if (
+                            reflectionType.type.decorators?.find(
+                                (d) => d.typeName === 'SingletonComponent'
+                            ) &&
+                            manager.state.entityMap.get(componentType as any)
+                                ?.size > 1
+                        ) {
+                            throw new Error(
+                                `[Entity.components.${
+                                    componentType as string
+                                }] singleton component being used more than once.`
+                            );
+                        }
+                    } catch (e) {
+                        console.warn(
+                            'Error finding type info for componentType',
+                            componentType
                         );
                     }
 
                     const entityIsRegistered = manager.state.entities.has(id);
 
                     if (componentType !== 'updatedAt' && entityIsRegistered) {
-                        entity.previousComponents[componentType] =
-                            target[componentType];
-                        if (target[componentType] !== value) {
-                            flagUpdate(
-                                componentType as keyof ExactComponentTypes
-                            );
+                        if (
+                            value instanceof Vector2 ||
+                            value instanceof Vector3
+                        ) {
+                            if (!entity.previousComponents[componentType]) {
+                                entity.previousComponents[componentType] =
+                                    target[componentType].clone();
+                            } else {
+                                entity.previousComponents[componentType].copy(
+                                    target[componentType]
+                                );
+                            }
+                        } else {
+                            entity.previousComponents[componentType] =
+                                target[componentType];
+
+                            if (target[componentType] !== value) {
+                                flagUpdate(
+                                    entity,
+                                    componentType as keyof ExactComponentTypes
+                                );
+                            }
                         }
                     }
 
@@ -384,7 +431,8 @@ export class Manager<ExactComponentTypes extends defaultComponentTypes> {
                     return true;
                 },
             }),
-            flagUpdate,
+            flagUpdate: (componentType: keyof ExactComponentTypes) =>
+                flagUpdate(entity, componentType),
             quietSet(componentType, value) {
                 components[componentType] = value;
             },
@@ -393,7 +441,7 @@ export class Manager<ExactComponentTypes extends defaultComponentTypes> {
         return entity;
     }
 
-    /** Creates entity, add components and registers it immediately */
+    /** Creates or gets entity, add components and registers it immediately */
     quickEntity(components: Partial<ExactComponentTypes>, id = uuid()) {
         const entity = this.getEntity(id) || this.createEntity(id);
         this.addComponents(entity, components);
@@ -613,7 +661,7 @@ export class Manager<ExactComponentTypes extends defaultComponentTypes> {
         value: (typeof this.ComponentTypes)[K]
     ) {
         const entity = this.getSingletonEntity(componentType);
-        this.addComponent(entity, componentType, value);
+        entity.components[componentType] = value;
 
         return entity;
     }

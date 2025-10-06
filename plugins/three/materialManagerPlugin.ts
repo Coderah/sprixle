@@ -49,9 +49,12 @@ function objectWithMaterial(o: Object3D) {
 }
 
 export function applyMaterialManagerPlugin<
-    M extends Manager<ComponentTypes>,
     ComponentTypes extends defaultComponentTypes & MaterialManagerComponentTypes
->(em: M, components: Array<keyof ComponentTypes> = ['object3D']) {
+>(
+    em: Manager<ComponentTypes>,
+    components: Array<keyof ComponentTypes> = ['object3D']
+) {
+    type M = Manager<ComponentTypes>;
     const objectQuery = em.createQuery({
         includes: components,
         flexible: true,

@@ -342,24 +342,11 @@ export class Query<
 
         if (this.entities.has(entity.id)) {
             if (!matches) {
-                throttleLog(
-                    '[QUERY]',
-                    this.queryName,
-                    'removed entity',
-                    entity.id
-                );
                 this.removeEntity(entity);
             } else {
-                throttleLog(
-                    '[QUERY]',
-                    this.queryName,
-                    'updated entity',
-                    entity.id
-                );
                 this.updatedEntity(entity);
             }
         } else if (matches) {
-            throttleLog('[QUERY]', this.queryName, 'added entity', entity.id);
             this.addEntity(entity);
         }
     }
@@ -406,11 +393,14 @@ export class Query<
         }
         this.manager.state.queryMap.get(entity.id)?.add(this.queryName);
         this.lastEntity = entity as E;
+
+        console.log('[QUERY]', this.queryName, 'added entity', entity.id);
     }
 
     updatedEntity(entity: typeof this.manager.Entity) {
         if (!this.entities.has(entity.id)) return;
 
+        throttleLog('[QUERY]', this.queryName, 'updated entity', entity.id);
         this.indexEntity(entity);
 
         if (
@@ -459,6 +449,7 @@ export class Query<
         }
 
         this.manager.state.queryMap.get(entity.id)?.delete(this.queryName);
+        console.log('[QUERY]', this.queryName, 'removed entity', entity.id);
     }
 
     get size() {

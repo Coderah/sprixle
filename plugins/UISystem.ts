@@ -34,6 +34,8 @@ export const createUISystem = <
     const pipeline = new Pipeline(em);
     pipeline.tag = 'UIPipeline';
 
+    const queries: Array<Query<ComponentTypes, any, M, any>> = [];
+
     function add<
         Includes extends Keys<ComponentTypes>[],
         Q extends Query<ComponentTypes, Includes, M, IndexedComponent>,
@@ -46,12 +48,17 @@ export const createUISystem = <
             removed?: (uiElement: HTMLElement, entity: Q['Entity']) => void;
         }
     ) {
+        queries.push(query);
         const { create, update } = handlers;
 
         pipeline.systems.add(
             em.createSystem(query.createConsumer(), {
                 forNew(entity) {
-                    if (!create || entity.components.uiElement) return;
+                    if (!create) return;
+
+                    if (entity.components.uiElement) {
+                        entity.components.uiElement.remove();
+                    }
 
                     const uiElement = create(entity);
 
@@ -69,9 +76,8 @@ export const createUISystem = <
                     if (update) update(entity.components.uiElement, entity);
                 },
                 updated(entity) {
-                    // TODO call create if element not existing?
                     if (!entity.components.uiElement) {
-                        if (!create || entity.components.uiElement) return;
+                        if (!create) return;
 
                         const uiElement = create(entity);
 
@@ -82,10 +88,16 @@ export const createUISystem = <
                     if (update) update(entity.components.uiElement, entity);
                 },
                 removed(entity) {
-                    entity.components.uiElement?.remove();
+                    if (!queries.find((q) => q.entities.has(entity.id))) {
+                        entity.components.uiElement?.remove();
+                        if (entity.components.uiElement) {
+                            delete entity.components.uiElement;
+                        }
+                    }
 
-                    if (handlers.removed)
+                    if (handlers.removed) {
                         handlers.removed(entity.components.uiElement, entity);
+                    }
                 },
             }) as ConsumerSystem<ComponentTypes, Keys<ComponentTypes>[], M>
         );

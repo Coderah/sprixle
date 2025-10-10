@@ -20,10 +20,10 @@ import { ConsumerSystem, QuerySystem, System } from './system';
 import { endPerformanceMeasure, startPerformanceMeasure } from './performance';
 
 export type Keys<T> = keyof T;
-export type entityId = string;
+export type EntityId = string;
 
 export type Entity<ComponentTypes> = {
-    id: entityId;
+    id: EntityId;
     previousComponents: Readonly<ComponentTypes>;
     components: ComponentTypes;
     /** flag a deeper update to a component */
@@ -36,10 +36,10 @@ export type Entity<ComponentTypes> = {
     ) => void;
 };
 
-type EntitiesById<ComponentTypes> = Map<entityId, Entity<ComponentTypes>>; //{ [id: string]: Entity<ComponentTypes> };
-type EntityMap<ComponentTypes> = Map<Keys<ComponentTypes>, Set<entityId>>; //{ [type in Keys<ComponentTypes>]?: Set<string> };
-type ComponentMap<ComponentTypes> = Map<entityId, Set<Keys<ComponentTypes>>>; //{ [id: string]: Set<Keys<ComponentTypes>> }; // TODO do we actually need ComponentMap for anything?
-type QueryMap = Map<entityId, Set<QueryName>>; //{ [id: string]: Set<Keys<ComponentTypes>> }; // TODO do we actually need ComponentMap for anything?
+type EntitiesById<ComponentTypes> = Map<EntityId, Entity<ComponentTypes>>; //{ [id: string]: Entity<ComponentTypes> };
+type EntityMap<ComponentTypes> = Map<Keys<ComponentTypes>, Set<EntityId>>; //{ [type in Keys<ComponentTypes>]?: Set<string> };
+type ComponentMap<ComponentTypes> = Map<EntityId, Set<Keys<ComponentTypes>>>; //{ [id: string]: Set<Keys<ComponentTypes>> }; // TODO do we actually need ComponentMap for anything?
+type QueryMap = Map<EntityId, Set<QueryName>>; //{ [id: string]: Set<Keys<ComponentTypes>> }; // TODO do we actually need ComponentMap for anything?
 
 export type EntityAdminState<
     ComponentTypes,
@@ -62,11 +62,11 @@ export type EntityAdminState<
     >;
     // consumerStates: Array<>
 
-    stagedUpdates: Map<Keys<ExactComponentTypes>, Set<entityId>>;
+    stagedUpdates: Map<Keys<ExactComponentTypes>, Set<EntityId>>;
 
-    newEntities: Set<entityId>;
-    updatedEntities: Set<entityId>;
-    previouslyUpdatedEntities: Set<entityId>;
+    newEntities: Set<EntityId>;
+    updatedEntities: Set<EntityId>;
+    previouslyUpdatedEntities: Set<EntityId>;
     deletedEntities: Set<Entity<ComponentTypes>>;
 };
 
@@ -362,8 +362,9 @@ export class Manager<ExactComponentTypes extends defaultComponentTypes> {
 
                     if (componentType !== 'updatedAt' && entityIsRegistered) {
                         if (
-                            value instanceof Vector2 ||
-                            value instanceof Vector3
+                            (value instanceof Vector2 ||
+                                value instanceof Vector3) &&
+                            target[componentType]
                         ) {
                             if (!entity.previousComponents[componentType]) {
                                 entity.previousComponents[componentType] =

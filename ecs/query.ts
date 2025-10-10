@@ -3,7 +3,7 @@ import uuid from 'uuid-random';
 import {
     defaultComponentTypes,
     Entity,
-    entityId,
+    EntityId,
     EntityWithComponents,
     Keys,
     Manager,
@@ -58,15 +58,15 @@ export interface QueryState<
     IndexedComponent extends Keys<ExactComponentTypes> = null,
     E = EntityWithComponents<ExactComponentTypes, M, Includes[number]>
 > {
-    entities: Set<entityId>;
+    entities: Set<EntityId>;
     consumerStates: ConsumerState[];
 
-    indexed: Map<ExactComponentTypes[IndexedComponent], Set<entityId>>;
+    indexed: Map<ExactComponentTypes[IndexedComponent], Set<EntityId>>;
 
     /** What entities are queued for future slices */
-    queuedEntities: Set<entityId>;
+    queuedEntities: Set<EntityId>;
     /** tracks what entities are included in the current slice; cleared on tick. */
-    entitiesInSlice: Set<entityId>;
+    entitiesInSlice: Set<EntityId>;
 
     lastEntity: E | undefined;
     sliceHead: string | null;
@@ -535,11 +535,11 @@ export class Query<
 }
 
 export interface ConsumerState {
-    updatedEntities: Set<entityId>;
-    newEntities: Set<entityId>;
+    updatedEntities: Set<EntityId>;
+    newEntities: Set<EntityId>;
     deletedEntities: Set<typeof this.query.manager.Entity>;
     consumed: boolean;
-    consumedEntities: Set<entityId>;
+    consumedEntities: Set<EntityId>;
 }
 
 // TODO: revisit this.consumed concept
@@ -628,7 +628,7 @@ export class Consumer<
     }
 
     /** called by Query when adding an entity, for internal use */
-    add(id: entityId) {
+    add(id: EntityId) {
         this.newEntities.add(id);
         const deletedEntity = this.deletedEntities.find((e) => e.id === id);
         if (deletedEntity) {
@@ -650,7 +650,7 @@ export class Consumer<
     }
 
     /** called by Query when updating an entity, for internal use */
-    updated(id: entityId) {
+    updated(id: EntityId) {
         this.updatedEntities.add(id);
     }
 

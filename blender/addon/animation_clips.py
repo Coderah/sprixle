@@ -24,7 +24,7 @@ def export_actions_to_scene(scene):
 
         for slot in action.slots:
             for user in slot.users():
-                if not user.type == "SHADER":
+                if hasattr(user, 'type') and not user.type == "SHADER":
                     user.id_data['animation'] = json.dumps({
                         "action_name": action.name,
                         "action_slot": user.id_data.animation_data.action_slot.name_display,

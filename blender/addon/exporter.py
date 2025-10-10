@@ -63,12 +63,12 @@ def prepareInstancesForExport(object):
         for attribute_name in evaluated_object.data.attributes.keys():
             if attribute_name.startswith('.'): continue
             if attribute_name == 'UVMap': continue
+            attribute = evaluated_object.data.attributes[attribute_name]
             if attribute_name == 'position': 
                 object['+instances'] = len(attribute.data)
                 continue
             if attribute_name == 'id': continue
 
-            attribute = evaluated_object.data.attributes[attribute_name]
             values = []
             if isinstance(attribute, bpy.types.FloatVectorAttribute):
                 values = (f"[{','.join(str(i) for i in [attr.vector[0], attr.vector[2], attr.vector[1]])}]" for attr in attribute.data)

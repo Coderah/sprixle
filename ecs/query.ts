@@ -59,7 +59,7 @@ export interface QueryState<
     E = EntityWithComponents<ExactComponentTypes, M, Includes[number]>
 > {
     entities: Set<EntityId>;
-    consumerStates: ConsumerState[];
+    consumerStates: ConsumerState<E>[];
 
     indexed: Map<ExactComponentTypes[IndexedComponent], Set<EntityId>>;
 
@@ -68,7 +68,7 @@ export interface QueryState<
     /** tracks what entities are included in the current slice; cleared on tick. */
     entitiesInSlice: Set<EntityId>;
 
-    lastEntity: E | undefined;
+    lastEntity: EntityId;
     sliceHead: string | null;
     nextSliceHead: string | null;
 }
@@ -133,10 +133,11 @@ export class Query<
     // entitiesInSlice = new Set<entityId>();
 
     private get lastEntity() {
-        return this.state.lastEntity;
+        return this.manager.getEntity(this.state.lastEntity);
     }
     private set lastEntity(v) {
-        this.state.lastEntity = v;
+        if (!v) return;
+        this.state.lastEntity = v.id;
     }
     // private lastEntity: E | undefined;
     private get sliceHead() {
@@ -275,7 +276,7 @@ export class Query<
         };
     }
 
-    componentMatches(component: keyof typeof this.manager.ComponentTypes) {
+    componentMatches(component: keyof ExactComponentTypes) {
         return this.queryParameters.includes
             ? this.queryParameters.includes.has(component)
             : this.queryParameters.excludes
@@ -283,7 +284,7 @@ export class Query<
             : true;
     }
 
-    entityMatches(entity: typeof this.manager.Entity) {
+    entityMatches(entity: E) {
         if (
             this.queryParameters.includes &&
             (this.queryParameters.flexible
@@ -320,7 +321,7 @@ export class Query<
     }
 
     /** for internal use */
-    indexEntity(entity: typeof this.manager.Entity) {
+    indexEntity(entity: E) {
         // TODO split add and update for performance?
 
         this.entities.add(entity.id);
@@ -346,7 +347,7 @@ export class Query<
         }
     }
 
-    handleEntity(entity: typeof this.manager.Entity) {
+    handleEntity(entity: E) {
         const matches = this.entityMatches(entity);
 
         if (this.entities.has(entity.id)) {
@@ -393,7 +394,7 @@ export class Query<
         }
     }
 
-    addEntity(entity: typeof this.manager.Entity) {
+    addEntity(entity: E) {
         this.consumers.forEach((c) => c.add(entity.id));
         this.indexEntity(entity);
 
@@ -406,7 +407,7 @@ export class Query<
         console.log('[QUERY]', this.queryName, 'added entity', entity.id);
     }
 
-    updatedEntity(entity: typeof this.manager.Entity) {
+    updatedEntity(entity: E) {
         if (!this.entities.has(entity.id)) return;
 
         throttleLog('[QUERY]', this.queryName, 'updated entity', entity.id);
@@ -429,7 +430,7 @@ export class Query<
         });
     }
 
-    removeEntity(entity: typeof this.manager.Entity) {
+    removeEntity(entity: E) {
         this.entities.delete(entity.id);
         this.queuedEntities.delete(entity.id);
         this.entitiesInSlice.delete(entity.id);
@@ -534,10 +535,10 @@ export class Query<
     }
 }
 
-export interface ConsumerState {
+export interface ConsumerState<E> {
     updatedEntities: Set<EntityId>;
     newEntities: Set<EntityId>;
-    deletedEntities: Set<typeof this.query.manager.Entity>;
+    deletedEntities: Set<E>;
     consumed: boolean;
     consumedEntities: Set<EntityId>;
 }
@@ -613,7 +614,7 @@ export class Consumer<
         }
     }
 
-    createInitialState(): ConsumerState {
+    createInitialState(): ConsumerState<E> {
         return {
             updatedEntities: new Set(),
             newEntities: new Set(),

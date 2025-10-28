@@ -24,8 +24,8 @@ export type EntityId = string;
 
 export type Entity<ComponentTypes> = {
     id: EntityId;
-    previousComponents: Readonly<ComponentTypes>;
     components: ComponentTypes;
+    previousComponents: Readonly<ComponentTypes>;
     /** flag a deeper update to a component */
     flagUpdate: (componentType: keyof ComponentTypes) => void;
 
@@ -35,6 +35,11 @@ export type Entity<ComponentTypes> = {
         value: ComponentTypes[T]
     ) => void;
 };
+
+export type SerializableEntity<ComponentTypes> = Omit<
+    Entity<ComponentTypes>,
+    'previousComponents' | 'quietSet' | 'flagUpdate'
+>;
 
 type EntitiesById<ComponentTypes> = Map<EntityId, Entity<ComponentTypes>>; //{ [id: string]: Entity<ComponentTypes> };
 type EntityMap<ComponentTypes> = Map<Keys<ComponentTypes>, Set<EntityId>>; //{ [type in Keys<ComponentTypes>]?: Set<string> };
@@ -68,6 +73,17 @@ export type EntityAdminState<
     updatedEntities: Set<EntityId>;
     previouslyUpdatedEntities: Set<EntityId>;
     deletedEntities: Set<Entity<ComponentTypes>>;
+};
+
+export type SerializableState<
+    ComponentTypes,
+    ExactComponentTypes extends defaultComponentTypes,
+    SerializableEntity
+> = Omit<
+    EntityAdminState<ComponentTypes, ExactComponentTypes>,
+    'queries' | 'entities'
+> & {
+    entities: Map<EntityId, SerializableEntity>;
 };
 
 export type defaultComponentTypes = {
@@ -132,6 +148,15 @@ export class Manager<ExactComponentTypes extends defaultComponentTypes> {
 
         this.state = this.createInitialState();
     }
+
+    patchHandlers?: {
+        newEntity?: (entity: Entity<Partial<ExactComponentTypes>>) => void;
+        component?: <K extends Keys<ExactComponentTypes>>(
+            entity: Entity<Partial<ExactComponentTypes>>,
+            componentType: K,
+            componentValue: ExactComponentTypes[K]
+        ) => void;
+    };
 
     setState(
         newState:
@@ -478,10 +503,18 @@ export class Manager<ExactComponentTypes extends defaultComponentTypes> {
     /** to be called after each system */
     subTick() {
         startPerformanceMeasure(this);
-        const { state } = this;
+        const { state, patchHandlers } = this;
         state.stagedUpdates.forEach((componentUpdates, componentType) => {
             componentUpdates.forEach((entityId) => {
                 const entity = this.getEntity(entityId);
+                if (!entity) return;
+
+                patchHandlers?.component?.(
+                    entity,
+                    componentType,
+                    entity.components[componentType] as any
+                );
+
                 if (entity && !this.state.updatedEntities.has(entityId)) {
                     this.updatedEntity(entity, false, false);
                 }
@@ -507,6 +540,7 @@ export class Manager<ExactComponentTypes extends defaultComponentTypes> {
         endPerformanceMeasure(this);
     }
 
+    // TODO evaluate and remove?
     tickHandlers = new Set<() => void>();
 
     /** to be called after each set of systems (end of a frame) */
@@ -560,6 +594,8 @@ export class Manager<ExactComponentTypes extends defaultComponentTypes> {
         this.state.queries.forEach((query, queryName) => {
             query.handleEntity(entity);
         });
+
+        this.patchHandlers?.newEntity?.(entity);
 
         return entity;
     }

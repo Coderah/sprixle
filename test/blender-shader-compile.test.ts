@@ -37,7 +37,7 @@ import {
     RenderPass,
     Sky,
 } from 'three-stdlib';
-import { OutputPass } from 'three/examples/jsm/postprocessing/OutputPass';
+// import { OutputPass } from 'three/examples/jsm/postprocessing/OutputPass.js';
 import {
     createNodeTreeCompiler,
     NodeTree,
@@ -246,7 +246,7 @@ new GLTFLoader().load('assets/shader-compile-test.glb', (gltf) => {
             composer = new EffectComposer(renderer, renderTarget);
 
             composer.addPass(new RenderPass(scene, camera));
-            composer.addPass(new OutputPass());
+            // composer.addPass(new OutputPass());
             // controls.target =
         }
 

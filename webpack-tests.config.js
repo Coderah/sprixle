@@ -4,8 +4,6 @@ const { CleanWebpackPlugin } = require('clean-webpack-plugin');
 const HtmlWebpackPlugin = require('html-webpack-plugin');
 const CopyPlugin = require('copy-webpack-plugin');
 const commitCount = require('git-commit-count');
-const fs = require('fs');
-const YAML = require('yaml');
 
 const isDevelopment = process.env.NODE_ENV !== 'production';
 

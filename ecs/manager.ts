@@ -98,7 +98,7 @@ export class Manager<ExactComponentTypes extends defaultComponentTypes> {
     componentTypesSet: Readonly<Set<keyof ExactComponentTypes>>;
     componentNames: readonly Keys<ExactComponentTypes>[];
 
-    state: ReturnType<typeof this.createInitialState>;
+    state: EntityAdminState<typeof this.ComponentTypes, ExactComponentTypes>;
 
     componentsReflection: ReflectionClass<ComponentTypes>;
 
@@ -155,7 +155,7 @@ export class Manager<ExactComponentTypes extends defaultComponentTypes> {
             componentMap: new Map(),
             queryMap: new Map(),
 
-            queries: new Map(),
+            queries: this.state?.queries || new Map(),
             queryStates: new Map(),
 
             stagedUpdates: new Map(),
@@ -166,23 +166,18 @@ export class Manager<ExactComponentTypes extends defaultComponentTypes> {
             deletedEntities: new Set(),
         };
 
+        this.state?.queries.forEach((query) => {
+            newState.queryStates.set(
+                query.queryName,
+                query.createInitialState()
+            );
+        });
+
         this.componentTypesSet.forEach((type) => {
             newState.stagedUpdates.set(type, new Set());
         });
 
         return newState;
-    }
-
-    resetState() {
-        const oldState = this.state;
-        const newState = this.createInitialState();
-
-        oldState.queries.forEach((query) => {
-            query.resetConsumers();
-            newState.queries.set(query.queryName, query);
-        });
-
-        this.state = newState;
     }
 
     createQuery<
@@ -543,7 +538,15 @@ export class Manager<ExactComponentTypes extends defaultComponentTypes> {
 
     // TODO handle deserialized (no proxy or flagUpdate)
     registerEntity(entity: typeof this.Entity) {
-        if (this.entityExists(entity.id)) return;
+        if (this.entityExists(entity.id)) {
+            if (this.getEntity(entity.id) !== entity) {
+                console.warn(
+                    '[registerEntity] two entity objects exist with id',
+                    entity.id
+                );
+            }
+            return;
+        }
         const { state } = this;
 
         state.entities.set(entity.id, entity);

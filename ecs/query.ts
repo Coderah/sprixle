@@ -246,9 +246,23 @@ export class Query<
         if (manager.state.queryStates.has(this.queryName)) {
             this.queryName += uuid();
         }
-        manager.state.queryStates.set(this.queryName, {
+        manager.state.queryStates.set(
+            this.queryName,
+            this.createInitialState()
+        );
+
+        // TODO: handle existing entities
+        manager.state.entities.forEach((entity) => {
+            if (this.entityMatches(entity)) this.addEntity(entity);
+        });
+    }
+
+    createInitialState(): QueryState<ExactComponentTypes, any, any, any> {
+        return {
             entities: new Set(),
-            consumerStates: [],
+            consumerStates: this.consumers.map((consumer) =>
+                consumer.createInitialState()
+            ),
 
             indexed: new Map(),
 
@@ -258,12 +272,7 @@ export class Query<
             lastEntity: undefined,
             sliceHead: null,
             nextSliceHead: null,
-        });
-
-        // TODO: handle existing entities
-        manager.state.entities.forEach((entity) => {
-            if (this.entityMatches(entity)) this.addEntity(entity);
-        });
+        };
     }
 
     componentMatches(component: keyof typeof this.manager.ComponentTypes) {
@@ -597,17 +606,21 @@ export class Consumer<
 
         this.consumerId = query.consumers.length;
 
-        query.state.consumerStates[this.consumerId] = {
+        query.state.consumerStates[this.consumerId] = this.createInitialState();
+
+        if (query.entities.size) {
+            query.entities.forEach((entity) => this.add(entity));
+        }
+    }
+
+    createInitialState(): ConsumerState {
+        return {
             updatedEntities: new Set(),
             newEntities: new Set(),
             deletedEntities: new Set(),
             consumed: false,
             consumedEntities: new Set(),
         };
-
-        if (query.entities.size) {
-            query.entities.forEach((entity) => this.add(entity));
-        }
     }
 
     clear() {

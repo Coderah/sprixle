@@ -5,9 +5,13 @@ let timeDiff = 0;
 
 export function setTimeSyncDiff(serverNow: number) {
     memoizedGlobalNow.cache.clear?.();
-    timeDiff = now() - serverNow;
+    timeDiff = Date.now() - serverNow;
 
     console.log('serverTime diff set', timeDiff);
+}
+
+export function getTimeDiff(): number {
+    return timeDiff;
 }
 
 let activePipeline: Pipeline<any> | null = null;

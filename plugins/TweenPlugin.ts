@@ -1,4 +1,4 @@
-import { lerp } from 'three/src/math/MathUtils';
+import { lerp } from 'three/src/math/MathUtils.js';
 import { Keys, Manager, defaultComponentTypes } from '../ecs/manager';
 import { memoizedGlobalNow } from '../util/now';
 import * as easing from 'easing-utils';

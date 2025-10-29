@@ -468,12 +468,20 @@ export class Manager<ExactComponentTypes extends defaultComponentTypes> {
     }
 
     /** Creates or gets entity, add components and registers it immediately */
-    quickEntity(components: Partial<ExactComponentTypes>, id = uuid()) {
+    quickEntity<Components extends Partial<ExactComponentTypes>>(
+        components: Components,
+        id = uuid()
+    ) {
         const entity = this.getEntity(id) || this.createEntity(id);
         this.addComponents(entity, components);
         this.registerEntity(entity);
 
-        return entity;
+        return entity as EntityWithComponents<
+            ExactComponentTypes,
+            typeof this,
+            //@ts-ignore
+            Keys<Components>
+        >;
     }
 
     cloneEntity(

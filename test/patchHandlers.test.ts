@@ -17,17 +17,12 @@ import { deserialize, serialize, typeOf } from '@deepkit/type';
 import assert from 'assert';
 
 type ComponentTypes = defaultComponentTypes & {
+    serverOnly: Object;
     genericID: string;
     numericComponent: number;
 };
 
-type SerializableComponents = Omit<ComponentTypes, 'genericID'>;
-
-type ComponentPatch = {
-    id: EntityId;
-    componentType: keyof ComponentTypes;
-    value: ComponentTypes[keyof ComponentTypes];
-};
+type SerializableComponents = Omit<ComponentTypes, 'serverOnly'>;
 
 type TransmittableEntity = SerializableEntity<Partial<SerializableComponents>>;
 // type ComponentPatch = [
@@ -35,12 +30,6 @@ type TransmittableEntity = SerializableEntity<Partial<SerializableComponents>>;
 //     keyof ComponentTypes,
 //     ComponentTypes[keyof ComponentTypes]
 // ];
-
-const componentPatch = getBsonEncoder(typeOf<ComponentPatch>(), {
-    validation: false,
-});
-
-let globalStorage: any;
 
 const manager = new Manager<ComponentTypes>();
 
@@ -57,8 +46,8 @@ const entityB = getBsonEncoder(typeOf<TransmittableEntity>(), {
 const stateB = getBsonEncoder(
     typeOf<
         SerializableState<
-            Partial<ComponentTypes>,
-            ComponentTypes,
+            Partial<SerializableComponents>,
+            SerializableComponents,
             TransmittableEntity
         >
     >(),
@@ -68,12 +57,12 @@ const stateB = getBsonEncoder(
 );
 
 manager.patchHandlers = {
-    newEntity(entity) {
+    register(entity) {
         const time = performance.now();
         const serialized = entityB.encode(entity);
         const newEntity = entityB.decode(serialized);
         console.log(
-            '[patchHandlers newEntity]',
+            '[patchHandlers register]',
             serialized.length,
             // deserialize<typeof manager.Entity>(serialized),
             newEntity,
@@ -81,18 +70,15 @@ manager.patchHandlers = {
             performance.now() - time
         );
     },
-    component(entity, componentType, componentValue) {
-        // const time = performance.now();
-        const serialized = componentPatch.encode({
-            id: entity.id,
-            componentType,
-            value: componentValue,
+    components(id, components: Partial<ComponentTypes>) {
+        const time = performance.now();
+        const serialized = entityB.encode({
+            id,
+            components,
         });
 
-        globalStorage = serialized;
-
         // const serialized = componentPatch.encode([
-        //     entity.id,
+        //     id,
         //     componentType,
         //     componentValue,
         // ]);
@@ -104,34 +90,41 @@ manager.patchHandlers = {
         //     componentValue
         // );
 
-        console.log(componentPatch.decode(serialized));
-        console.log('serialize loop', componentType);
+        console.log('deserialized', entityB.decode(serialized));
+        console.log('serialize loop', components, performance.now() - time);
+    },
+    deregister(entity) {
+        console.log('[patchHandlers deregister]', entity);
     },
 };
 
 const entity = manager.quickEntity({
+    serverOnly: {},
     genericID: '112365-45235-23452-2525',
     numericComponent: 3,
 });
 
 manager.tick();
 
+entity.components.serverOnly = function () {};
 entity.components.genericID = '8259-2348235-2348234-23424';
 entity.components.numericComponent += 3;
-
 manager.subTick();
 
 entity.components.genericID = '234-2348235-2348234-23424';
 entity.components.numericComponent += 3;
-
 manager.subTick();
+
+entity.components.serverOnly = manager.createEntity();
 entity.components.genericID = '8259-55-2348234-23424';
 entity.components.numericComponent += 3;
-
 manager.subTick();
+
 entity.components.genericID = '8259-2348235-88-23424';
 entity.components.numericComponent += 3;
 
+// test stagedUpdates serialization
+assert(stateB.decode(stateB.encode(manager.state)).stagedUpdates.size === 1);
 manager.subTick();
 
 manager.tick();
@@ -142,3 +135,5 @@ console.log('serialized manager state', serializedState);
 console.log('took', performance.now() - time);
 
 console.log(stateB.decode(serializedState));
+
+manager.deregisterEntity(entity);

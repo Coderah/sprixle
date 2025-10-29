@@ -18,6 +18,7 @@ import {
 } from './query';
 import { ConsumerSystem, QuerySystem, System } from './system';
 import { endPerformanceMeasure, startPerformanceMeasure } from './performance';
+import { PooledMap } from './pool.ts';
 
 export type Keys<T> = keyof T;
 export type EntityId = string;
@@ -41,16 +42,17 @@ export type SerializableEntity<ComponentTypes> = Omit<
     'previousComponents' | 'quietSet' | 'flagUpdate'
 >;
 
-type EntitiesById<ComponentTypes> = Map<EntityId, Entity<ComponentTypes>>; //{ [id: string]: Entity<ComponentTypes> };
 type EntityMap<ComponentTypes> = Map<Keys<ComponentTypes>, Set<EntityId>>; //{ [type in Keys<ComponentTypes>]?: Set<string> };
 type ComponentMap<ComponentTypes> = Map<EntityId, Set<Keys<ComponentTypes>>>; //{ [id: string]: Set<Keys<ComponentTypes>> }; // TODO do we actually need ComponentMap for anything?
 type QueryMap = Map<EntityId, Set<QueryName>>; //{ [id: string]: Set<Keys<ComponentTypes>> }; // TODO do we actually need ComponentMap for anything?
 
+// TODO use pooled objects for more things.
 export type EntityAdminState<
     ComponentTypes,
-    ExactComponentTypes extends defaultComponentTypes
+    ExactComponentTypes extends defaultComponentTypes,
+    E = Entity<ComponentTypes>
 > = {
-    entities: EntitiesById<ComponentTypes>;
+    entities: Map<EntityId, E>;
     /** Maps entity type to set of Entity Ids */
     entityMap: EntityMap<ComponentTypes>;
     /** Maps entity Id to set of ComponentTypes */
@@ -67,12 +69,12 @@ export type EntityAdminState<
     >;
     // consumerStates: Array<>
 
-    stagedUpdates: Map<Keys<ExactComponentTypes>, Set<EntityId>>;
+    stagedUpdates: PooledMap<EntityId, Set<Keys<ExactComponentTypes>>>;
 
     newEntities: Set<EntityId>;
     updatedEntities: Set<EntityId>;
     previouslyUpdatedEntities: Set<EntityId>;
-    deletedEntities: Set<Entity<ComponentTypes>>;
+    deletedEntities: Set<E>;
 };
 
 export type SerializableState<
@@ -80,10 +82,10 @@ export type SerializableState<
     ExactComponentTypes extends defaultComponentTypes,
     SerializableEntity
 > = Omit<
-    EntityAdminState<ComponentTypes, ExactComponentTypes>,
-    'queries' | 'entities'
+    EntityAdminState<ComponentTypes, ExactComponentTypes, SerializableEntity>,
+    'queries' | 'stagedUpdates'
 > & {
-    entities: Map<EntityId, SerializableEntity>;
+    stagedUpdates: Map<EntityId, Set<Keys<ComponentTypes>>>;
 };
 
 export type defaultComponentTypes = {
@@ -105,18 +107,18 @@ export type EntityWithComponents<
 // TODO: add `clone` method? Handle queries being made in a singleton manner.
 // TODO: tie query/consumer and system together more meaningfully for performance and cleanup
 export class Manager<ExactComponentTypes extends defaultComponentTypes> {
-    readonly ComponentTypes: Partial<ExactComponentTypes>;
-    readonly State: EntityAdminState<
+    readonly ComponentTypes!: Partial<ExactComponentTypes>;
+    readonly State!: EntityAdminState<
         typeof this.ComponentTypes,
         ExactComponentTypes
     >;
-    readonly Entity: Entity<typeof this.ComponentTypes>;
+    readonly Entity!: Entity<typeof this.ComponentTypes>;
     componentTypesSet: Readonly<Set<keyof ExactComponentTypes>>;
     componentNames: readonly Keys<ExactComponentTypes>[];
 
     state: EntityAdminState<typeof this.ComponentTypes, ExactComponentTypes>;
 
-    componentsReflection: ReflectionClass<ComponentTypes>;
+    componentsReflection: ReflectionClass<ExactComponentTypes>;
 
     /**
      *
@@ -150,12 +152,12 @@ export class Manager<ExactComponentTypes extends defaultComponentTypes> {
     }
 
     patchHandlers?: {
-        newEntity?: (entity: Entity<Partial<ExactComponentTypes>>) => void;
-        component?: <K extends Keys<ExactComponentTypes>>(
-            entity: Entity<Partial<ExactComponentTypes>>,
-            componentType: K,
-            componentValue: ExactComponentTypes[K]
+        register?: (entity: Entity<Partial<ExactComponentTypes>>) => void;
+        components?: (
+            id: EntityId,
+            components: Partial<ExactComponentTypes>
         ) => void;
+        deregister?: (entity: Entity<Partial<ExactComponentTypes>>) => void;
     };
 
     setState(
@@ -183,7 +185,12 @@ export class Manager<ExactComponentTypes extends defaultComponentTypes> {
             queries: this.state?.queries || new Map(),
             queryStates: new Map(),
 
-            stagedUpdates: new Map(),
+            stagedUpdates:
+                this.state?.stagedUpdates ||
+                new PooledMap(
+                    () => new Set(),
+                    (s) => s.clear()
+                ),
 
             newEntities: new Set(),
             previouslyUpdatedEntities: new Set(),
@@ -191,15 +198,13 @@ export class Manager<ExactComponentTypes extends defaultComponentTypes> {
             deletedEntities: new Set(),
         };
 
+        newState.stagedUpdates.clear();
+
         this.state?.queries.forEach((query) => {
             newState.queryStates.set(
                 query.queryName,
                 query.createInitialState()
             );
-        });
-
-        this.componentTypesSet.forEach((type) => {
-            newState.stagedUpdates.set(type, new Set());
         });
 
         return newState;
@@ -319,7 +324,7 @@ export class Manager<ExactComponentTypes extends defaultComponentTypes> {
             entity: typeof this.Entity,
             componentType: keyof ExactComponentTypes
         ) {
-            manager.state.stagedUpdates.get(componentType)?.add(id);
+            manager.state.stagedUpdates.getOrCreate(id).add(componentType);
 
             const value = entity.components[componentType];
             if (
@@ -504,16 +509,17 @@ export class Manager<ExactComponentTypes extends defaultComponentTypes> {
     subTick() {
         startPerformanceMeasure(this);
         const { state, patchHandlers } = this;
-        state.stagedUpdates.forEach((componentUpdates, componentType) => {
-            componentUpdates.forEach((entityId) => {
+
+        state.stagedUpdates.forEach((componentTypes, entityId) => {
+            const patches: Partial<ExactComponentTypes> = {};
+
+            componentTypes.forEach((componentType) => {
                 const entity = this.getEntity(entityId);
                 if (!entity) return;
 
-                patchHandlers?.component?.(
-                    entity,
-                    componentType,
-                    entity.components[componentType] as any
-                );
+                if (patchHandlers?.components) {
+                    patches[componentType] = entity.components[componentType];
+                }
 
                 if (entity && !this.state.updatedEntities.has(entityId)) {
                     this.updatedEntity(entity, false, false);
@@ -529,14 +535,16 @@ export class Manager<ExactComponentTypes extends defaultComponentTypes> {
                         //     componentType,
                         //     query.queryName
                         // );
-                    } else if (query.queryParameters.index === componentType) {
+                    } else if (query?.queryParameters.index === componentType) {
                         query.indexEntity(entity);
                     }
                 });
             });
 
-            componentUpdates.clear();
+            patchHandlers?.components?.(entityId, patches);
         });
+
+        state.stagedUpdates.clear();
         endPerformanceMeasure(this);
     }
 
@@ -595,7 +603,7 @@ export class Manager<ExactComponentTypes extends defaultComponentTypes> {
             query.handleEntity(entity);
         });
 
-        this.patchHandlers?.newEntity?.(entity);
+        this.patchHandlers?.register?.(entity);
 
         return entity;
     }
@@ -618,6 +626,8 @@ export class Manager<ExactComponentTypes extends defaultComponentTypes> {
         });
 
         this.updatedEntity(entity, false, false);
+
+        this.patchHandlers?.deregister?.(entity);
     }
 
     addEntityMapping(

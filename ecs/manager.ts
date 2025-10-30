@@ -172,18 +172,24 @@ export class Manager<ExactComponentTypes extends defaultComponentTypes> {
         }
     }
 
-    createInitialState() {
+    createInitialState(
+        importableState?: SerializableState<
+            Partial<ExactComponentTypes>,
+            ExactComponentTypes,
+            SerializableEntity<Partial<ExactComponentTypes>>
+        >
+    ) {
         const newState: EntityAdminState<
             typeof this.ComponentTypes,
             ExactComponentTypes
         > = {
             entities: new Map(),
-            entityMap: new Map(),
-            componentMap: new Map(),
-            queryMap: new Map(),
+            entityMap: importableState?.entityMap || new Map(),
+            componentMap: importableState?.componentMap || new Map(),
+            queryMap: importableState?.queryMap || new Map(),
 
             queries: this.state?.queries || new Map(),
-            queryStates: new Map(),
+            queryStates: importableState?.queryStates || new Map(),
 
             stagedUpdates:
                 this.state?.stagedUpdates ||
@@ -192,15 +198,26 @@ export class Manager<ExactComponentTypes extends defaultComponentTypes> {
                     (s) => s.clear()
                 ),
 
-            newEntities: new Set(),
-            previouslyUpdatedEntities: new Set(),
-            updatedEntities: new Set(),
+            newEntities: importableState?.newEntities || new Set(),
+            previouslyUpdatedEntities:
+                importableState?.previouslyUpdatedEntities || new Set(),
+            updatedEntities: importableState?.updatedEntities || new Set(),
             deletedEntities: new Set(),
         };
+
+        if (importableState) {
+            for (let importableEntity of importableState.entities.values()) {
+                newState.entities.set(
+                    importableEntity.id,
+                    this.createEntity(importableEntity)
+                );
+            }
+        }
 
         newState.stagedUpdates.clear();
 
         this.state?.queries.forEach((query) => {
+            if (newState.queryStates.has(query.queryName)) return;
             newState.queryStates.set(
                 query.queryName,
                 query.createInitialState()
@@ -315,13 +332,24 @@ export class Manager<ExactComponentTypes extends defaultComponentTypes> {
         }
     }
 
-    createEntity(id = uuid()): typeof this.Entity {
+    createEntity(
+        deserialized: SerializableEntity<Partial<ExactComponentTypes>>
+    ): typeof this.Entity;
+    createEntity(id: string): typeof this.Entity;
+    createEntity(
+        idOrDeserialized:
+            | string
+            | SerializableEntity<Partial<ExactComponentTypes>> = uuid()
+    ): typeof this.Entity {
         const timestamp = now();
+
+        const isFromDeserialized = typeof idOrDeserialized !== 'string';
+        const id = !isFromDeserialized ? idOrDeserialized : idOrDeserialized.id;
 
         const manager = this;
 
         function flagUpdate(
-            entity: typeof this.Entity,
+            entity: Entity<ExactComponentTypes>,
             componentType: keyof ExactComponentTypes
         ) {
             manager.state.stagedUpdates.getOrCreate(id).add(componentType);
@@ -332,17 +360,21 @@ export class Manager<ExactComponentTypes extends defaultComponentTypes> {
                 (value instanceof Vector2 || value instanceof Vector3)
             ) {
                 if (!entity.previousComponents[componentType]) {
+                    // @ts-ignore
                     entity.previousComponents[componentType] = value.clone();
                 } else {
+                    // @ts-ignore
                     entity.previousComponents[componentType].copy(value);
                 }
             }
         }
 
-        const components = {
-            createdAt: timestamp,
-            updatedAt: timestamp,
-        } as typeof this.ComponentTypes;
+        const components = isFromDeserialized
+            ? idOrDeserialized.components
+            : ({
+                  createdAt: timestamp,
+                  updatedAt: timestamp,
+              } as typeof this.ComponentTypes);
 
         const entity = {
             id,
@@ -377,10 +409,10 @@ export class Manager<ExactComponentTypes extends defaultComponentTypes> {
                             );
                         }
                     } catch (e) {
-                        console.warn(
-                            'Error finding type info for componentType',
-                            componentType
-                        );
+                        // console.warn(
+                        //     'Error finding type info for componentType',
+                        //     componentType
+                        // );
                     }
 
                     const entityIsRegistered = manager.state.entities.has(id);

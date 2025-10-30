@@ -557,7 +557,12 @@ export class Consumer<
     consumerId: number;
 
     get state() {
-        return this.query.state.consumerStates[this.consumerId];
+        let state = this.query.state.consumerStates[this.consumerId];
+        if (!state) {
+            state = this.createInitialState();
+            this.query.state.consumerStates[this.consumerId] = state;
+        }
+        return state;
     }
 
     // updatedEntities = new Set<entityId>();

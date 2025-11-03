@@ -7,6 +7,7 @@ import {
 import { now } from '../util/now';
 import { Pipeline } from '../ecs/system';
 import { throttleLog } from '../util/log';
+import { SingletonComponent } from '../ecs/types';
 
 const mouseButtons = {
     0: 'Left',
@@ -66,6 +67,8 @@ interface InputPluginOptions {
 }
 
 export type InputComponents = {
+    screenPointerPosition: Vector2 & SingletonComponent;
+
     /** used to indicate an input binding (map multiple inputs and input types to a name) */
     inputBindName: string;
     /** the list of inputs that trigger a binding, must be paired with @inputBindName */
@@ -212,20 +215,37 @@ export function applyInputPlugin<
             });
         },
         initInput(domElement: HTMLElement) {
-            screenMousePosition.set(
-                window.innerWidth / 2,
-                window.innerHeight / 2
+            const screenPointerEntity = manager.getSingletonEntity(
+                'screenPointerPosition'
             );
+            screenPointerEntity.components.screenPointerPosition =
+                screenMousePosition.set(
+                    window.innerWidth / 2,
+                    window.innerHeight / 2
+                );
+
+            function updateScreenMousePosition(x: number, y: number) {
+                screenMousePosition.set(x, y);
+
+                screenPointerEntity.flagUpdate('screenPointerPosition');
+
+                if (manager.entityExists('screenPointerPosition')) {
+                    manager.registerEntity(screenPointerEntity);
+                }
+            }
+
             const handleMouseMove = (event: MouseEvent | TouchEvent) => {
                 if (event instanceof MouseEvent) {
-                    screenMousePosition.set(event.clientX, event.clientY);
+                    updateScreenMousePosition(event.clientX, event.clientY);
                 } else if (event.touches) {
                     // const bounding = domElement.getBoundingClientRect();
-                    screenMousePosition.set(
+                    updateScreenMousePosition(
                         event.touches[0].clientX,
                         event.touches[0].clientY
                     );
                 }
+
+                updateScreenMousePosition;
             };
 
             const handleMouseDown = (event: MouseEvent) => {
@@ -275,7 +295,7 @@ export function applyInputPlugin<
                 }
 
                 // const bounding = domElement.getBoundingClientRect();
-                screenMousePosition.set(
+                updateScreenMousePosition(
                     event.touches[0].clientX,
                     event.touches[0].clientY
                 );

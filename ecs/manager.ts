@@ -432,10 +432,10 @@ export class Manager<ExactComponentTypes extends defaultComponentTypes> {
                                 );
                             }
                         } else {
-                            entity.previousComponents[componentType] =
-                                target[componentType];
-
                             if (target[componentType] !== value) {
+                                entity.previousComponents[componentType] =
+                                    target[componentType];
+
                                 flagUpdate(
                                     entity,
                                     componentType as keyof ExactComponentTypes

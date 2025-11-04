@@ -58,7 +58,7 @@ export const inputState = {
     worldMouseY: 0.5,
 };
 
-window['inputState'] = inputState;
+global['inputState'] = inputState;
 
 interface InputPluginOptions {
     useThreeForWorldPosition?: boolean;

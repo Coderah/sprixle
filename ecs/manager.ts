@@ -335,7 +335,7 @@ export class Manager<ExactComponentTypes extends defaultComponentTypes> {
     createEntity(
         deserialized: SerializableEntity<Partial<ExactComponentTypes>>
     ): typeof this.Entity;
-    createEntity(id: string): typeof this.Entity;
+    createEntity(id?: string): typeof this.Entity;
     createEntity(
         idOrDeserialized:
             | string

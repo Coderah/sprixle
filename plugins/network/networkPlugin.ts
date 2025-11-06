@@ -158,8 +158,8 @@ export function applyNetwork<
             return;
         }
         // TODO rewrite for server send
-        // if (!targetSocket || targetSocket.readyState !== targetSocket.OPEN)
-        //     return;
+        if (!targetSocket || targetSocket.readyState !== targetSocket.OPEN)
+            return;
         const enclosedData = bufferEncoder.encode(
             data ? [command, data] : command
         );

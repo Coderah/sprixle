@@ -157,6 +157,10 @@ export class Manager<ExactComponentTypes extends defaultComponentTypes> {
             id: EntityId,
             components: Partial<ExactComponentTypes>
         ) => void;
+        removeComponent?: (
+            id: EntityId,
+            component: keyof ExactComponentTypes
+        ) => void;
         deregister?: (entity: Entity<Partial<ExactComponentTypes>>) => void;
     };
 
@@ -382,6 +386,10 @@ export class Manager<ExactComponentTypes extends defaultComponentTypes> {
             components: new Proxy(components, {
                 set(target, componentType, value = null) {
                     // TODO handle setting undefined (should removeComponent)
+                    // if (value === undefined) {
+                    //     delete entity.components[componentType];
+                    //     return;
+                    // }
 
                     try {
                         const reflectionType =
@@ -484,6 +492,10 @@ export class Manager<ExactComponentTypes extends defaultComponentTypes> {
                     delete target[p];
                     manager.removeEntityMapping(
                         entity,
+                        p as keyof ExactComponentTypes
+                    );
+                    manager.patchHandlers?.removeComponent?.(
+                        entity.id,
                         p as keyof ExactComponentTypes
                     );
                     return true;

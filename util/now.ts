@@ -3,9 +3,9 @@ import { Pipeline } from '../ecs/system';
 
 let timeDiff = 0;
 
-export function setTimeSyncDiff(serverNow: number) {
+export function setTimeSyncDiff(serverNow: number, pingSentAt = Date.now()) {
     memoizedGlobalNow.cache.clear?.();
-    timeDiff = Date.now() - serverNow;
+    timeDiff = pingSentAt - serverNow;
 
     console.log('serverTime diff set', timeDiff);
 }

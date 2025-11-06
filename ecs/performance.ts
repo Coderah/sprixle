@@ -12,7 +12,7 @@ let endPerformanceMeasure: (
 ) => void = noop;
 
 if (process.env.NODE_ENV !== 'production') {
-    global['trackPerformance'] = function () {
+    globalThis['trackPerformance'] = function () {
         startPerformanceMeasure = (target, detail = {}) => {
             const tag =
                 target instanceof Manager
@@ -32,7 +32,7 @@ if (process.env.NODE_ENV !== 'production') {
         };
     };
 
-    global['stopTrackingPerformance'] = function () {
+    globalThis['stopTrackingPerformance'] = function () {
         startPerformanceMeasure = noop;
         endPerformanceMeasure = noop;
 

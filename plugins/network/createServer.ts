@@ -2,6 +2,7 @@ import { applyNetwork } from './networkPlugin';
 import { createServer as createHTTPServer } from 'http';
 import { Server as WebSocketServer } from 'ws';
 import { gameNetwork } from '../../../game/gameNetwork';
+import { uuid } from '@deepkit/type';
 
 export function createServer(
     config: {
@@ -53,10 +54,7 @@ export function createServer(
     });
 
     server.on('connection', async (socket, request) => {
-        const client = gameNetwork.getClientEntity(
-            request.socket.remoteAddress as string,
-            socket
-        );
+        const client = gameNetwork.getClientEntity(uuid(), socket);
 
         socket.addEventListener('message', (event) => {
             let { data } = event;
@@ -72,6 +70,7 @@ export function createServer(
             delete client.components.socket;
 
             console.log('client disconnected', client.id);
+            // gameNetwork.handleDisconnect(e);
         });
     });
 

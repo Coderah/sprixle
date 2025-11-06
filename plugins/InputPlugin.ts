@@ -215,17 +215,12 @@ export function applyInputPlugin<
             });
         },
         initInput(domElement: HTMLElement) {
-            const screenPointerEntity = manager.getSingletonEntity(
-                'screenPointerPosition'
-            );
-            screenPointerEntity.components.screenPointerPosition =
-                screenMousePosition.set(
-                    window.innerWidth / 2,
-                    window.innerHeight / 2
-                );
-
             function updateScreenMousePosition(x: number, y: number) {
                 screenMousePosition.set(x, y);
+
+                const screenPointerEntity = manager.getSingletonEntity(
+                    'screenPointerPosition'
+                );
 
                 screenPointerEntity.flagUpdate('screenPointerPosition');
 
@@ -366,6 +361,12 @@ export function applyInputPlugin<
             manager,
             // raw input system
             manager.createSystem(rawInputQuery.createConsumer(), {
+                init() {
+                    manager.setSingletonEntityComponent(
+                        'screenPointerPosition',
+                        screenMousePosition
+                    );
+                },
                 forNew(entity) {
                     entity.components.inputBindIds = [];
                     // TODO map raw input to binds

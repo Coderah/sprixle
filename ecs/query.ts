@@ -1,8 +1,7 @@
-import { throttleLog } from '../util/log';
 import uuid from 'uuid-random';
+import { throttleLog } from '../util/log';
 import {
     defaultComponentTypes,
-    Entity,
     EntityId,
     EntityWithComponents,
     Keys,
@@ -69,8 +68,8 @@ export interface QueryState<
     entitiesInSlice: Set<EntityId>;
 
     lastEntity: EntityId;
-    sliceHead: string | null;
-    nextSliceHead: string | null;
+    sliceHead: EntityId | null;
+    nextSliceHead: EntityId | null;
 }
 
 export class Query<

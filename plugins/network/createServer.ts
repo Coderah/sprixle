@@ -2,7 +2,6 @@ import { applyNetwork } from './networkPlugin';
 import { createServer as createHTTPServer } from 'http';
 import { Server as WebSocketServer } from 'ws';
 import { gameNetwork } from '../../../game/gameNetwork';
-import { uuid } from '@deepkit/type';
 
 export function createServer(
     config: {
@@ -54,7 +53,7 @@ export function createServer(
     });
 
     server.on('connection', async (socket, request) => {
-        const client = gameNetwork.getClientEntity(uuid(), socket);
+        const client = gameNetwork.getClientEntity(socket);
 
         socket.addEventListener('message', (event) => {
             let { data } = event;

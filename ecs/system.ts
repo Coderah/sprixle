@@ -267,6 +267,7 @@ export class Pipeline<ExactComponentTypes extends defaultComponentTypes> {
     cleanup() {
         this.systems.forEach((system) => {
             if (system.cleanup) {
+                //@ts-ignore
                 const { source } = system;
                 if (!source) {
                     system.cleanup();

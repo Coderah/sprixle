@@ -2,6 +2,7 @@ import { ReceiveType, typeOf } from '@deepkit/type';
 import { getBsonEncoder } from '@deepkit/bson';
 import {
     defaultComponentTypes,
+    EntityId,
     EntityWithComponents,
     Manager,
 } from '../../ecs/manager';
@@ -20,7 +21,13 @@ export function applyNetwork<
     Command,
     ComponentTypes extends defaultComponentTypes & NetworkComponentTypes
 >(manager: Manager<ComponentTypes>, commandType?: ReceiveType<Command>) {
-    type MessageData = string | Uint8Array | number | number[] | string[];
+    type MessageData =
+        | string
+        | Uint8Array
+        | number
+        | number[]
+        | string[]
+        | bigint;
     type BufferMessage = Command | [Command, MessageData];
     type EntityWithSocket = EntityWithComponents<
         ComponentTypes,
@@ -174,7 +181,10 @@ export function applyNetwork<
         }
     }
 
-    function getClientEntity(id: string, socket?: ClientWebSocket) {
+    function getClientEntity(
+        socket?: ClientWebSocket,
+        id: EntityId = manager.genId()
+    ) {
         if (!socket) return manager.getEntity(id);
 
         return manager.quickEntity(

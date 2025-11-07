@@ -18,10 +18,10 @@ import {
 } from './query';
 import { ConsumerSystem, QuerySystem, System } from './system';
 import { endPerformanceMeasure, startPerformanceMeasure } from './performance';
-import { PooledMap } from './pool.ts';
+import { PooledMap } from './pool';
 
 export type Keys<T> = keyof T;
-export type EntityId = string;
+export type EntityId = string | bigint;
 
 export type Entity<ComponentTypes> = {
     id: EntityId;
@@ -43,8 +43,8 @@ export type SerializableEntity<ComponentTypes> = Omit<
 >;
 
 type EntityMap<ComponentTypes> = Map<Keys<ComponentTypes>, Set<EntityId>>; //{ [type in Keys<ComponentTypes>]?: Set<string> };
-type ComponentMap<ComponentTypes> = Map<EntityId, Set<Keys<ComponentTypes>>>; //{ [id: string]: Set<Keys<ComponentTypes>> }; // TODO do we actually need ComponentMap for anything?
-type QueryMap = Map<EntityId, Set<QueryName>>; //{ [id: string]: Set<Keys<ComponentTypes>> }; // TODO do we actually need ComponentMap for anything?
+type ComponentMap<ComponentTypes> = Map<EntityId, Set<Keys<ComponentTypes>>>; //{ [id: EntityId]: Set<Keys<ComponentTypes>> }; // TODO do we actually need ComponentMap for anything?
+type QueryMap = Map<EntityId, Set<QueryName>>; //{ [id: EntityId]: Set<Keys<ComponentTypes>> }; // TODO do we actually need ComponentMap for anything?
 
 // TODO use pooled objects for more things.
 export type EntityAdminState<
@@ -89,7 +89,7 @@ export type SerializableState<
 };
 
 export type defaultComponentTypes = {
-    ownerId: string;
+    ownerId: EntityId;
     createdAt: number;
     updatedAt: number;
 };
@@ -119,6 +119,8 @@ export class Manager<ExactComponentTypes extends defaultComponentTypes> {
     state: EntityAdminState<typeof this.ComponentTypes, ExactComponentTypes>;
 
     componentsReflection: ReflectionClass<ExactComponentTypes>;
+
+    genId: () => EntityId = uuid;
 
     /**
      *
@@ -339,15 +341,15 @@ export class Manager<ExactComponentTypes extends defaultComponentTypes> {
     createEntity(
         deserialized: SerializableEntity<Partial<ExactComponentTypes>>
     ): typeof this.Entity;
-    createEntity(id?: string): typeof this.Entity;
+    createEntity(id?: EntityId): typeof this.Entity;
     createEntity(
         idOrDeserialized:
-            | string
-            | SerializableEntity<Partial<ExactComponentTypes>> = uuid()
+            | EntityId
+            | SerializableEntity<Partial<ExactComponentTypes>> = this.genId()
     ): typeof this.Entity {
         const timestamp = now();
 
-        const isFromDeserialized = typeof idOrDeserialized !== 'string';
+        const isFromDeserialized = typeof idOrDeserialized === 'object';
         const id = !isFromDeserialized ? idOrDeserialized : idOrDeserialized.id;
 
         const manager = this;
@@ -514,7 +516,7 @@ export class Manager<ExactComponentTypes extends defaultComponentTypes> {
     /** Creates or gets entity, add components and registers it immediately */
     quickEntity<Components extends Partial<ExactComponentTypes>>(
         components: Components,
-        id = uuid()
+        id = this.genId()
     ) {
         const entity = this.getEntity(id) || this.createEntity(id);
         this.addComponents(entity, components);
@@ -730,11 +732,11 @@ export class Manager<ExactComponentTypes extends defaultComponentTypes> {
         });
     }
 
-    getEntity(id: string) {
+    getEntity(id: EntityId) {
         return this.state.entities.get(id);
     }
 
-    entityExists(id: string) {
+    entityExists(id: EntityId) {
         return this.state.entities.has(id);
     }
 
@@ -777,7 +779,9 @@ export class Manager<ExactComponentTypes extends defaultComponentTypes> {
         );
     }
 
-    getEntityIds(componentType: Keys<typeof this.ComponentTypes>): Set<string> {
+    getEntityIds(
+        componentType: Keys<typeof this.ComponentTypes>
+    ): Set<EntityId> {
         // TODO: optimize?
         const { state } = this;
         const entityMap = state.entityMap.get(componentType);
@@ -833,10 +837,12 @@ export class Manager<ExactComponentTypes extends defaultComponentTypes> {
         return intersectedEntities.map((id) => this.getEntity(id) as E);
     }
 
-    getEntityIdsOf(types: Set<Keys<typeof this.ComponentTypes>>): Set<string> {
+    getEntityIdsOf(
+        types: Set<Keys<typeof this.ComponentTypes>>
+    ): Set<EntityId> {
         return types.reduce(
             (entities, type) => entities.union(this.getEntityIds(type)),
-            new Set<string>()
+            new Set<EntityId>()
         );
     }
 

@@ -338,6 +338,24 @@ export class Manager<ExactComponentTypes extends defaultComponentTypes> {
         }
     }
 
+    protected flagUpdate(
+        entity: Entity<Partial<ExactComponentTypes>>,
+        componentType: keyof ExactComponentTypes
+    ) {
+        this.state.stagedUpdates.getOrCreate(entity.id).add(componentType);
+
+        const value = entity.components[componentType];
+        if (value && (value instanceof Vector2 || value instanceof Vector3)) {
+            if (!entity.previousComponents[componentType]) {
+                // @ts-ignore
+                entity.previousComponents[componentType] = value.clone();
+            } else {
+                // @ts-ignore
+                entity.previousComponents[componentType].copy(value);
+            }
+        }
+    }
+
     createEntity(
         deserialized: SerializableEntity<Partial<ExactComponentTypes>>
     ): typeof this.Entity;
@@ -353,27 +371,6 @@ export class Manager<ExactComponentTypes extends defaultComponentTypes> {
         const id = !isFromDeserialized ? idOrDeserialized : idOrDeserialized.id;
 
         const manager = this;
-
-        function flagUpdate(
-            entity: Entity<ExactComponentTypes>,
-            componentType: keyof ExactComponentTypes
-        ) {
-            manager.state.stagedUpdates.getOrCreate(id).add(componentType);
-
-            const value = entity.components[componentType];
-            if (
-                value &&
-                (value instanceof Vector2 || value instanceof Vector3)
-            ) {
-                if (!entity.previousComponents[componentType]) {
-                    // @ts-ignore
-                    entity.previousComponents[componentType] = value.clone();
-                } else {
-                    // @ts-ignore
-                    entity.previousComponents[componentType].copy(value);
-                }
-            }
-        }
 
         const components = isFromDeserialized
             ? idOrDeserialized.components
@@ -446,7 +443,7 @@ export class Manager<ExactComponentTypes extends defaultComponentTypes> {
                                 entity.previousComponents[componentType] =
                                     target[componentType];
 
-                                flagUpdate(
+                                manager.flagUpdate(
                                     entity,
                                     componentType as keyof ExactComponentTypes
                                 );
@@ -504,7 +501,7 @@ export class Manager<ExactComponentTypes extends defaultComponentTypes> {
                 },
             }),
             flagUpdate: (componentType: keyof ExactComponentTypes) =>
-                flagUpdate(entity, componentType),
+                manager.flagUpdate(entity, componentType),
             quietSet(componentType, value) {
                 components[componentType] = value;
             },

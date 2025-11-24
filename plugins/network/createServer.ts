@@ -9,7 +9,7 @@ export function createServer(
     },
     network: ReturnType<typeof applyNetwork>
 ) {
-    const httpServer = createHTTPServer();
+    const httpServer = createHTTPServer({ noDelay: true });
 
     httpServer.on('request', (request, response) => {
         response.setHeader('Access-Control-Allow-Origin', '*');

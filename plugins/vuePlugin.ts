@@ -1,4 +1,4 @@
-import { onUnmounted, ShallowRef, shallowRef } from 'vue';
+import { onUnmounted, ShallowRef, shallowRef, watch } from 'vue';
 import {
     defaultComponentTypes,
     EntityId,
@@ -37,7 +37,9 @@ export function applyVuePlugin<
             const entityComponentWatchers = componentWatchers.get(id);
             if (entityComponentWatchers) {
                 for (let component in patches) {
-                    const refs = entityComponentWatchers.get(component as Keys<C>);
+                    const refs = entityComponentWatchers.get(
+                        component as Keys<C>
+                    );
                     if (refs) {
                         const newValue = patches[component as Keys<C>];
                         for (let ref of refs) {
@@ -98,22 +100,28 @@ export function applyVuePlugin<
         component: K
     ): ShallowRef<C[K] | undefined> {
         // Extract ID from various input types
-        const getId = (): EntityId | undefined => {
-            if (typeof entityOrId === 'string' || typeof entityOrId === 'bigint') {
-                return entityOrId;
+        const getId = (input = entityOrId): EntityId | undefined => {
+            if (typeof input === 'string' || typeof input === 'bigint') {
+                return input;
             }
-            if ('value' in entityOrId) {
-                return entityOrId.value;
+            if ('value' in input) {
+                return input.value;
             }
-            return entityOrId.id;
+            return input.id;
         };
 
         const initialId = getId();
-        const initialEntity = initialId ? manager.getEntity(initialId) : undefined;
-        const ref = shallowRef<C[K] | undefined>(initialEntity?.components[component]);
+        const initialEntity = initialId
+            ? manager.getEntity(initialId)
+            : undefined;
+        const ref = shallowRef<C[K] | undefined>(
+            initialEntity?.components[component]
+        );
 
         let currentId = initialId;
-        let entityComponentWatchers: Map<Keys<C>, Set<ShallowRef<any>>> | undefined;
+        let entityComponentWatchers:
+            | Map<Keys<C>, Set<ShallowRef<any>>>
+            | undefined;
 
         const registerWatcher = (id: EntityId) => {
             if (!componentWatchers.has(id)) {
@@ -127,7 +135,10 @@ export function applyVuePlugin<
             return watchers;
         };
 
-        const unregisterWatcher = (id: EntityId, watchers: Map<Keys<C>, Set<ShallowRef<any>>>) => {
+        const unregisterWatcher = (
+            id: EntityId,
+            watchers: Map<Keys<C>, Set<ShallowRef<any>>>
+        ) => {
             const refs = watchers.get(component);
             if (refs) {
                 refs.delete(ref);
@@ -168,14 +179,11 @@ export function applyVuePlugin<
 
         // If entityOrId is a ref, watch for ID changes
         if (typeof entityOrId === 'object' && 'value' in entityOrId) {
-            const idRef = entityOrId as { value: EntityId };
-
-            // Use tick handler for efficiency
-            const checkId = () => handleIdChange(idRef.value);
-            manager.tickHandlers.add(checkId);
+            watch(entityOrId, (entityOrId) => {
+                handleIdChange(getId(entityOrId));
+            });
 
             onUnmounted(() => {
-                manager.tickHandlers.delete(checkId);
                 if (currentId && entityComponentWatchers) {
                     unregisterWatcher(currentId, entityComponentWatchers);
                 }
@@ -203,8 +211,11 @@ export function applyVuePlugin<
     function useEntity(
         entityOrId: EntityId | { value: EntityId }
     ): ShallowRef<typeof manager.Entity | undefined> {
-        const initialId = typeof entityOrId === 'object' ? entityOrId.value : entityOrId;
-        const ref = shallowRef(initialId ? manager.getEntity(initialId) : undefined);
+        const initialId =
+            typeof entityOrId === 'object' ? entityOrId.value : entityOrId;
+        const ref = shallowRef(
+            initialId ? manager.getEntity(initialId) : undefined
+        );
 
         let currentId = initialId;
 
@@ -250,13 +261,11 @@ export function applyVuePlugin<
 
         // If entityOrId is a ref, watch for ID changes
         if (typeof entityOrId === 'object') {
-            const idRef = entityOrId as { value: EntityId };
-
-            const checkId = () => handleIdChange(idRef.value);
-            manager.tickHandlers.add(checkId);
+            watch(entityOrId, (entityOrId) => {
+                handleIdChange(entityOrId.value);
+            });
 
             onUnmounted(() => {
-                manager.tickHandlers.delete(checkId);
                 if (currentId) {
                     unregisterWatcher(currentId);
                 }
@@ -306,7 +315,9 @@ export function applyVuePlugin<
 
         function getEntityRef<E = typeof manager.Entity>(id: string) {
             if (!cache.has(id)) {
-                const entityRef = shallowRef(manager.getEntity(id)) as ShallowRef<E>;
+                const entityRef = shallowRef(
+                    manager.getEntity(id)
+                ) as ShallowRef<E>;
                 cache.set(id, entityRef);
 
                 // Register this ref with entityWatchers so patchHandlers updates it
@@ -323,7 +334,10 @@ export function applyVuePlugin<
         const system = manager.createSystem(consumer, {
             tick() {
                 // Only rebuild array when entities are added/removed
-                if (consumer.newEntities.size || consumer.deletedEntities.size) {
+                if (
+                    consumer.newEntities.size ||
+                    consumer.deletedEntities.size
+                ) {
                     ref.value = query.entities.map((id) => getEntityRef<E>(id));
                 }
                 // Individual entity updates handled by patchHandlers

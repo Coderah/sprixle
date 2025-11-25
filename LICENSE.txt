@@ -1,0 +1,26 @@
+Sprixle Engine - Proprietary License
+
+Copyright (c) 2025 Sprixle Studio (Say Nothing and Leave, LLC)
+All rights reserved.
+
+This software and associated documentation files (the "Engine") are proprietary 
+and confidential to Sprixle Studio.
+
+PERMITTED USE:
+This Engine is licensed solely for use in developing the specific project for 
+which access has been granted. No other use is authorized.
+
+RESTRICTIONS:
+- You may NOT copy, modify, merge, publish, distribute, sublicense, or sell 
+  copies of the Engine or any portion thereof
+- You may NOT extract, reuse, or repurpose any Engine code for other projects
+- You may NOT reverse engineer or attempt to derive the source code
+- You may NOT remove or alter this license notice
+
+THE ENGINE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED.
+
+Unauthorized use, copying, or distribution of this Engine or any portion of it 
+may result in severe civil and criminal penalties, and will be prosecuted to 
+the maximum extent possible under law.
+
+For licensing inquiries: Alex DiBerardino - alex@sprixle.studio

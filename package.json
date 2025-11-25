@@ -43,8 +43,9 @@
     "type": "git",
     "url": "git+https://github.com/Coderah/sprixle.git"
   },
-  "author": "",
-  "license": "ISC",
+  "author": "Sprixle Studio",
+  "license": "SEE LICENSE.txt",
+  "private": "true",
   "bugs": {
     "url": "https://github.com/Coderah/sprixle/issues"
   },

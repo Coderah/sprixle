@@ -1,14 +1,8 @@
 import { applyNetwork } from './networkPlugin';
 import { createServer as createHTTPServer } from 'http';
 import { Server as WebSocketServer } from 'ws';
-import { gameNetwork } from '../../../game/gameNetwork';
 
-export function createServer(
-    config: {
-        port: number;
-    },
-    network: ReturnType<typeof applyNetwork>
-) {
+function defaultHTTPServer() {
     const httpServer = createHTTPServer({ noDelay: true });
 
     httpServer.on('request', (request, response) => {
@@ -42,6 +36,16 @@ export function createServer(
         // response.end();
     });
 
+    return httpServer;
+}
+
+export function createServer(
+    config: {
+        port: number;
+    },
+    network: ReturnType<typeof applyNetwork>,
+    httpServer = defaultHTTPServer()
+) {
     const server = new WebSocketServer({
         server: httpServer,
     });
@@ -53,7 +57,7 @@ export function createServer(
     });
 
     server.on('connection', async (socket, request) => {
-        const client = gameNetwork.getClientEntity(socket);
+        const client = network.getClientEntity(socket);
 
         socket.addEventListener('message', (event) => {
             let { data } = event;
@@ -69,7 +73,6 @@ export function createServer(
             delete client.components.socket;
 
             console.log('client disconnected', client.id);
-            // gameNetwork.handleDisconnect(e);
         });
     });
 

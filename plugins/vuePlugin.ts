@@ -61,7 +61,26 @@ export function applyVuePlugin<
 
         register(entity) {
             existingHandlers.register?.(entity);
-            // Entity watchers will pick this up naturally when needed
+
+            const entityComponentWatchers = componentWatchers.get(entity.id);
+            if (entityComponentWatchers) {
+                for (let [component, refs] of entityComponentWatchers) {
+                    if (refs) {
+                        const newValue =
+                            entity.components[component as Keys<C>];
+                        for (let ref of refs) {
+                            ref.value = newValue;
+                        }
+                    }
+                }
+            }
+
+            const entityRefs = entityWatchers.get(entity.id);
+            if (entityRefs?.size) {
+                for (let ref of entityRefs) {
+                    ref.value = entity;
+                }
+            }
         },
 
         deregister(entity) {
@@ -97,7 +116,8 @@ export function applyVuePlugin<
      */
     function useComponent<K extends Keys<C>>(
         entityOrId: EntityId | { value: EntityId } | typeof manager.Entity,
-        component: K
+        component: K,
+        placeholder?: C[K]
     ): ShallowRef<C[K] | undefined> {
         // TODO updating the ref wont actually change the component on the ECS side of things.. fix that
         // Extract ID from various input types
@@ -116,7 +136,7 @@ export function applyVuePlugin<
             ? manager.getEntity(initialId)
             : undefined;
         const ref = shallowRef<C[K] | undefined>(
-            initialEntity?.components[component]
+            initialEntity?.components[component] || placeholder
         );
 
         let currentId = initialId;
@@ -166,7 +186,7 @@ export function applyVuePlugin<
             if (newId) {
                 entityComponentWatchers = registerWatcher(newId);
                 const entity = manager.getEntity(newId);
-                ref.value = entity?.components[component];
+                ref.value = entity?.components[component] || placeholder;
             } else {
                 entityComponentWatchers = undefined;
                 ref.value = undefined;

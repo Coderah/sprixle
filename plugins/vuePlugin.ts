@@ -99,6 +99,7 @@ export function applyVuePlugin<
         entityOrId: EntityId | { value: EntityId } | typeof manager.Entity,
         component: K
     ): ShallowRef<C[K] | undefined> {
+        // TODO updating the ref wont actually change the component on the ECS side of things.. fix that
         // Extract ID from various input types
         const getId = (input = entityOrId): EntityId | undefined => {
             if (typeof input === 'string' || typeof input === 'bigint') {

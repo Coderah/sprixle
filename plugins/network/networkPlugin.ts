@@ -35,7 +35,7 @@ export function applyNetwork<
         'socket'
     >;
 
-    const bufferEncoder = getBsonEncoder(typeOf<BufferMessage>(), {
+    const networkMessageEncoder = getBsonEncoder(typeOf<BufferMessage>(), {
         validation: false,
     });
 
@@ -90,7 +90,7 @@ export function applyNetwork<
     ) {
         incomingDataSize += data.byteLength;
 
-        const decoded = bufferEncoder.decode(data);
+        const decoded = decodeMessage(data);
         let first: Command, second: any;
         if (Array.isArray(decoded)) {
             [first, second] = decoded;
@@ -121,6 +121,48 @@ export function applyNetwork<
             );
         }
         messageResolvers.set(command, handler);
+    }
+
+    async function sendRaw(
+        buffer: Uint8Array,
+        targetSocket:
+            | WebSocket
+            | WebSocketServer
+            | ClientWebSocket
+            | EntityWithSocket = socket
+    ) {
+        if (!targetSocket) {
+            console.warn(
+                '[networkPlugin] attempting to sendRaw without a socket'
+            );
+            return;
+        }
+
+        if ('components' in targetSocket) {
+            targetSocket = targetSocket.components.socket;
+        }
+
+        if (!('send' in targetSocket)) {
+            // TODO handle server broadcast
+            // TODO use a query?
+            for (let clientEntity of manager.getEntities('socket')) {
+                // TODO parallel?
+                await sendRaw(buffer, clientEntity);
+            }
+            return;
+        }
+        // TODO rewrite for server send
+        if (!targetSocket || targetSocket.readyState !== targetSocket.OPEN)
+            return;
+
+        outgoingMessageCount++;
+        if ('on' in targetSocket) {
+            await new Promise((resolve) =>
+                targetSocket.send(buffer, { binary: true }, resolve)
+            );
+        } else {
+            targetSocket.send(buffer);
+        }
     }
 
     async function send(command: Command): Promise<void>;
@@ -167,9 +209,7 @@ export function applyNetwork<
         // TODO rewrite for server send
         if (!targetSocket || targetSocket.readyState !== targetSocket.OPEN)
             return;
-        const enclosedData = bufferEncoder.encode(
-            data ? [command, data] : command
-        );
+        const enclosedData = encodeMessage(command, data);
 
         outgoingMessageCount++;
         if ('on' in targetSocket) {
@@ -179,6 +219,14 @@ export function applyNetwork<
         } else {
             targetSocket.send(enclosedData);
         }
+    }
+
+    function encodeMessage(command: Command, data?: MessageData) {
+        return networkMessageEncoder.encode(data ? [command, data] : command);
+    }
+
+    function decodeMessage(buffer: Uint8Array) {
+        return networkMessageEncoder.decode(buffer);
     }
 
     function getClientEntity(
@@ -199,7 +247,10 @@ export function applyNetwork<
     return {
         receive,
         message,
+        encodeMessage,
+        decodeMessage,
         send,
+        sendRaw,
         setNetworkSocket,
         setOnConnect,
         setOnDisconnect,

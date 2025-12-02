@@ -42,12 +42,18 @@ function defaultHTTPServer() {
 export function createServer(
     config: {
         port: number;
+        noServer?: boolean;
+        httpServer?: ReturnType<typeof createHTTPServer>;
     },
-    network: ReturnType<typeof applyNetwork>,
-    httpServer = defaultHTTPServer()
+    network: ReturnType<typeof applyNetwork>
 ) {
+    const httpServer = config.noServer
+        ? undefined
+        : config.httpServer || defaultHTTPServer();
+
     const server = new WebSocketServer({
         server: httpServer,
+        noServer: config.noServer,
     });
 
     network.setNetworkSocket(server);
@@ -76,5 +82,9 @@ export function createServer(
         });
     });
 
-    httpServer.listen(config.port);
+    if (httpServer) {
+        httpServer.listen(config.port);
+    }
+
+    return { wss: server, httpServer };
 }

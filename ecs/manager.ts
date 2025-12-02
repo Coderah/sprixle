@@ -757,6 +757,19 @@ export class Manager<ExactComponentTypes extends defaultComponentTypes> {
         return this.getEntity(componentType as string) as E;
     }
 
+    deleteSingletonEntity<
+        K extends Keys<typeof this.ComponentTypes>,
+        E = EntityWithComponents<
+            ExactComponentTypes,
+            Manager<ExactComponentTypes>,
+            K
+        >
+    >(componentType: K) {
+        if (!this.entityExists(componentType as string)) return;
+
+        return this.deregisterEntity(this.getSingletonEntity(componentType));
+    }
+
     setSingletonEntityComponent<K extends Keys<typeof this.ComponentTypes>>(
         componentType: K,
         value: (typeof this.ComponentTypes)[K]

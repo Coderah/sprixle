@@ -88,6 +88,7 @@ export function applyVuePlugin<
             // Clean up watchers
             componentWatchers.delete(entity.id);
             entityWatchers.delete(entity.id);
+            // TODO handle componentWatchers getting cleared (like removeComponent)
         },
 
         removeComponent(id, component) {

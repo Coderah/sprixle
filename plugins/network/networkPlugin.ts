@@ -1,4 +1,4 @@
-import { ReceiveType, typeOf } from '@deepkit/type';
+import { ReceiveType, typeOf, uint8 } from '@deepkit/type';
 import { getBsonEncoder } from '@deepkit/bson';
 import {
     defaultComponentTypes,
@@ -35,6 +35,11 @@ export function applyNetwork<
         'socket'
     >;
 
+    const socketQuery = manager.createQuery({
+        includes: ['socket'],
+        index: 'socket',
+    });
+
     const networkMessageEncoder = getBsonEncoder(typeOf<BufferMessage>(), {
         validation: false,
     });
@@ -60,7 +65,11 @@ export function applyNetwork<
 
     const messageResolvers: Map<
         Command,
-        (response: any, client?: typeof manager.Entity) => void
+        (
+            response: any,
+            client?: typeof manager.Entity,
+            rawData?: Uint8Array
+        ) => void
     > = new Map();
 
     let incomingMessageCount = 0;
@@ -100,7 +109,7 @@ export function applyNetwork<
 
         throttleLog('[Network] receive', first);
 
-        messageResolvers.get(first)?.(second, client);
+        messageResolvers.get(first)?.(second, client, data);
     }
 
     async function message<R>(command: Command) {
@@ -112,7 +121,11 @@ export function applyNetwork<
     // TODO refactor to handle multiple receivers of the same kind of message?
     function receive<R>(
         command: Command,
-        handler: (value: R, client?: EntityWithSocket) => void
+        handler: (
+            value: R,
+            client?: EntityWithSocket,
+            rawData?: Uint8Array
+        ) => void
     ) {
         if (messageResolvers.has(command)) {
             console.warn(
@@ -235,13 +248,18 @@ export function applyNetwork<
     ) {
         if (!socket) return manager.getEntity(id);
 
-        return manager.quickEntity(
-            //@ts-ignore
-            {
-                socket,
-            },
-            id
-        ) as EntityWithSocket;
+        const existingEntity = socketQuery.get(socket).first();
+
+        return (
+            existingEntity ||
+            (manager.quickEntity(
+                //@ts-ignore
+                {
+                    socket,
+                },
+                id
+            ) as EntityWithSocket)
+        );
     }
 
     return {

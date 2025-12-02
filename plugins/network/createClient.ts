@@ -3,7 +3,10 @@ import { applyNetwork } from './networkPlugin';
 // TODO smarter reconnect with backoff and jitter and such
 export function createClient(
     endpoint: string,
-    network: ReturnType<typeof applyNetwork>
+    network: ReturnType<typeof applyNetwork>,
+    options?: {
+        getToken?: () => string | null | undefined;
+    }
 ) {
     let socket: WebSocket;
     let socketPromise: Promise<WebSocket>;
@@ -13,7 +16,16 @@ export function createClient(
         return (socketPromise = new Promise((resolve) => {
             async function connect() {
                 try {
-                    socket = new WebSocket('ws://' + endpoint);
+                    // Build WebSocket URL with optional token
+                    let wsUrl = 'ws://' + endpoint;
+                    if (options?.getToken) {
+                        const token = options.getToken();
+                        if (token) {
+                            wsUrl += `?token=${encodeURIComponent(token)}`;
+                        }
+                    }
+
+                    socket = new WebSocket(wsUrl);
                     socket.binaryType = 'arraybuffer';
 
                     socket.onopen = () => {

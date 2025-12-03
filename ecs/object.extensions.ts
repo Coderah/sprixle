@@ -4,6 +4,16 @@ Map.prototype.first = function <K, V>(this: Map<K, V>) {
     return this.values()[0];
 };
 
+Set.prototype.keyBy = function <T, K extends keyof T>(this: Set<T>, key: K) {
+    const result = new Map<K, T>();
+
+    for (let item of this) {
+        result.set(item[key] as K, item);
+    }
+
+    return result;
+};
+
 Set.prototype.every = function <T>(this: Set<T>, fn: (value: T) => boolean) {
     for (let item of this) {
         if (!fn(item)) return false;

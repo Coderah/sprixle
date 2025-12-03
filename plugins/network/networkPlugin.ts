@@ -25,8 +25,7 @@ export function applyNetwork<
         | string
         | Uint8Array
         | number
-        | number[]
-        | string[]
+        | (string | number)[]
         | bigint;
     type BufferMessage = Command | [Command, MessageData];
     type EntityWithSocket = EntityWithComponents<
@@ -107,7 +106,7 @@ export function applyNetwork<
             first = decoded;
         }
 
-        throttleLog('[Network] receive', first);
+        // console.log('[Network] receive', first);
 
         messageResolvers.get(first)?.(second, client, data);
     }
@@ -239,7 +238,7 @@ export function applyNetwork<
     }
 
     function decodeMessage(buffer: Uint8Array) {
-        return networkMessageEncoder.decode(buffer);
+        return networkMessageEncoder.decode(buffer) as BufferMessage;
     }
 
     function getClientEntity(

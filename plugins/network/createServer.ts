@@ -76,6 +76,7 @@ export function createServer(
         });
 
         socket.on('close', () => {
+            // TODO resolve potentially memory leak (deregister entities?)
             delete client.components.socket;
 
             console.log('client disconnected', client.id);

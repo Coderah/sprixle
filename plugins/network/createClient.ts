@@ -17,7 +17,9 @@ export function createClient(
             async function connect() {
                 try {
                     // Build WebSocket URL with optional token
-                    let wsUrl = 'ws://' + endpoint;
+                    let wsUrl = `${
+                        window.location.protocol === 'https:' ? 'wss' : 'ws'
+                    }://${endpoint}`;
                     if (options?.getToken) {
                         const token = options.getToken();
                         if (token) {

@@ -13,6 +13,12 @@ import type {
 } from 'ws';
 import { throttleLog } from '../../util/log';
 
+// Handle WebSocket in both browser and Node.js environments
+const WebSocketImpl = typeof WebSocket !== 'undefined'
+    ? WebSocket
+    : require('ws').WebSocket;
+type BrowserWebSocket = typeof WebSocket extends undefined ? never : WebSocket;
+
 export type NetworkComponentTypes = {
     socket: ClientWebSocket;
 };
@@ -43,13 +49,13 @@ export function applyNetwork<
         validation: false,
     });
 
-    let socket: WebSocket | WebSocketServer;
+    let socket: BrowserWebSocket | ClientWebSocket | WebSocketServer;
     let onConnect = function () {};
     let onDisconnect = function (e: CloseEvent) {};
 
     function setNetworkSocket(newSocket: typeof socket) {
         socket = newSocket;
-        if (newSocket instanceof WebSocket) {
+        if (newSocket instanceof WebSocketImpl) {
             onConnect();
         }
     }
@@ -138,7 +144,7 @@ export function applyNetwork<
     async function sendRaw(
         buffer: Uint8Array,
         targetSocket:
-            | WebSocket
+            | BrowserWebSocket
             | WebSocketServer
             | ClientWebSocket
             | EntityWithSocket = socket
@@ -187,13 +193,13 @@ export function applyNetwork<
     async function send(
         command: Command,
         data: MessageData,
-        targetSocket: WebSocket | WebSocketServer
+        targetSocket: BrowserWebSocket | ClientWebSocket | WebSocketServer
     ): Promise<void>;
     async function send(
         command: Command,
         data?: MessageData,
         targetSocket:
-            | WebSocket
+            | BrowserWebSocket
             | WebSocketServer
             | ClientWebSocket
             | EntityWithSocket = socket

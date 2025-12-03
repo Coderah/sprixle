@@ -86,7 +86,17 @@ export function applyVuePlugin<
         deregister(entity) {
             existingHandlers.deregister?.(entity);
             // Clean up watchers
-            componentWatchers.delete(entity.id);
+            const entityComponentWatchers = componentWatchers.get(entity.id);
+            if (entityComponentWatchers) {
+                for (let [component, refs] of entityComponentWatchers) {
+                    if (refs) {
+                        for (let ref of refs) {
+                            ref.value = undefined;
+                        }
+                    }
+                }
+            }
+            // componentWatchers.delete(entity.id);
             entityWatchers.delete(entity.id);
             // TODO handle componentWatchers getting cleared (like removeComponent)
         },

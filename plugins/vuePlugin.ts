@@ -146,8 +146,9 @@ export function applyVuePlugin<
         const initialEntity = initialId
             ? manager.getEntity(initialId)
             : undefined;
+        const initialValue = initialEntity?.components[component];
         const ref = shallowRef<C[K] | undefined>(
-            initialEntity?.components[component] || placeholder
+            initialValue === undefined ? placeholder : initialValue
         );
 
         let currentId = initialId;

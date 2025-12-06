@@ -396,11 +396,104 @@ export function applyVuePlugin<
         return ref;
     }
 
+    /**
+     * Watch a query indexed by a specific component value.
+     * Returns a reactive array of entity refs for entities with the given index value.
+     *
+     * @example
+     * const positionQuery = em.createQuery({ includes: ['position'], index: 'ownerId' });
+     * const playerEntities = useQueryIndexedBy(positionQuery, 'player-1');
+     */
+    function useQueryIndexedBy<
+        Includes extends Keys<C>[],
+        IndexedComponent extends Keys<C>,
+        E extends EntityWithComponents<C, M, Includes[number]>
+    >(
+        query: Query<C, Includes, M, IndexedComponent, E>,
+        indexValue: { value: C[IndexedComponent] } | C[IndexedComponent]
+    ) {
+        const cache = new Map<string, ShallowRef<typeof manager.Entity>>();
+
+        const getIndexValue = (): C[IndexedComponent] | undefined => {
+            if (typeof indexValue === 'object' && 'value' in indexValue) {
+                return indexValue.value;
+            }
+            return indexValue;
+        };
+
+        const getEntitiesForIndex = (idx: C[IndexedComponent] | undefined) => {
+            if (idx === undefined) return [];
+            const indexedEntities = query.get(idx);
+            return Array.from(indexedEntities || []).map((id) =>
+                getEntityRef<E>(id)
+            );
+        };
+
+        const ref = shallowRef(getEntitiesForIndex(getIndexValue()));
+
+        function getEntityRef<E = typeof manager.Entity>(id: string) {
+            if (!cache.has(id)) {
+                const entityRef = shallowRef(
+                    manager.getEntity(id)
+                ) as ShallowRef<E>;
+                cache.set(id, entityRef);
+
+                // Register this ref with entityWatchers so patchHandlers updates it
+                if (!entityWatchers.has(id)) {
+                    entityWatchers.set(id, new Set());
+                }
+                entityWatchers.get(id)!.add(entityRef);
+            }
+            return cache.get(id) as ShallowRef<E>;
+        }
+
+        // Consumer and System work to track entity list changes
+        const consumer = query.createConsumer();
+        const system = manager.createSystem(consumer, {
+            tick() {
+                // Rebuild array when entities are added/removed
+                if (
+                    consumer.newEntities.size ||
+                    consumer.deletedEntities.size ||
+                    consumer.updatedEntities.size
+                ) {
+                    ref.value = getEntitiesForIndex(getIndexValue());
+                }
+            },
+        });
+
+        vuePipeline.systems.add(system);
+
+        // If indexValue is a ref, watch for changes
+        if (typeof indexValue === 'object' && 'value' in indexValue) {
+            watch(indexValue, () => {
+                ref.value = getEntitiesForIndex(getIndexValue());
+            });
+        }
+
+        // Cleanup cached refs on unmount
+        onUnmounted(() => {
+            for (let [id, entityRef] of cache) {
+                const watchers = entityWatchers.get(id);
+                if (watchers) {
+                    watchers.delete(entityRef);
+                    if (watchers.size === 0) {
+                        entityWatchers.delete(id);
+                    }
+                }
+            }
+            cache.clear();
+        });
+
+        return ref;
+    }
+
     return {
         vuePipeline,
         useEntity,
         useComponent,
         useSingletonEntityComponent,
         useQuery,
+        useQueryIndexedBy,
     };
 }

@@ -14,9 +14,8 @@ import type {
 import { throttleLog } from '../../util/log';
 
 // Handle WebSocket in both browser and Node.js environments
-const WebSocketImpl = typeof WebSocket !== 'undefined'
-    ? WebSocket
-    : require('ws').WebSocket;
+const WebSocketImpl =
+    typeof WebSocket !== 'undefined' ? WebSocket : require('ws').WebSocket;
 type BrowserWebSocket = typeof WebSocket extends undefined ? never : WebSocket;
 
 export type NetworkComponentTypes = {
@@ -268,6 +267,7 @@ export function applyNetwork<
     }
 
     return {
+        manager,
         receive,
         message,
         encodeMessage,

@@ -208,7 +208,7 @@ export function applyNetwork<
             return;
         }
 
-        throttleLog('[Network] send', command);
+        // throttleLog('[Network] send', command);
 
         if ('components' in targetSocket) {
             targetSocket = targetSocket.components.socket;

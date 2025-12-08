@@ -54,6 +54,10 @@ export function applyVuePlugin<
             if (entityRefs?.size) {
                 const entity = manager.getEntity(id);
                 for (let ref of entityRefs) {
+                    // TODO: find a better way than this bummer of a hack
+                    if (ref.value === entity) {
+                        ref.value = undefined;
+                    }
                     ref.value = entity;
                 }
             }
@@ -78,6 +82,9 @@ export function applyVuePlugin<
             const entityRefs = entityWatchers.get(entity.id);
             if (entityRefs?.size) {
                 for (let ref of entityRefs) {
+                    if (ref.value === entity) {
+                        ref.value = undefined;
+                    }
                     ref.value = entity;
                 }
             }

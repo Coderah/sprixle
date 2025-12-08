@@ -1,4 +1,4 @@
-import { Manager, defaultComponentTypes } from '../ecs/manager';
+import { EntityId, Manager, defaultComponentTypes } from '../ecs/manager';
 import { now } from '../util/now';
 
 export type DeathEffectComponents<
@@ -6,7 +6,7 @@ export type DeathEffectComponents<
 > = {
     deadAt: number;
     deathEffect: {
-        id: string;
+        id: EntityId;
         components: Partial<ComponentTypes>;
     };
 };

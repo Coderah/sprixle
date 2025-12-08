@@ -244,8 +244,20 @@ export function applyVuePlugin<
     function useEntity(
         entityOrId: EntityId | { value: EntityId }
     ): ShallowRef<typeof manager.Entity | undefined> {
-        const initialId =
-            typeof entityOrId === 'object' ? entityOrId.value : entityOrId;
+        const getId = (input = entityOrId): EntityId | undefined => {
+            if (!input) return undefined;
+
+            if (typeof input === 'string' || typeof input === 'bigint') {
+                return input;
+            }
+            if ('value' in input) {
+                return input.value;
+            }
+
+            return undefined;
+        };
+
+        const initialId = getId();
         const ref = shallowRef(
             initialId ? manager.getEntity(initialId) : undefined
         );
@@ -279,8 +291,8 @@ export function applyVuePlugin<
 
             // Register for new ID and update value
             currentId = newId;
+            registerWatcher(newId);
             if (newId) {
-                registerWatcher(newId);
                 ref.value = manager.getEntity(newId);
             } else {
                 ref.value = undefined;
@@ -294,8 +306,8 @@ export function applyVuePlugin<
 
         // If entityOrId is a ref, watch for ID changes
         if (typeof entityOrId === 'object') {
-            watch(entityOrId, (entityOrId) => {
-                handleIdChange(entityOrId.value);
+            watch(entityOrId, (newId) => {
+                handleIdChange(getId(newId));
             });
 
             onUnmounted(() => {

@@ -103,17 +103,23 @@ export function applyNetwork<
     ) {
         incomingDataSize += data.byteLength;
 
-        const decoded = decodeMessage(data);
-        let first: Command, second: any;
-        if (Array.isArray(decoded)) {
-            [first, second] = decoded;
-        } else {
-            first = decoded;
+        if (!data.length) return;
+
+        try {
+            const decoded = decodeMessage(data);
+            let first: Command, second: any;
+            if (Array.isArray(decoded)) {
+                [first, second] = decoded;
+            } else {
+                first = decoded;
+            }
+
+            // console.log('[Network] receive', first);
+
+            messageResolvers.get(first)?.(second, client, data);
+        } catch (e) {
+            console.error('[network] failed to parse incoming message', e);
         }
-
-        // console.log('[Network] receive', first);
-
-        messageResolvers.get(first)?.(second, client, data);
     }
 
     async function message<R>(command: Command) {

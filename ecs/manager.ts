@@ -8,7 +8,7 @@ import uuid from 'uuid-random';
 import { memoizedGlobalNow, now } from '../util/now';
 import { keys } from './dict';
 import { Vector2, Vector3 } from 'three';
-import './object.extensions.ts';
+import './object.extensions';
 import {
     Consumer,
     Query,

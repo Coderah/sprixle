@@ -40,7 +40,14 @@ export function createClient(
                     }
 
                     if (socket) {
-                        socket.close();
+                        if (
+                            socket.readyState !== socket.CLOSED &&
+                            socket.readyState !== socket.CLOSING
+                        ) {
+                            return resolve(socket);
+                        } else {
+                            socket.close();
+                        }
                     }
                     console.log('[NETWORK] opening new client WebSocket...');
                     socket = new WebSocket(wsUrl);

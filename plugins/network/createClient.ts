@@ -76,7 +76,7 @@ export function createClient(
                         );
                         if (socketPromise) {
                             socketPromise = null;
-                            reconnect().then(resolve);
+                            reconnect()?.then(resolve);
                         } else {
                             reconnect();
                         }
@@ -90,7 +90,7 @@ export function createClient(
                             );
                             if (socketPromise) {
                                 socketPromise = null;
-                                reconnect().then(resolve);
+                                reconnect()?.then(resolve);
                             } else {
                                 reconnect();
                             }
@@ -98,7 +98,7 @@ export function createClient(
                     };
                 } catch (e) {
                     console.log('[NETWORK] reconnecting due to catch?', e);
-                    reconnect();
+                    return reconnect();
                 }
             }));
     }

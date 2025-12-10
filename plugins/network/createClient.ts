@@ -1,3 +1,4 @@
+import { throttle } from 'lodash';
 import { applyNetwork } from './networkPlugin';
 
 // TODO smarter reconnect with backoff and jitter and such
@@ -11,10 +12,21 @@ export function createClient(
     let socket: WebSocket;
     let socketPromise: Promise<WebSocket>;
 
+    const reconnect = throttle(
+        () => {
+            return connect();
+        },
+        1500,
+        {
+            leading: false,
+            trailing: true,
+        }
+    );
+
     async function connect() {
-        if (socketPromise) return socketPromise;
-        return (socketPromise = new Promise((resolve) => {
-            async function connect() {
+        return (socketPromise =
+            socketPromise ||
+            new Promise(async (resolve) => {
                 try {
                     // Build WebSocket URL with optional token
                     let wsUrl = `${
@@ -27,11 +39,17 @@ export function createClient(
                         }
                     }
 
+                    if (socket) {
+                        socket.close();
+                    }
+                    console.log('[NETWORK] opening new client WebSocket...');
                     socket = new WebSocket(wsUrl);
                     socket.binaryType = 'arraybuffer';
 
                     socket.onopen = () => {
+                        console.log('[NETWORK] OPEN!');
                         network.setNetworkSocket(socket);
+                        socketPromise = null;
                         resolve(socket);
 
                         socket.onmessage = (event) => {
@@ -49,21 +67,40 @@ export function createClient(
                     };
 
                     socket.onclose = (e) => {
-                        console.log('closed', e);
+                        // console.log('closed', e);
                         // em.state = em.createInitialState();
                         network.handleDisconnect(e);
-                        connect();
+                        console.log(
+                            '[NETWORK] reconnecting due to close...',
+                            e
+                        );
+                        if (socketPromise) {
+                            socketPromise = null;
+                            reconnect().then(resolve);
+                        } else {
+                            reconnect();
+                        }
                     };
                     socket.onerror = (e) => {
-                        console.error(e);
-                        if (socket.readyState === socket.CLOSED) connect();
+                        // console.error(e);
+                        if (socket.readyState === socket.CLOSED) {
+                            console.log(
+                                '[NETWORK] reconnecting from error on closed socket...',
+                                e
+                            );
+                            if (socketPromise) {
+                                socketPromise = null;
+                                reconnect().then(resolve);
+                            } else {
+                                reconnect();
+                            }
+                        }
                     };
-                } catch {
-                    connect();
+                } catch (e) {
+                    console.log('[NETWORK] reconnecting due to catch?', e);
+                    reconnect();
                 }
-            }
-            connect();
-        }));
+            }));
     }
 
     return { connect };

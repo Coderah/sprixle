@@ -61,6 +61,7 @@ export const inputState = {
 global['inputState'] = inputState;
 
 interface InputPluginOptions {
+    domElement: HTMLElement;
     useThreeForWorldPosition?: boolean;
     threeCamera?: Camera;
     allowOtherMouseEvents?: boolean;
@@ -108,7 +109,7 @@ export function collapseVectorToDirection(vec2: Vector2, deadzone = 0) {
 
 export function applyInputPlugin<
     ComponentTypes extends defaultComponentTypes & InputComponents
->(manager: Manager<ComponentTypes>, options?: InputPluginOptions) {
+>(manager: Manager<ComponentTypes>, options: InputPluginOptions = {domElement: document.body}) {
     const inputBindingQuery = manager.createQuery({
         includes: ['inputBindName', 'inputBinds'],
     });
@@ -143,78 +144,7 @@ export function applyInputPlugin<
         return inputRaycaster;
     }
 
-    return {
-        setupRaycastFromMousePosition,
-        inputActiveModeSystem: manager.createSystem(
-            rawInputQuery.createConsumer(),
-            {
-                init() {
-                    manager.setSingletonEntityComponent(
-                        'activeInputMode',
-                        'pointer'
-                    );
-                },
-                updated(entity) {
-                    if (entity.components.inputName.startsWith('Mouse')) {
-                        manager.setSingletonEntityComponent(
-                            'activeInputMode',
-                            'pointer'
-                        );
-                    } else if (
-                        entity.components.inputName.startsWith('Touch')
-                    ) {
-                        manager.setSingletonEntityComponent(
-                            'activeInputMode',
-                            'touch'
-                        );
-                    } else if (
-                        entity.components.inputName.startsWith('Gamepad')
-                    ) {
-                        manager.setSingletonEntityComponent(
-                            'activeInputMode',
-                            'gamepad'
-                        );
-                    } else {
-                        manager.setSingletonEntityComponent(
-                            'activeInputMode',
-                            'keyboard'
-                        );
-                    }
-                },
-            }
-        ),
-        triggerInputBind(bindName: string) {
-            const binding = manager.getEntity(createBindEntityId(bindName));
-            if (!binding) {
-                console.warn(
-                    '[InputPlugin] attempted to trigger unknown binding',
-                    bindName
-                );
-                return;
-            }
-
-            binding.components.inputState = now();
-        },
-        getInputState(input: InputComponents['inputName']) {
-            const entity = manager.getEntity(createInputEntityId(input));
-
-            if (!entity) return null;
-
-            return entity.components.inputState;
-        },
-        getBindState(bindName: string) {
-            const entity = manager.getEntity(createBindEntityId(bindName));
-
-            if (!entity) return null;
-
-            return entity.components.inputState;
-        },
-        resetInputBinds() {
-            inputBindStateQuery.for((entity) => {
-                entity.components.inputState = null;
-            });
-        },
-        initInput(domElement: HTMLElement) {
+    function initInput(domElement: HTMLElement = options.domElement) {
             function updateScreenMousePosition(x: number, y: number) {
                 screenMousePosition.set(x, y);
 
@@ -355,6 +285,84 @@ export function applyInputPlugin<
             domElement.addEventListener('touchmove', handleMouseMove);
             domElement.addEventListener('mouseleave', handleMouseMove);
         },
+
+    return {
+        setupRaycastFromMousePosition,
+        inputActiveModeSystem: manager.createSystem(
+            rawInputQuery.createConsumer(),
+            {
+                init() {
+                    manager.setSingletonEntityComponent(
+                        'activeInputMode',
+                        'pointer'
+                    );
+
+                    initInput();
+                },
+                updated(entity) {
+                    if (entity.components.inputName.startsWith('Mouse')) {
+                        manager.setSingletonEntityComponent(
+                            'activeInputMode',
+                            'pointer'
+                        );
+                    } else if (
+                        entity.components.inputName.startsWith('Touch')
+                    ) {
+                        manager.setSingletonEntityComponent(
+                            'activeInputMode',
+                            'touch'
+                        );
+                    } else if (
+                        entity.components.inputName.startsWith('Gamepad')
+                    ) {
+                        manager.setSingletonEntityComponent(
+                            'activeInputMode',
+                            'gamepad'
+                        );
+                    } else {
+                        manager.setSingletonEntityComponent(
+                            'activeInputMode',
+                            'keyboard'
+                        );
+                    }
+                },
+            }
+        ),
+        triggerInputBind(bindName: string) {
+            const binding = manager.getEntity(createBindEntityId(bindName));
+            if (!binding) {
+                console.warn(
+                    '[InputPlugin] attempted to trigger unknown binding',
+                    bindName
+                );
+                return;
+            }
+
+            binding.components.inputState = now();
+        },
+        getInputState(input: InputComponents['inputName']) {
+            const entity = manager.getEntity(createInputEntityId(input));
+
+            if (!entity) return null;
+
+            return entity.components.inputState;
+        },
+        getBindState(bindName: string) {
+            const entity = manager.getEntity(createBindEntityId(bindName));
+
+            if (!entity) return null;
+
+            return entity.components.inputState;
+        },
+        resetInputBinds() {
+            inputBindStateQuery.for((entity) => {
+                entity.components.inputState = null;
+            });
+        },
+        /** @deprecated provide domElement to applyInputPlugin via options, initing the pipeline handles this logic now. */
+        initInput(domElement: HTMLElement) {
+
+        }
 
         /** this system handles and propagates raw inputs to bindings, ensure it is run before any binding handler systems */
         inputSystem: new Pipeline(

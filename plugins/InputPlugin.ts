@@ -109,7 +109,10 @@ export function collapseVectorToDirection(vec2: Vector2, deadzone = 0) {
 
 export function applyInputPlugin<
     ComponentTypes extends defaultComponentTypes & InputComponents
->(manager: Manager<ComponentTypes>, options: InputPluginOptions = {domElement: document.body}) {
+>(
+    manager: Manager<ComponentTypes>,
+    options: InputPluginOptions = { domElement: document.body }
+) {
     const inputBindingQuery = manager.createQuery({
         includes: ['inputBindName', 'inputBinds'],
     });
@@ -145,146 +148,146 @@ export function applyInputPlugin<
     }
 
     function initInput(domElement: HTMLElement = options.domElement) {
-            function updateScreenMousePosition(x: number, y: number) {
-                screenMousePosition.set(x, y);
+        function updateScreenMousePosition(x: number, y: number) {
+            screenMousePosition.set(x, y);
 
-                const screenPointerEntity = manager.getSingletonEntity(
-                    'screenPointerPosition'
-                );
+            const screenPointerEntity = manager.getSingletonEntity(
+                'screenPointerPosition'
+            );
 
-                screenPointerEntity.flagUpdate('screenPointerPosition');
+            screenPointerEntity.flagUpdate('screenPointerPosition');
 
-                if (manager.entityExists('screenPointerPosition')) {
-                    manager.registerEntity(screenPointerEntity);
-                }
+            if (manager.entityExists('screenPointerPosition')) {
+                manager.registerEntity(screenPointerEntity);
             }
+        }
 
-            const handleMouseMove = (event: MouseEvent | TouchEvent) => {
-                if (event instanceof MouseEvent) {
-                    updateScreenMousePosition(event.clientX, event.clientY);
-                } else if (event.touches) {
-                    // const bounding = domElement.getBoundingClientRect();
-                    updateScreenMousePosition(
-                        event.touches[0].clientX,
-                        event.touches[0].clientY
-                    );
-                }
-
-                updateScreenMousePosition;
-            };
-
-            const handleMouseDown = (event: MouseEvent) => {
-                if (
-                    event.currentTarget === domElement &&
-                    !options?.allowOtherMouseEvents
-                ) {
-                    event.preventDefault();
-                }
-
-                let mouseButton =
-                    event.button in mouseButtons
-                        ? 'Mouse' + mouseButtons[event.button]
-                        : 'Mouse' + event.button;
-                const entity =
-                    manager.getEntity(createInputEntityId(mouseButton)) ||
-                    manager.createEntity(createInputEntityId(mouseButton));
-                entity.components.inputName = mouseButton as Input;
-                entity.components.inputState = now();
-                manager.registerEntity(entity);
-            };
-
-            const handleMouseUp = (event: MouseEvent) => {
-                if (
-                    event.currentTarget === domElement &&
-                    !options?.allowOtherMouseEvents
-                ) {
-                    event.preventDefault();
-                }
-                let mouseButton =
-                    event.button in mouseButtons
-                        ? 'Mouse' + mouseButtons[event.button]
-                        : 'Mouse' + event.button;
-                const entity =
-                    manager.getEntity(createInputEntityId(mouseButton)) ||
-                    manager.createEntity(createInputEntityId(mouseButton));
-                entity.components.inputName = mouseButton as Input;
-                entity.components.inputState = null;
-                manager.registerEntity(entity);
-            };
-
-            const handleTouchStart = (event: TouchEvent) => {
-                if (event.currentTarget === domElement) {
-                    event.preventDefault();
-                    event.stopPropagation();
-                    event.stopImmediatePropagation();
-                }
-
+        const handleMouseMove = (event: MouseEvent | TouchEvent) => {
+            if (event instanceof MouseEvent) {
+                updateScreenMousePosition(event.clientX, event.clientY);
+            } else if (event.touches) {
                 // const bounding = domElement.getBoundingClientRect();
                 updateScreenMousePosition(
                     event.touches[0].clientX,
                     event.touches[0].clientY
                 );
+            }
 
-                let touchIdentifier = 'Touch0';
-                const entity =
-                    manager.getEntity(createInputEntityId(touchIdentifier)) ||
-                    manager.createEntity(createInputEntityId(touchIdentifier));
-                entity.components.inputName = touchIdentifier as Input;
-                entity.components.inputState = now();
-                manager.registerEntity(entity);
-            };
+            updateScreenMousePosition;
+        };
 
-            const handleTouchEnd = (event: TouchEvent) => {
-                if (event.currentTarget === domElement) {
-                    event.preventDefault();
-                    event.stopPropagation();
-                    event.stopImmediatePropagation();
-                }
-                let touchIdentifier = 'Touch0';
-                const entity =
-                    manager.getEntity(createInputEntityId(touchIdentifier)) ||
-                    manager.createEntity(createInputEntityId(touchIdentifier));
-                entity.components.inputName = touchIdentifier as Input;
-                entity.components.inputState = null;
-                manager.registerEntity(entity);
-            };
+        const handleMouseDown = (event: MouseEvent) => {
+            if (
+                event.currentTarget === domElement &&
+                !options?.allowOtherMouseEvents
+            ) {
+                event.preventDefault();
+            }
 
-            const handleKeyDown = (event: KeyboardEvent) => {
-                if (event.repeat) return;
-                const key = ('Key' + event.code.replace('Key', '')) as Input;
-                const entity =
-                    manager.getEntity(createInputEntityId(key)) ||
-                    manager.createEntity(createInputEntityId(key));
-                entity.components.inputName = key;
-                entity.components.inputState = now();
-                manager.registerEntity(entity);
-            };
+            let mouseButton =
+                event.button in mouseButtons
+                    ? 'Mouse' + mouseButtons[event.button]
+                    : 'Mouse' + event.button;
+            const entity =
+                manager.getEntity(createInputEntityId(mouseButton)) ||
+                manager.createEntity(createInputEntityId(mouseButton));
+            entity.components.inputName = mouseButton as Input;
+            entity.components.inputState = now();
+            manager.registerEntity(entity);
+        };
 
-            const handleKeyUp = (event: KeyboardEvent) => {
-                const key = ('Key' + event.code.replace('Key', '')) as Input;
-                const entity =
-                    manager.getEntity(createInputEntityId(key)) ||
-                    manager.createEntity(createInputEntityId(key));
-                entity.components.inputName = key;
-                entity.components.inputState = null;
-                manager.registerEntity(entity);
-            };
+        const handleMouseUp = (event: MouseEvent) => {
+            if (
+                event.currentTarget === domElement &&
+                !options?.allowOtherMouseEvents
+            ) {
+                event.preventDefault();
+            }
+            let mouseButton =
+                event.button in mouseButtons
+                    ? 'Mouse' + mouseButtons[event.button]
+                    : 'Mouse' + event.button;
+            const entity =
+                manager.getEntity(createInputEntityId(mouseButton)) ||
+                manager.createEntity(createInputEntityId(mouseButton));
+            entity.components.inputName = mouseButton as Input;
+            entity.components.inputState = null;
+            manager.registerEntity(entity);
+        };
 
-            domElement.addEventListener('contextmenu', (event) =>
-                event.preventDefault()
+        const handleTouchStart = (event: TouchEvent) => {
+            if (event.currentTarget === domElement) {
+                event.preventDefault();
+                event.stopPropagation();
+                event.stopImmediatePropagation();
+            }
+
+            // const bounding = domElement.getBoundingClientRect();
+            updateScreenMousePosition(
+                event.touches[0].clientX,
+                event.touches[0].clientY
             );
 
-            document.addEventListener('keyup', handleKeyUp);
-            document.addEventListener('keydown', handleKeyDown);
-            domElement.addEventListener('touchstart', handleTouchStart);
-            domElement.addEventListener('touchend', handleTouchEnd);
-            domElement.addEventListener('mousedown', handleMouseDown);
-            domElement.addEventListener('mouseup', handleMouseUp);
-            domElement.addEventListener('dragend', handleMouseUp);
-            domElement.addEventListener('mousemove', handleMouseMove);
-            domElement.addEventListener('touchmove', handleMouseMove);
-            domElement.addEventListener('mouseleave', handleMouseMove);
-        },
+            let touchIdentifier = 'Touch0';
+            const entity =
+                manager.getEntity(createInputEntityId(touchIdentifier)) ||
+                manager.createEntity(createInputEntityId(touchIdentifier));
+            entity.components.inputName = touchIdentifier as Input;
+            entity.components.inputState = now();
+            manager.registerEntity(entity);
+        };
+
+        const handleTouchEnd = (event: TouchEvent) => {
+            if (event.currentTarget === domElement) {
+                event.preventDefault();
+                event.stopPropagation();
+                event.stopImmediatePropagation();
+            }
+            let touchIdentifier = 'Touch0';
+            const entity =
+                manager.getEntity(createInputEntityId(touchIdentifier)) ||
+                manager.createEntity(createInputEntityId(touchIdentifier));
+            entity.components.inputName = touchIdentifier as Input;
+            entity.components.inputState = null;
+            manager.registerEntity(entity);
+        };
+
+        const handleKeyDown = (event: KeyboardEvent) => {
+            if (event.repeat) return;
+            const key = ('Key' + event.code.replace('Key', '')) as Input;
+            const entity =
+                manager.getEntity(createInputEntityId(key)) ||
+                manager.createEntity(createInputEntityId(key));
+            entity.components.inputName = key;
+            entity.components.inputState = now();
+            manager.registerEntity(entity);
+        };
+
+        const handleKeyUp = (event: KeyboardEvent) => {
+            const key = ('Key' + event.code.replace('Key', '')) as Input;
+            const entity =
+                manager.getEntity(createInputEntityId(key)) ||
+                manager.createEntity(createInputEntityId(key));
+            entity.components.inputName = key;
+            entity.components.inputState = null;
+            manager.registerEntity(entity);
+        };
+
+        domElement.addEventListener('contextmenu', (event) =>
+            event.preventDefault()
+        );
+
+        document.addEventListener('keyup', handleKeyUp);
+        document.addEventListener('keydown', handleKeyDown);
+        domElement.addEventListener('touchstart', handleTouchStart);
+        domElement.addEventListener('touchend', handleTouchEnd);
+        domElement.addEventListener('mousedown', handleMouseDown);
+        domElement.addEventListener('mouseup', handleMouseUp);
+        domElement.addEventListener('dragend', handleMouseUp);
+        domElement.addEventListener('mousemove', handleMouseMove);
+        domElement.addEventListener('touchmove', handleMouseMove);
+        domElement.addEventListener('mouseleave', handleMouseMove);
+    }
 
     return {
         setupRaycastFromMousePosition,
@@ -359,7 +362,9 @@ export function applyInputPlugin<
         },
         /** @deprecated provide domElement to applyInputPlugin via options, initing the pipeline handles this logic now. */
         initInput(domElement: HTMLElement) {
-            console.warn('[InputPlugin] pass domElement to applyInputPlugin options instead of using initInput(@deprecated) directly.')
+            console.warn(
+                '[InputPlugin] pass domElement to applyInputPlugin options instead of using initInput(@deprecated) directly.'
+            );
             initInput(domElement);
         },
 

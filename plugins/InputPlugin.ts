@@ -296,8 +296,6 @@ export function applyInputPlugin<
                         'activeInputMode',
                         'pointer'
                     );
-
-                    initInput();
                 },
                 updated(entity) {
                     if (entity.components.inputName.startsWith('Mouse')) {
@@ -361,8 +359,9 @@ export function applyInputPlugin<
         },
         /** @deprecated provide domElement to applyInputPlugin via options, initing the pipeline handles this logic now. */
         initInput(domElement: HTMLElement) {
-
-        }
+            console.warn('[InputPlugin] pass domElement to applyInputPlugin options instead of using initInput(@deprecated) directly.')
+            initInput(domElement);
+        },
 
         /** this system handles and propagates raw inputs to bindings, ensure it is run before any binding handler systems */
         inputSystem: new Pipeline(
@@ -374,6 +373,7 @@ export function applyInputPlugin<
                         'screenPointerPosition',
                         screenMousePosition
                     );
+                    initInput();
                 },
                 forNew(entity) {
                     entity.components.inputBindIds = [];

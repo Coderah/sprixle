@@ -12,8 +12,10 @@ import { Pipeline } from '../ecs/system';
 export function applyVuePlugin<
     C extends defaultComponentTypes,
     M extends Manager<C> = Manager<C>
->(manager: M) {
-    const vuePipeline = new Pipeline(manager);
+>(manager: M, init: () => any) {
+    const vuePipeline = new Pipeline(manager, {
+        init,
+    });
 
     // Track component watchers: EntityId -> ComponentKey -> Set of refs
     const componentWatchers = new Map<

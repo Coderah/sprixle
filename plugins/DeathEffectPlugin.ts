@@ -13,10 +13,9 @@ export type DeathEffectComponents<
 
 /** Creates a system for death side-effects, an entities death can cause components to be applied to a different entity. */
 export function applyDeathEffectPlugin<
-    M extends Manager<ComponentTypes>,
     ComponentTypes extends defaultComponentTypes &
         DeathEffectComponents<ComponentTypes>
->(manager: M) {
+>(manager: Manager<ComponentTypes>) {
     const deathEffectQuery = manager.createQuery({
         includes: ['deathEffect'],
     });
@@ -49,7 +48,9 @@ export function applyDeathEffectPlugin<
                             deathEffect.components
                         );
                     } else {
-                        manager.registerEntity(deathEffect as M['Entity']);
+                        manager.registerEntity(
+                            deathEffect as Manager<ComponentTypes>['Entity']
+                        );
                     }
                 },
             }

@@ -20,6 +20,7 @@ export type Input =
     | `Key${string}`
     | `Mouse${string}`
     | `Touch${number}`
+    | `Touch${number}Move`
     | `Gamepad${string}`;
 
 const gamepadButtons = [
@@ -86,7 +87,8 @@ export type InputComponents = {
 
     /** used on both raw and bound inputs to indicate state and position */
     inputState: number | null;
-    inputPosition: number | number[];
+    inputPosition: number | number[] | Vector2;
+    inputWorldPosition: Vector3;
 
     activeInputMode: 'touch' | 'pointer' | 'keyboard' | 'gamepad';
 };
@@ -157,12 +159,34 @@ export function applyInputPlugin<
 
             screenPointerEntity.flagUpdate('screenPointerPosition');
 
-            if (manager.entityExists('screenPointerPosition')) {
+            if (!manager.entityExists('screenPointerPosition')) {
                 manager.registerEntity(screenPointerEntity);
             }
         }
 
+        function handlePointerLocationUpdate(
+            inputName: `MouseMove` | `Touch${number}Move`,
+            vector: Vector2 = manager.getSingletonEntityComponent(
+                'screenPointerPosition'
+            )
+        ) {
+            // console.log('[handlePointerLocationUpdate]', inputName);
+            const entityId = createInputEntityId(inputName);
+            const entity =
+                manager.getEntity(entityId) || manager.createEntity(entityId);
+
+            entity.components.inputName = inputName;
+            entity.components.inputPosition = vector;
+            if (!entity.components.inputState) {
+                entity.components.inputState = now();
+            }
+
+            manager.registerEntity(entity);
+        }
+
         const handleMouseMove = (event: MouseEvent | TouchEvent) => {
+            let inputName: `MouseMove` | `Touch${number}Move` = 'MouseMove';
+
             if (event instanceof MouseEvent) {
                 updateScreenMousePosition(event.clientX, event.clientY);
             } else if (event.touches) {
@@ -171,9 +195,27 @@ export function applyInputPlugin<
                     event.touches[0].clientX,
                     event.touches[0].clientY
                 );
+
+                if (event.touches.length === 1) {
+                    inputName = 'Touch0Move';
+                } else {
+                    for (let touch of event.touches) {
+                        inputName = `Touch${touch.identifier}Move`;
+                        handlePointerLocationUpdate(
+                            inputName,
+                            touch.identifier === 0
+                                ? manager.getSingletonEntityComponent(
+                                      'screenPointerPosition'
+                                  )
+                                : new Vector2(touch.clientX, touch.clientY)
+                        );
+                    }
+                    return;
+                    // walk all touches and handle input entity logic
+                }
             }
 
-            updateScreenMousePosition;
+            handlePointerLocationUpdate(inputName);
         };
 
         const handleMouseDown = (event: MouseEvent) => {
@@ -397,10 +439,18 @@ export function applyInputPlugin<
                             bindEntity.flagUpdate('inputState');
                             bindEntity.components.inputPosition =
                                 entity.components.inputPosition;
+                            bindEntity.flagUpdate('inputPosition');
                             bindEntity.components.inputName =
                                 entity.components.inputName;
                         }
                     });
+
+                    if (
+                        entity.components.inputName.endsWith('Move') &&
+                        entity.components.inputState
+                    ) {
+                        entity.components.inputState = null;
+                    }
                 },
                 updated(entity, delta) {
                     entity.components.inputBindIds?.forEach((bindId) => {
@@ -438,13 +488,23 @@ export function applyInputPlugin<
                                     entity.components.inputState;
                                 // ensure this is always treated as an update to avoid release binds that overlap multiple other binds
                                 bindEntity.flagUpdate('inputState');
-                                bindEntity.components.inputPosition =
-                                    entity.components.inputPosition;
+                                if (entity.components.inputPosition) {
+                                    bindEntity.components.inputPosition =
+                                        entity.components.inputPosition;
+                                    bindEntity.flagUpdate('inputPosition');
+                                }
                                 bindEntity.components.inputName =
                                     entity.components.inputName;
                             }
                         }
                     });
+
+                    if (
+                        entity.components.inputName.endsWith('Move') &&
+                        entity.components.inputState
+                    ) {
+                        entity.components.inputState = null;
+                    }
                 },
 
                 tick() {

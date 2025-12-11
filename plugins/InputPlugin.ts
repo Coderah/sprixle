@@ -58,7 +58,7 @@ export const inputState = {
     worldMouseY: 0.5,
 };
 
-global['inputState'] = inputState;
+globalThis['inputState'] = inputState;
 
 interface InputPluginOptions {
     domElement: HTMLElement;

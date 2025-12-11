@@ -383,16 +383,17 @@ export function applyVuePlugin<
 
         // Consumer and System work to track entity list changes
         const consumer = query.createConsumer();
+
+        const handleChange = () => {
+            ref.value = query.entities.map((id) => getEntityRef<E>(id));
+        };
+
         const system = manager.createSystem(consumer, {
-            tick() {
-                // Only rebuild array when entities are added/removed
-                if (
-                    consumer.newEntities.size ||
-                    consumer.deletedEntities.size
-                ) {
-                    ref.value = query.entities.map((id) => getEntityRef<E>(id));
-                }
-                // Individual entity updates handled by patchHandlers
+            newOrUpdated() {
+                handleChange();
+            },
+            removed() {
+                handleChange();
             },
         });
 

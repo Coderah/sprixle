@@ -36,6 +36,11 @@ export function createClient(
                         const token = options.getToken();
                         if (token) {
                             wsUrl += `?token=${encodeURIComponent(token)}`;
+                        } else {
+                            console.warn(
+                                '[NETWORK] getToken provided, but no token available, assuming we should not connect.'
+                            );
+                            return;
                         }
                     }
 

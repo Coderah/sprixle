@@ -45,6 +45,10 @@ export function applyVuePlugin<
                     if (refs) {
                         const newValue = patches[component as Keys<C>];
                         for (let ref of refs) {
+                            // TODO: find a better way than this bummer of a hack
+                            if (ref.value === newValue) {
+                                ref.value = undefined;
+                            }
                             ref.value = newValue;
                         }
                     }

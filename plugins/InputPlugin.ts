@@ -50,6 +50,7 @@ const intersectPoint = new Vector3();
 
 const worldMousePosition = new Vector3();
 const screenMousePosition = new Vector2();
+const screenMouseRelPosition = new Vector2();
 const ndcMousePosition = new Vector2();
 
 export const inputState = {
@@ -70,6 +71,7 @@ interface InputPluginOptions {
 
 export type InputComponents = {
     screenPointerPosition: Vector2 & SingletonComponent;
+    screenPointerRelPosition: Vector2 & SingletonComponent;
 
     /** used to indicate an input binding (map multiple inputs and input types to a name) */
     inputBindName: string;
@@ -88,6 +90,7 @@ export type InputComponents = {
     /** used on both raw and bound inputs to indicate state and position */
     inputState: number | null;
     inputPosition: number | number[] | Vector2;
+    inputRelPosition: number | number[] | Vector2;
     inputWorldPosition: Vector3;
 
     activeInputMode: 'touch' | 'pointer' | 'keyboard' | 'gamepad';
@@ -150,17 +153,30 @@ export function applyInputPlugin<
     }
 
     function initInput(domElement: HTMLElement = options.domElement) {
-        function updateScreenMousePosition(x: number, y: number) {
+        function updateScreenMousePosition(
+            x: number,
+            y: number,
+            relX?: number,
+            relY?: number
+        ) {
             screenMousePosition.set(x, y);
+            screenMouseRelPosition.set(relX, relY);
 
             const screenPointerEntity = manager.getSingletonEntity(
                 'screenPointerPosition'
             );
 
+            const relScreenPointerEntity = manager.getSingletonEntity(
+                'screenPointerRelPosition'
+            );
             screenPointerEntity.flagUpdate('screenPointerPosition');
+            screenPointerEntity.flagUpdate('screenPointerRelPosition');
 
             if (!manager.entityExists('screenPointerPosition')) {
                 manager.registerEntity(screenPointerEntity);
+            }
+            if (!manager.entityExists('relScreenPointerEntity')) {
+                manager.registerEntity(relScreenPointerEntity);
             }
         }
 
@@ -168,6 +184,9 @@ export function applyInputPlugin<
             inputName: `MouseMove` | `Touch${number}Move`,
             vector: Vector2 = manager.getSingletonEntityComponent(
                 'screenPointerPosition'
+            ),
+            relVector: Vector2 = manager.getSingletonEntityComponent(
+                'screenPointerRelPosition'
             )
         ) {
             // console.log('[handlePointerLocationUpdate]', inputName);
@@ -177,6 +196,7 @@ export function applyInputPlugin<
 
             entity.components.inputName = inputName;
             entity.components.inputPosition = vector;
+            entity.components.inputRelPosition = relVector;
             if (!entity.components.inputState) {
                 entity.components.inputState = now();
             }
@@ -188,7 +208,12 @@ export function applyInputPlugin<
             let inputName: `MouseMove` | `Touch${number}Move` = 'MouseMove';
 
             if (event instanceof MouseEvent) {
-                updateScreenMousePosition(event.clientX, event.clientY);
+                updateScreenMousePosition(
+                    event.clientX,
+                    event.clientY,
+                    event.movementX,
+                    event.movementY
+                );
             } else if (event.touches) {
                 // const bounding = domElement.getBoundingClientRect();
                 updateScreenMousePosition(
@@ -420,6 +445,10 @@ export function applyInputPlugin<
                         'screenPointerPosition',
                         screenMousePosition
                     );
+                    manager.setSingletonEntityComponent(
+                        'screenPointerRelPosition',
+                        screenMouseRelPosition
+                    );
                     initInput();
                 },
                 forNew(entity) {
@@ -439,7 +468,11 @@ export function applyInputPlugin<
                             bindEntity.flagUpdate('inputState');
                             bindEntity.components.inputPosition =
                                 entity.components.inputPosition;
+                            bindEntity.components.inputRelPosition =
+                                entity.components.inputRelPosition;
+
                             bindEntity.flagUpdate('inputPosition');
+                            bindEntity.flagUpdate('inputRelPosition');
                             bindEntity.components.inputName =
                                 entity.components.inputName;
                         }
@@ -492,7 +525,11 @@ export function applyInputPlugin<
                                     bindEntity.components.inputPosition =
                                         entity.components.inputPosition;
                                     bindEntity.flagUpdate('inputPosition');
+                                    bindEntity.components.inputRelPosition =
+                                        entity.components.inputRelPosition;
+                                    bindEntity.flagUpdate('inputRelPosition');
                                 }
+
                                 bindEntity.components.inputName =
                                     entity.components.inputName;
                             }

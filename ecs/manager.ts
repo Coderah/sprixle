@@ -424,7 +424,11 @@ export class Manager<ExactComponentTypes extends defaultComponentTypes> {
 
                     const entityIsRegistered = manager.state.entities.has(id);
 
-                    if (componentType !== 'updatedAt' && entityIsRegistered) {
+                    if (
+                        componentType !== 'updatedAt' &&
+                        entityIsRegistered &&
+                        target[componentType] !== value
+                    ) {
                         if (
                             (value instanceof Vector2 ||
                                 value instanceof Vector3) &&
@@ -439,15 +443,13 @@ export class Manager<ExactComponentTypes extends defaultComponentTypes> {
                                 );
                             }
                         } else {
-                            if (target[componentType] !== value) {
-                                entity.previousComponents[componentType] =
-                                    target[componentType];
+                            entity.previousComponents[componentType] =
+                                target[componentType];
 
-                                manager.flagUpdate(
-                                    entity,
-                                    componentType as keyof ExactComponentTypes
-                                );
-                            }
+                            manager.flagUpdate(
+                                entity,
+                                componentType as keyof ExactComponentTypes
+                            );
                         }
                     }
 

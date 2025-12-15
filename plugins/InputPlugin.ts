@@ -170,12 +170,12 @@ export function applyInputPlugin<
                 'screenPointerRelPosition'
             );
             screenPointerEntity.flagUpdate('screenPointerPosition');
-            screenPointerEntity.flagUpdate('screenPointerRelPosition');
+            relScreenPointerEntity.flagUpdate('screenPointerRelPosition');
 
             if (!manager.entityExists('screenPointerPosition')) {
                 manager.registerEntity(screenPointerEntity);
             }
-            if (!manager.entityExists('relScreenPointerEntity')) {
+            if (!manager.entityExists('relScreenPointerPosition')) {
                 manager.registerEntity(relScreenPointerEntity);
             }
         }

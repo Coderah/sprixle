@@ -54,7 +54,7 @@ manager.tick();
 console.log('tick');
 
 for (let entity of positionQuery.IterateIgnoringSlice()) {
-    entity.flagUpdate('position');
+    entity.willUpdate('position');
 }
 manager.subTick(); // as if we are updating entities within a system
 

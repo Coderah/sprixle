@@ -16,7 +16,7 @@ const entity = manager.quickEntity({
 
 manager.tick();
 
-entity.flagUpdate('vec2');
+entity.willUpdate('vec2');
 entity.components.vec2.set(3, 2);
 
 manager.tick();

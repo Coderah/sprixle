@@ -8,7 +8,7 @@ export function velocitySystem(delta: number) {
         const { velocity } = entity.components;
         if (!velocity) return;
 
+        entity.willUpdate('position');
         entity.components.position?.add(velocity);
-        entity.flagUpdate('position');
     });
 }

@@ -283,7 +283,7 @@ export const createZUISystem = <
             if (!uiElement) return;
             zUIElements[component] = uiElement;
 
-            entity.flagUpdate('zUIElements');
+            entity.willUpdate('zUIElements');
 
             if (parameters.use3DTransforms) {
                 const innerElement = getInnerElement(entity, component);

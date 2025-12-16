@@ -27,8 +27,10 @@ export type Entity<ComponentTypes> = {
     id: EntityId;
     components: ComponentTypes;
     previousComponents: Readonly<ComponentTypes>;
-    /** flag a deeper update to a component */
+    /** @deprecated use `willUpdate` instead. */
     flagUpdate: (componentType: keyof ComponentTypes) => void;
+    /** flag a deeper update to a component, call this before changing values within a component's data structure. */
+    willUpdate: (componentType: keyof ComponentTypes) => void;
 
     /** quietly update a component (avoid update flagging) */
     quietSet: <T extends keyof ComponentTypes>(
@@ -39,7 +41,7 @@ export type Entity<ComponentTypes> = {
 
 export type SerializableEntity<ComponentTypes> = Omit<
     Entity<ComponentTypes>,
-    'previousComponents' | 'quietSet' | 'flagUpdate'
+    'previousComponents' | 'quietSet' | 'flagUpdate' | 'willUpdate'
 >;
 
 type EntityMap<ComponentTypes> = Map<Keys<ComponentTypes>, Set<EntityId>>; //{ [type in Keys<ComponentTypes>]?: Set<string> };
@@ -502,7 +504,10 @@ export class Manager<ExactComponentTypes extends defaultComponentTypes> {
                     return true;
                 },
             }),
+            /** @deprecated use `willUpdate` instead. */
             flagUpdate: (componentType: keyof ExactComponentTypes) =>
+                manager.flagUpdate(entity, componentType),
+            willUpdate: (componentType: keyof ExactComponentTypes) =>
                 manager.flagUpdate(entity, componentType),
             quietSet(componentType, value) {
                 components[componentType] = value;

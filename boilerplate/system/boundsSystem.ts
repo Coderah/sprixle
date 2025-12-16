@@ -13,16 +13,16 @@ export function boundsSystem(delta: number) {
         if (!position || !velocity) return;
 
         if (position.x > bounds.x || position.x < -bounds.x) {
+            entity.willUpdate('velocity');
             velocity.setX(-velocity.x);
-            entity.flagUpdate('velocity');
         }
         if (position.y > bounds.y || position.y < -bounds.y) {
+            entity.willUpdate('velocity');
             velocity.setY(-velocity.y);
-            entity.flagUpdate('velocity');
         }
         if (position.z > bounds.z || position.z < -bounds.z) {
+            entity.willUpdate('velocity');
             velocity.setZ(-velocity.z);
-            entity.flagUpdate('velocity');
         }
     });
 }

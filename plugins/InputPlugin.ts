@@ -167,8 +167,8 @@ export function applyInputPlugin<
             const relScreenPointerEntity = manager.getSingletonEntity(
                 'screenPointerRelPosition'
             );
-            screenPointerEntity.flagUpdate('screenPointerPosition');
-            relScreenPointerEntity.flagUpdate('screenPointerRelPosition');
+            screenPointerEntity.willUpdate('screenPointerPosition');
+            relScreenPointerEntity.willUpdate('screenPointerRelPosition');
 
             screenMousePosition.set(x, y);
             screenMouseRelPosition.set(relX, relY);
@@ -464,16 +464,17 @@ export function applyInputPlugin<
                             entity.components.inputBindIds?.push(bindEntity.id);
 
                             // ensure this is always treated as an update to avoid release binds that overlap multiple other binds
-                            bindEntity.flagUpdate('inputState');
+                            bindEntity.willUpdate('inputState');
                             bindEntity.components.inputState =
                                 entity.components.inputState;
+
+                            bindEntity.willUpdate('inputPosition');
+                            bindEntity.willUpdate('inputRelPosition');
                             bindEntity.components.inputPosition =
                                 entity.components.inputPosition;
                             bindEntity.components.inputRelPosition =
                                 entity.components.inputRelPosition;
 
-                            bindEntity.flagUpdate('inputPosition');
-                            bindEntity.flagUpdate('inputRelPosition');
                             bindEntity.components.inputName =
                                 entity.components.inputName;
                         }
@@ -519,15 +520,15 @@ export function applyInputPlugin<
                                 // TODO do we need to copy other components?
                             } else {
                                 // ensure this is always treated as an update to avoid release binds that overlap multiple other binds
-                                bindEntity.flagUpdate('inputState');
+                                bindEntity.willUpdate('inputState');
                                 bindEntity.components.inputState =
                                     entity.components.inputState;
                                 if (entity.components.inputPosition) {
-                                    bindEntity.flagUpdate('inputPosition');
+                                    bindEntity.willUpdate('inputPosition');
                                     bindEntity.components.inputPosition =
                                         entity.components.inputPosition;
 
-                                    bindEntity.flagUpdate('inputRelPosition');
+                                    bindEntity.willUpdate('inputRelPosition');
                                     bindEntity.components.inputRelPosition =
                                         entity.components.inputRelPosition;
                                 }

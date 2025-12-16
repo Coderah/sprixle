@@ -1,6 +1,7 @@
 import { Camera, Plane, Raycaster, Vector2, Vector3 } from 'three';
 import {
     defaultComponentTypes,
+    EntityId,
     EntityWithComponents,
     Manager,
 } from '../ecs/manager';
@@ -85,7 +86,7 @@ export type InputComponents = {
     /** indicates a raw input, will be paired with @inputState */
     inputName: Input;
     /** used internally. maps raw inputs to bind entities */
-    inputBindIds: string[];
+    inputBindIds: EntityId[];
 
     /** used on both raw and bound inputs to indicate state and position */
     inputState: number | null;
@@ -159,9 +160,6 @@ export function applyInputPlugin<
             relX?: number,
             relY?: number
         ) {
-            screenMousePosition.set(x, y);
-            screenMouseRelPosition.set(relX, relY);
-
             const screenPointerEntity = manager.getSingletonEntity(
                 'screenPointerPosition'
             );
@@ -171,6 +169,9 @@ export function applyInputPlugin<
             );
             screenPointerEntity.flagUpdate('screenPointerPosition');
             relScreenPointerEntity.flagUpdate('screenPointerRelPosition');
+
+            screenMousePosition.set(x, y);
+            screenMouseRelPosition.set(relX, relY);
 
             if (!manager.entityExists('screenPointerPosition')) {
                 manager.registerEntity(screenPointerEntity);
@@ -462,10 +463,10 @@ export function applyInputPlugin<
                         ) {
                             entity.components.inputBindIds?.push(bindEntity.id);
 
-                            bindEntity.components.inputState =
-                                entity.components.inputState;
                             // ensure this is always treated as an update to avoid release binds that overlap multiple other binds
                             bindEntity.flagUpdate('inputState');
+                            bindEntity.components.inputState =
+                                entity.components.inputState;
                             bindEntity.components.inputPosition =
                                 entity.components.inputPosition;
                             bindEntity.components.inputRelPosition =
@@ -517,17 +518,18 @@ export function applyInputPlugin<
 
                                 // TODO do we need to copy other components?
                             } else {
-                                bindEntity.components.inputState =
-                                    entity.components.inputState;
                                 // ensure this is always treated as an update to avoid release binds that overlap multiple other binds
                                 bindEntity.flagUpdate('inputState');
+                                bindEntity.components.inputState =
+                                    entity.components.inputState;
                                 if (entity.components.inputPosition) {
+                                    bindEntity.flagUpdate('inputPosition');
                                     bindEntity.components.inputPosition =
                                         entity.components.inputPosition;
-                                    bindEntity.flagUpdate('inputPosition');
+
+                                    bindEntity.flagUpdate('inputRelPosition');
                                     bindEntity.components.inputRelPosition =
                                         entity.components.inputRelPosition;
-                                    bindEntity.flagUpdate('inputRelPosition');
                                 }
 
                                 bindEntity.components.inputName =

@@ -392,6 +392,7 @@ export class Manager<ExactComponentTypes extends defaultComponentTypes> {
                     //     return;
                     // }
 
+                    // TODO do singleton and nested and reference lookup during construction and use Sets for faster lookups
                     try {
                         const reflectionType =
                             manager.componentsReflection.hasProperty(

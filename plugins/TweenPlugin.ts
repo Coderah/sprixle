@@ -69,7 +69,7 @@ export function applyTweenPlugin<
                             );
                         });
 
-                        tweenTarget.flagUpdate(tweeningComponent);
+                        tweenTarget.willUpdate(tweeningComponent);
                     } else {
                         tweenTarget.components[tweeningComponent] = lerp(
                             tweenFrom as number,

@@ -6,3 +6,5 @@ export type SingletonComponent = Group<'SingletonComponent'>;
 
 type NestableTypes = Record<string, unknown> | Array<unknown>;
 export type Nested<T extends NestableTypes> = T & Group<'Nested'>;
+
+export type Annotations = 'Nested' | 'SingletonComponent';

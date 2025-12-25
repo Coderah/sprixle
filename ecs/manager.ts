@@ -371,6 +371,54 @@ export class Manager<ExactComponentTypes extends defaultComponentTypes> {
         }
     }
 
+    protected wrapNested<
+        T extends typeof this.Entity,
+        K extends Keys<typeof this.ComponentTypes>,
+        V extends Object | Array<unknown>
+    >(entity: T, componentType: K, value: V): V {
+        // @ts-ignore
+        if (value.__isSprixleNestedProxy) return value;
+        if (typeof value !== 'object') {
+            console.warn(
+                `[Manager.wrapNested] ${componentType.toString()} isn't proxyable so it cannot be nested`
+            );
+            return value;
+        }
+
+        const manager = this;
+
+        for (let [key, v] of Object.entries(value)) {
+            if (typeof v === 'object') {
+                value[key] = this.wrapNested(entity, componentType, v);
+            }
+        }
+
+        // TODO nesting
+        return new Proxy(value, {
+            get(target, prop, receiver) {
+                if (prop === '__isSprixleNestedProxy') {
+                    return true;
+                }
+                return Reflect.get(target, prop, receiver);
+            },
+            set(target, prop, newValue, receiver) {
+                entity.willUpdate(componentType);
+
+                // TODO maybe make it so deep keys have to also be annotated to avoid unintended overhead?
+                if (typeof newValue === 'object') {
+                    newValue = manager.wrapNested(
+                        entity,
+                        componentType,
+                        newValue
+                    );
+                }
+
+                // target[prop] = newValue;
+                return Reflect.set(target, prop, newValue, receiver);
+            },
+        }) as V;
+    }
+
     createEntity(
         deserialized: SerializableEntity<Partial<ExactComponentTypes>>
     ): typeof this.Entity;
@@ -387,6 +435,7 @@ export class Manager<ExactComponentTypes extends defaultComponentTypes> {
 
         const manager = this;
 
+        // TODO ensure Nested deserializes properly
         const components = isFromDeserialized
             ? idOrDeserialized.components
             : ({
@@ -406,8 +455,9 @@ export class Manager<ExactComponentTypes extends defaultComponentTypes> {
                     // }
 
                     // TODO add nested handler
-                    const componentAnnotations =
-                        manager.componentAnnotations[componentType];
+                    const componentAnnotations = manager.componentAnnotations[
+                        componentType
+                    ] as Set<Annotations>;
 
                     if (componentAnnotations) {
                         if (
@@ -421,10 +471,19 @@ export class Manager<ExactComponentTypes extends defaultComponentTypes> {
                                 }] singleton component being used more than once.`
                             );
                         }
+
+                        if (componentAnnotations.has('Nested')) {
+                            value = manager.wrapNested(
+                                entity,
+                                componentType as any,
+                                value
+                            );
+                        }
                     }
 
                     const entityIsRegistered = manager.state.entities.has(id);
 
+                    // TODO figure out how Nested components handle previousComponents?
                     if (
                         componentType !== 'updatedAt' &&
                         entityIsRegistered &&

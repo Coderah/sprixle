@@ -1,4 +1,5 @@
 import {
+    groupAnnotation,
     ReceiveType,
     ReflectionClass,
     resolveReceiveType,
@@ -19,6 +20,7 @@ import {
 import { ConsumerSystem, QuerySystem, System } from './system';
 import { endPerformanceMeasure, startPerformanceMeasure } from './performance';
 import { PooledMap } from './pool';
+import { Annotations } from './types';
 
 export type Keys<T> = keyof T;
 export type EntityId = string | bigint;
@@ -117,6 +119,7 @@ export class Manager<ExactComponentTypes extends defaultComponentTypes> {
     readonly Entity!: Entity<typeof this.ComponentTypes>;
     componentTypesSet: Readonly<Set<keyof ExactComponentTypes>>;
     componentNames: readonly Keys<ExactComponentTypes>[];
+    componentAnnotations: Record<keyof ExactComponentTypes, Set<Annotations>>;
 
     state: EntityAdminState<typeof this.ComponentTypes, ExactComponentTypes>;
 
@@ -149,8 +152,18 @@ export class Manager<ExactComponentTypes extends defaultComponentTypes> {
             .getProperties()
             .map((p) => p.name) as readonly Keys<ExactComponentTypes>[];
 
+        const componentAnnotations = reflection
+            .getProperties()
+            .reduce((result, p) => {
+                result[p.name] = new Set(
+                    groupAnnotation.getAnnotations(p.type)
+                );
+                return result;
+            }, {}) as Record<keyof ExactComponentTypes, Set<Annotations>>;
+
         this.componentNames = extractedComponentNames;
         this.componentTypesSet = new Set(extractedComponentNames);
+        this.componentAnnotations = componentAnnotations;
 
         this.state = this.createInitialState();
     }
@@ -392,25 +405,15 @@ export class Manager<ExactComponentTypes extends defaultComponentTypes> {
                     //     return;
                     // }
 
-                    // TODO do singleton and nested and reference lookup during construction and use Sets for faster lookups
-                    try {
-                        const reflectionType =
-                            manager.componentsReflection.hasProperty(
-                                componentType
-                            )
-                                ? manager.componentsReflection.getProperty(
-                                      componentType
-                                  )
-                                : manager.componentsReflection.getMethod(
-                                      componentType
-                                  );
+                    // TODO add nested handler
+                    const componentAnnotations =
+                        manager.componentAnnotations[componentType];
 
+                    if (componentAnnotations) {
                         if (
-                            reflectionType.type.decorators?.find(
-                                (d) => d.typeName === 'SingletonComponent'
-                            ) &&
+                            componentAnnotations.has('SingletonComponent') &&
                             manager.state.entityMap.get(componentType as any)
-                                ?.size > 1
+                                ?.size
                         ) {
                             throw new Error(
                                 `[Entity.components.${
@@ -418,11 +421,6 @@ export class Manager<ExactComponentTypes extends defaultComponentTypes> {
                                 }] singleton component being used more than once.`
                             );
                         }
-                    } catch (e) {
-                        // console.warn(
-                        //     'Error finding type info for componentType',
-                        //     componentType
-                        // );
                     }
 
                     const entityIsRegistered = manager.state.entities.has(id);

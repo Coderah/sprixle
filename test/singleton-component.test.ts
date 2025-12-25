@@ -11,6 +11,8 @@ type ComponentTypes = defaultComponentTypes & {
 
 const manager = new Manager<ComponentTypes>();
 
+globalThis.manager = manager;
+
 manager.quickEntity({
     matchState: 'test',
 });
@@ -22,6 +24,7 @@ try {
     });
 } catch (e) {
     error = e;
+    console.warn('showing intended error as warning', error);
 }
 
 assert.ok(error);

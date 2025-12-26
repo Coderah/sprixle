@@ -3,41 +3,13 @@ import {
     // executeTemplates,
     BSONType,
 } from '@deepkit/bson';
-import { getPropertyNameString, TemplateState, Type } from '@deepkit/type';
+import { TemplateState, Type } from '@deepkit/type';
 import { Vector2, Vector3 } from 'three';
+import {
+    sizerPropertyNameAware,
+    serializePropertyNameAware,
+} from './sizerPropertyNameAware';
 
-function sizerPropertyNameAware(
-    type: Type,
-    state: TemplateState,
-    typeChecker: string,
-    code: string
-): void {
-    const checker = typeChecker
-        ? `if (!(${typeChecker})) ${state.throwCode(type)}`
-        : '';
-    state.template = `
-    ${checker}
-    ${state.template}
-    ${code}
-`;
-}
-
-function serializePropertyNameAware(
-    type: Type,
-    state: TemplateState,
-    bsonType: BSONType,
-    typeChecker: string,
-    code: string
-): void {
-    state.template = `
-    //serializer for ${type.kind}, via propertyName="${getPropertyNameString(
-        state.propertyName
-    )}"
-    ${typeChecker ? `if (!(${typeChecker})) ${state.throwCode(type)}` : ''}
-    state.writer.writeType(${bsonType}); //BSON type = ${BSONType[bsonType]}
-    ${code}
-`;
-}
 export function registerVectorSerializers() {
     bsonBinarySerializer.sizerRegistry.registerClass(Vector2, (type, state) =>
         sizerPropertyNameAware(

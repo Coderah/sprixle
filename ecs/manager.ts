@@ -1,15 +1,24 @@
 import {
+    getTypeJitContainer,
     groupAnnotation,
     ReceiveType,
     ReflectionClass,
     resolveReceiveType,
 } from '@deepkit/type';
 import { each } from 'lodash';
+import { Vector2, Vector3 } from 'three';
 import uuid from 'uuid-random';
+import '../data/bsonPointerSerializer';
+import {
+    registerPointerProperty,
+    setSerializationManagerContext,
+} from '../data/bsonPointerSerializer';
+import { getBSONSerializer, getBSONDeserializer } from '@deepkit/bson';
 import { memoizedGlobalNow, now } from '../util/now';
 import { keys } from './dict';
-import { Vector2, Vector3 } from 'three';
 import './object.extensions';
+import { endPerformanceMeasure, startPerformanceMeasure } from './performance';
+import { PooledMap } from './pool';
 import {
     Consumer,
     Query,
@@ -18,8 +27,6 @@ import {
     QueryState,
 } from './query';
 import { ConsumerSystem, QuerySystem, System } from './system';
-import { endPerformanceMeasure, startPerformanceMeasure } from './performance';
-import { PooledMap } from './pool';
 import { Annotations } from './types';
 
 export type Keys<T> = keyof T;
@@ -127,6 +134,18 @@ export class Manager<ExactComponentTypes extends defaultComponentTypes> {
 
     genId: () => EntityId = uuid;
 
+    // Global registry for pointer serialization/deserialization
+    private static globalPointerRegistry = new Map<
+        string,
+        {
+            forward: Map<any, any>;
+            reverse: Map<any, any>;
+        }
+    >();
+
+    private static instanceCounter = 0;
+    private instanceId: string;
+
     /**
      *
      * @param componentNames [DO NOT PASS] This is dynamic now and can be accessed at `new Manager<*>().componentNames` if needed
@@ -143,6 +162,10 @@ export class Manager<ExactComponentTypes extends defaultComponentTypes> {
                 'Do not pass componentNames to new Manager() to resolve this:'
             );
         }
+
+        // Initialize instance ID for pointer registry
+        this.instanceId = `manager-${Manager.instanceCounter++}`;
+
         const type = resolveReceiveType(componentNames);
 
         const reflection = (this.componentsReflection =
@@ -180,6 +203,91 @@ export class Manager<ExactComponentTypes extends defaultComponentTypes> {
         ) => void;
         deregister?: (entity: Entity<Partial<ExactComponentTypes>>) => void;
     };
+
+    /**
+     * Register pointer components that should serialize to/from keys instead of full objects.
+     * @param pointers Object mapping component names to their source maps/records
+     */
+    registerPointers(
+        pointers: Partial<{
+            [K in keyof ExactComponentTypes]:
+                | Record<string, ExactComponentTypes[K]>
+                | Map<unknown, ExactComponentTypes[K]>;
+        }>
+    ) {
+        for (const [componentType, source] of Object.entries(pointers)) {
+            if (
+                !this.componentTypesSet.has(
+                    componentType as keyof ExactComponentTypes
+                )
+            ) {
+                console.warn(
+                    `[Manager.registerPointers] "${componentType}" is not a valid component type`
+                );
+                continue;
+            }
+
+            let forward = new Map<any, any>();
+            const reverse = new Map<any, any>();
+
+            if (source instanceof Map) {
+                forward = source;
+                for (const [key, value] of source.entries()) {
+                    reverse.set(value, key);
+                }
+            } else {
+                for (const [key, value] of Object.entries(source)) {
+                    forward.set(key, value);
+                    reverse.set(value, key);
+                }
+            }
+
+            // Store in global registry for serializers
+            const registryKey = `${this.instanceId}:${componentType}`;
+            Manager.globalPointerRegistry.set(registryKey, {
+                forward,
+                reverse,
+            });
+
+            // Register the property path with the serializer
+            registerPointerProperty(
+                this.instanceId,
+                `components.${componentType}`
+            );
+        }
+    }
+
+    /**
+     * Get pointer registry for serialization - used by BSON serializers
+     * @internal
+     */
+    static getPointerRegistry(managerId: string, componentType: string) {
+        return Manager.globalPointerRegistry.get(
+            `${managerId}:${componentType}`
+        );
+    }
+
+    /**
+     * Create a serializer function that handles pointer components
+     */
+    createSerializer<T>(type?: ReceiveType<T>) {
+        const managerId = this.instanceId;
+        setSerializationManagerContext(managerId);
+        const serializer = getBSONSerializer<T>();
+
+        return serializer;
+    }
+
+    /**
+     * Create a deserializer function that handles pointer components
+     */
+    createDeserializer<T>(type?: ReceiveType<T>) {
+        const managerId = this.instanceId;
+        setSerializationManagerContext(managerId);
+        const deserializer = getBSONDeserializer<T>();
+
+        return deserializer;
+    }
 
     setState(
         newState:

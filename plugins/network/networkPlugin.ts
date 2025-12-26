@@ -1,5 +1,5 @@
-import { ReceiveType, typeOf, uint8 } from '@deepkit/type';
 import { getBsonEncoder } from '@deepkit/bson';
+import { Excluded, ReceiveType, typeOf } from '@deepkit/type';
 import {
     defaultComponentTypes,
     EntityId,
@@ -8,10 +8,9 @@ import {
 } from '../../ecs/manager';
 
 import type {
-    Server as WebSocketServer,
     WebSocket as ClientWebSocket,
+    Server as WebSocketServer,
 } from 'ws';
-import { throttleLog } from '../../util/log';
 
 // Handle WebSocket in both browser and Node.js environments
 const WebSocketImpl =
@@ -19,7 +18,7 @@ const WebSocketImpl =
 type BrowserWebSocket = typeof WebSocket extends undefined ? never : WebSocket;
 
 export type NetworkComponentTypes = {
-    socket: ClientWebSocket;
+    socket: ClientWebSocket & Excluded;
 };
 
 export function applyNetwork<

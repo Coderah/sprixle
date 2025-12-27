@@ -9,10 +9,7 @@ import { each } from 'lodash';
 import { Vector2, Vector3 } from 'three';
 import uuid from 'uuid-random';
 import '../data/bsonPointerSerializer';
-import {
-    registerPointerProperty,
-    setSerializationManagerContext,
-} from '../data/bsonPointerSerializer';
+import { setSerializationManagerContext } from '../data/bsonPointerSerializer';
 import { getBSONSerializer, getBSONDeserializer } from '@deepkit/bson';
 import { memoizedGlobalNow, now } from '../util/now';
 import { keys } from './dict';
@@ -205,34 +202,17 @@ export class Manager<ExactComponentTypes extends defaultComponentTypes> {
     };
 
     /**
-     * Register pointer components that should serialize to/from keys instead of full objects.
-     * @param pointers Object mapping component names to their source maps/records
+     * Register pointer data sources that can be referenced by Pointer<T, name> types.
+     * @param dataSources Object mapping data source names to their source maps/records
      */
-    registerPointers(
-        pointers: Partial<{
-            [K in keyof ExactComponentTypes]:
-                | Record<string, ExactComponentTypes[K]>
-                | Map<unknown, ExactComponentTypes[K]>;
-        }>
-    ) {
-        for (const [componentType, source] of Object.entries(pointers)) {
-            if (
-                !this.componentTypesSet.has(
-                    componentType as keyof ExactComponentTypes
-                )
-            ) {
-                console.warn(
-                    `[Manager.registerPointers] "${componentType}" is not a valid component type`
-                );
-                continue;
-            }
-
-            let forward = new Map<any, any>();
+    registerPointers(dataSources: Record<string, Record<string, any> | Map<unknown, any>>) {
+        for (const [dataSourceName, source] of Object.entries(dataSources)) {
+            const forward = new Map<any, any>();
             const reverse = new Map<any, any>();
 
             if (source instanceof Map) {
-                forward = source;
                 for (const [key, value] of source.entries()) {
+                    forward.set(key, value);
                     reverse.set(value, key);
                 }
             } else {
@@ -243,17 +223,11 @@ export class Manager<ExactComponentTypes extends defaultComponentTypes> {
             }
 
             // Store in global registry for serializers
-            const registryKey = `${this.instanceId}:${componentType}`;
+            const registryKey = `${this.instanceId}:${dataSourceName}`;
             Manager.globalPointerRegistry.set(registryKey, {
                 forward,
                 reverse,
             });
-
-            // Register the property path with the serializer
-            registerPointerProperty(
-                this.instanceId,
-                `components.${componentType}`
-            );
         }
     }
 
@@ -261,9 +235,9 @@ export class Manager<ExactComponentTypes extends defaultComponentTypes> {
      * Get pointer registry for serialization - used by BSON serializers
      * @internal
      */
-    static getPointerRegistry(managerId: string, componentType: string) {
+    static getPointerRegistry(managerId: string, dataSourceName: string) {
         return Manager.globalPointerRegistry.get(
-            `${managerId}:${componentType}`
+            `${managerId}:${dataSourceName}`
         );
     }
 

@@ -1,5 +1,5 @@
 import { bsonBinarySerializer, getValueSize } from '@deepkit/bson';
-import { ReflectionKind } from '@deepkit/type';
+import { ReflectionKind, dataAnnotation } from '@deepkit/type';
 import {
     serializePropertyNameAware,
     sizerPropertyNameAware,
@@ -26,86 +26,53 @@ export function getSerializationManagerContext() {
     return currentManagerId;
 }
 
-// Track which properties are pointers for a given manager
-const pointerProperties = new Map<string, Set<string>>();
-
-/**
- * Register a property path as a pointer component
- * @internal
- */
-export function registerPointerProperty(
-    managerId: string,
-    propertyPath: string
-) {
-    if (!pointerProperties.has(managerId)) {
-        pointerProperties.set(managerId, new Set());
-    }
-    pointerProperties.get(managerId)!.add(propertyPath);
-}
-
-/**
- * Check if a property is registered as a pointer
- * @internal
- */
-export function isPointerProperty(
-    managerId: string | null,
-    propertyPath: string
-): boolean {
-    if (!managerId) return false;
-    return pointerProperties.get(managerId)?.has(propertyPath) ?? false;
-}
-
 /**
  * Get the pointer registry from Manager
  * @internal
  */
-export function getPointerRegistry(managerId: string, componentType: string) {
-    return Manager.getPointerRegistry(managerId, componentType);
+export function getPointerRegistry(managerId: string, dataSourceName: string) {
+    return Manager.getPointerRegistry(managerId, dataSourceName);
 }
 
 // Add serialization hooks for pointer components
 bsonBinarySerializer.bsonSerializeRegistry.prepend(
     ReflectionKind.objectLiteral,
     (type, state) => {
-        if (
-            type.parent?.kind !== ReflectionKind.propertySignature ||
-            type.parent?.parent?.parent?.kind !==
-                ReflectionKind.propertySignature
-        )
+        const dataSourceName = dataAnnotation.get(type, 'Pointer');
+        if (!dataSourceName) {
             return;
-        const propertyPath = `${type.parent.parent.parent.name as string}.${
-            type.parent.name as string
-        }`;
+        }
 
-        // Check if this property is registered as a pointer
-        if (isPointerProperty(currentManagerId, propertyPath)) {
-            const componentType = type.parent.name as string;
-
-            state.setContext({
-                registry: getPointerRegistry(currentManagerId, componentType),
-            });
-
-            const start = state.compilerContext.reserveName('start');
-            serializePropertyNameAware(
-                type,
-                state,
-                BSONType.string,
-                null,
-                `
-                var ${start} = state.writer.offset;
-                const key = registry.reverse.get(${state.accessor});
-                if (key === undefined) {
-                    throw new Error('[Pointer Serialization] Object not found in registry for ${componentType}');
-                }
-                state.writer.offset += 4; //size placeholder
-                state.writer.writeString(key);
-                state.writer.writeByte(0); //null
-                state.writer.writeDelayedSize(state.writer.offset - ${start} - 4, ${start});
-                `
+        const registry = getPointerRegistry(currentManagerId, dataSourceName);
+        if (!registry)
+            throw new Error(
+                `[Manager] Pointer lookups not registered for ${dataSourceName}`
             );
 
-            state.stop();
-        }
+        state.setContext({
+            registry,
+        });
+
+        const start = state.compilerContext.reserveName('start');
+        serializePropertyNameAware(
+            type,
+            state,
+            BSONType.string,
+            null,
+            `
+            var ${start} = state.writer.offset;
+            const key = registry.reverse.get(${state.accessor});
+            if (key === undefined) {
+                throw new Error('[Pointer Serialization] Object not found in registry for "${dataSourceName}"');
+            }
+            state.writer.offset += 4; //size placeholder
+            state.writer.writeString(key);
+            state.writer.writeByte(0); //null
+            state.writer.writeDelayedSize(state.writer.offset - ${start} - 4, ${start});
+            `
+        );
+
+        state.stop();
     }
 );
 
@@ -113,40 +80,36 @@ bsonBinarySerializer.bsonSerializeRegistry.prepend(
 bsonBinarySerializer.sizerRegistry.prepend(
     ReflectionKind.objectLiteral,
     (type, state) => {
-        if (
-            type.parent?.kind !== ReflectionKind.propertySignature ||
-            type.parent?.parent?.parent?.kind !==
-                ReflectionKind.propertySignature
-        )
+        const dataSourceName = dataAnnotation.get(type, 'Pointer');
+        if (!dataSourceName) {
             return;
-        const propertyPath = `${type.parent.parent.parent.name as string}.${
-            type.parent.name as string
-        }`;
+        }
 
-        // Check if this property is registered as a pointer
-        if (isPointerProperty(currentManagerId, propertyPath)) {
-            const componentType = type.parent.name as string;
-
-            state.setContext({
-                registry: getPointerRegistry(currentManagerId, componentType),
-                getValueSize,
-            });
-
-            sizerPropertyNameAware(
-                type,
-                state,
-                null,
-                `
-                const key = registry.reverse.get(${state.accessor});
-                if (key === undefined) {
-                    throw new Error('[Pointer Sizing] Object not found in registry for ${componentType}');
-                }
-                state.size += getValueSize(key);
-                `
+        const registry = getPointerRegistry(currentManagerId, dataSourceName);
+        if (!registry)
+            throw new Error(
+                `[Manager] Pointer lookups not registered for ${dataSourceName}`
             );
 
-            state.stop();
-        }
+        state.setContext({
+            registry,
+            getValueSize,
+        });
+
+        sizerPropertyNameAware(
+            type,
+            state,
+            null,
+            `
+            const key = registry.reverse.get(${state.accessor});
+            if (key === undefined) {
+                throw new Error('[Pointer Sizing] Object not found in registry for "${dataSourceName}"');
+            }
+            state.size += getValueSize(key);
+            `
+        );
+
+        state.stop();
     }
 );
 
@@ -154,39 +117,35 @@ bsonBinarySerializer.sizerRegistry.prepend(
 bsonBinarySerializer.bsonDeserializeRegistry.prepend(
     ReflectionKind.objectLiteral,
     (type, state) => {
-        if (
-            type.parent?.kind !== ReflectionKind.propertySignature ||
-            type.parent?.parent?.parent?.kind !==
-                ReflectionKind.propertySignature
-        )
+        const dataSourceName = dataAnnotation.get(type, 'Pointer');
+        if (!dataSourceName) {
             return;
-        const propertyPath = `${type.parent.parent.parent.name as string}.${
-            type.parent.name as string
-        }`;
-
-        // Check if this property is registered as a pointer
-        if (isPointerProperty(currentManagerId, propertyPath)) {
-            const componentType = type.parent.name as string;
-
-            state.setContext({
-                registry: getPointerRegistry(currentManagerId, componentType),
-                BSONType,
-            });
-
-            state.addCode(`
-                if (state.elementType === ${BSONType.string}) {
-                    const key = state.parser.parseString();
-                    const value = registry.forward.get(key);
-                    if (value === undefined) {
-                        throw new Error('[Pointer Deserialization] Key "' + key + '" not found in registry for ${componentType}');
-                    }
-                    ${state.setter} = value;
-                } else {
-                    throw new Error('[Pointer Deserialization] Expected string type for ${componentType}, got ' + state.elementType);
-                }
-            `);
-
-            state.stop();
         }
+
+        const registry = getPointerRegistry(currentManagerId, dataSourceName);
+        if (!registry)
+            throw new Error(
+                `[Manager] Pointer lookups not registered for ${dataSourceName}`
+            );
+
+        state.setContext({
+            registry,
+            BSONType,
+        });
+
+        state.addCode(`
+            if (state.elementType === ${BSONType.string}) {
+                const key = state.parser.parseString();
+                const value = registry.forward.get(key);
+                if (value === undefined) {
+                    throw new Error('[Pointer Deserialization] Key "' + key + '" not found in registry for "${dataSourceName}"');
+                }
+                ${state.setter} = value;
+            } else {
+                throw new Error('[Pointer Deserialization] Expected string type for "${dataSourceName}", got ' + state.elementType);
+            }
+        `);
+
+        state.stop();
     }
 );

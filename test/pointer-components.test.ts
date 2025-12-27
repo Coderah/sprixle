@@ -4,6 +4,8 @@ import {
     Manager,
     SerializableEntity,
 } from '../ecs/manager';
+import { Pointer } from '../ecs/types';
+import { typeOf } from '@deepkit/type';
 
 type Ability = {
     stat: number;
@@ -22,16 +24,20 @@ const mappedAbilities = new Map<keyof typeof abilities, Ability>([
 ]);
 
 type ComponentTypes = defaultComponentTypes & {
-    ability: Ability;
-    mapTest: Ability;
+    abilities: {
+        blueprint: Pointer<Ability, 'abilities'>;
+        cooldownStartAt: number;
+    }[];
+
+    mapTest: Pointer<Ability, 'mappedAbilities'>;
 };
 
 const manager = new Manager<ComponentTypes>();
 
-// Register pointer components
+// Register pointer data sources
 manager.registerPointers({
-    ability: abilities,
-    mapTest: mappedAbilities,
+    abilities,
+    mappedAbilities,
 });
 
 export type TransmittableEntity = SerializableEntity<Partial<ComponentTypes>>;
@@ -41,7 +47,12 @@ export const decodeEntity = manager.createDeserializer<TransmittableEntity>();
 globalThis.manager = manager;
 
 const entity = manager.quickEntity({
-    ability: abilities.fireball,
+    abilities: [
+        {
+            blueprint: abilities.fireball,
+            cooldownStartAt: 100,
+        },
+    ],
     mapTest: mappedAbilities.get('fireball'),
 });
 
@@ -53,13 +64,24 @@ abilities.fireball.anotherStat = 1000;
 const deserialized = decodeEntity(serialized);
 console.log('deserialized', deserialized);
 
-// After deserialization, ability should be the object reference (not the key string)
-assert.ok(deserialized.components.ability === abilities.fireball);
+// After deserialization, blueprint should be the object reference (not the key string)
+assert.ok(
+    deserialized.components.abilities[0].blueprint === abilities.fireball
+);
+assert.ok(deserialized.components.mapTest === mappedAbilities.get('fireball'));
+
 const deserializedEntity = manager.createEntity(deserialized);
 console.log(deserializedEntity);
 
 // Should still point to the same object after entity creation
-assert.ok(deserializedEntity.components.ability === abilities.fireball);
+assert.ok(
+    deserializedEntity.components.abilities[0].blueprint === abilities.fireball
+);
+assert.ok(
+    deserializedEntity.components.mapTest === mappedAbilities.get('fireball')
+);
 
 // And should see the updated value
-assert.ok(deserializedEntity.components.ability.anotherStat === 1000);
+assert.ok(
+    deserializedEntity.components.abilities[0].blueprint.anotherStat === 1000
+);

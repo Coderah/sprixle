@@ -119,7 +119,7 @@ def export(sceneKey):
 
     # add node tree baking
     
-    worldShaderTree = bpy.data.scenes[0].world.node_tree
+    worldShaderTree = bpy.context.scene.world.node_tree
     worldShaderOutput = worldShaderTree.get_output_node('EEVEE')
     worldSurfaceInput = worldShaderOutput.inputs.get('Surface')
     if worldSurfaceInput:
@@ -137,6 +137,8 @@ def export(sceneKey):
             if worldStrengthInput:
                 scene['worldIntensity'] = worldStrengthInput.default_value
 
+    scene['viewLayer'] = bpy.context.view_layer.name
+    scene['worldShader'] = bpy.context.scene.world.name
     
     # sceneCollection = scene.collection;
     instanceObjectsToClean = []

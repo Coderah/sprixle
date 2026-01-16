@@ -15,6 +15,7 @@ from . import auto_load
 from . import node_trees
 from . import exporter
 from . import animation_clips
+from . import serializers
 from deepdiff import DeepDiff
 import bpy
 from bpy.app.handlers import persistent
@@ -64,19 +65,22 @@ def handleDepsGraphUpdate(scene, graph):
 
             if data and server:
                 print('sending world shader', update.id.name)
-                graphs_serialized.append(material)
+                # graphs_serialized.append(material)
                 server.send_message_to_all(json.dumps({
                     "name": name.replace('.',''),
                     "type": 'shaderTree',
                     "data": data
                 }, indent=0))
 
-        if isinstance(update.id, bpy.types.Scene):
-            scene = bpy.data.scenes[update.id.name]
-            (data, name) = node_trees.serialize(scene)
+        if isinstance(update.id, bpy.types.CompositorNodeTree):
+            # scene = bpy.data.scenes[update.id.name]
+            (data, name) = node_trees.serialize(bpy.context.scene)
 
             print('serialized scene compositor tree on change', update.id.name)
         
+        elif isinstance(update.id, bpy.types.Scene):
+            serializers.view_layer(bpy.context.view_layer)
+
         elif isinstance(update.id, bpy.types.Material):
             material = bpy.data.materials[update.id.name]
             (data, name) = node_trees.serialize(material)
@@ -147,6 +151,10 @@ def prepAllNodeTrees():
     if sceneData:
         materials[compositorName] = sceneData
 
+    (worldData, worldName) = node_trees.serialize(bpy.context.scene.world)
+    if worldData:
+        materials[worldName] = worldData
+
     return (logicObjects, materials)
     
 
@@ -202,6 +210,8 @@ class SprixleExport(bpy.types.Operator):
     def execute(self, context):        # execute() is called when running the operator.
         prepAllNodeTrees()
         animation_clips.prepare_animation_properties()
+
+        serializers.view_layer(bpy.context.view_layer)
         
         exporter.export(bpy.context.scene.name)
 
@@ -228,7 +238,7 @@ class SprixleInfoPanel(bpy.types.Panel):
 
     def draw(self, context):
         global active_scene
-        self.layout.label(text="Addon Version: 0.0.8")
+        self.layout.label(text="Addon Version: 0.1.0")
 
         self.layout.operator(SprixleExport.bl_idname, text="Export Scene", icon="EXPORT")
 
@@ -242,7 +252,7 @@ class SprixleInfoPanelInTree(bpy.types.Panel):
 
     def draw(self, context):
         global active_scene
-        self.layout.label(text="Addon Version: 0.0.8")
+        self.layout.label(text="Addon Version: 0.1.0")
 
         self.layout.operator(SprixleExport.bl_idname, text="Export Scene", icon="EXPORT")
 

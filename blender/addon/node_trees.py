@@ -3,6 +3,7 @@ import json
 import mathutils
 import os
 import re
+import hashlib
 
 def is_struct(val):
     return val.__class__.__name__ == "bpy_prop_array" or isinstance(val, bpy.types.bpy_struct)
@@ -132,15 +133,20 @@ def serialize(target):
         node_group = modifier.node_group
         name = node_group.name
     elif isinstance(target, bpy.types.Material):
-        if not '+compile' in target.name: return (None, None)
+        # if not '+compile' in target.name: return (None, None)
         modifier = target
         node_group = modifier.node_tree
         name = target.name
-    elif isinstance(target, bpy.types.World) or isinstance(target, bpy.types.Scene):
+    elif isinstance(target, bpy.types.Scene):
+        modifier = target
+        node_group = modifier.compositing_node_group
+        if not node_group: return (None, None)
+        name = node_group.name or target.name
+    elif isinstance(target, bpy.types.World):
         modifier = target
         node_group = modifier.node_tree
         if not node_group: return (None, None)
-        name = node_group.name or target.name
+        name = target.name
 
     if not modifier or not node_group: return (None, None)
 
@@ -266,7 +272,11 @@ def serialize(target):
                 if isinstance(value, (bpy.types.Object, bpy.types.Material)):
                     value = f"{value.name}"
                 elif input.type == 'VECTOR' or isinstance(value, (mathutils.Vector, mathutils.Euler)):
-                    value = [value[0], value[1], value[2]]
+                    print(node, value)
+                    if len(value) < 3:
+                        value = [value[0], value[1]]
+                    else:
+                        value = [value[0], value[1], value[2]]
                 elif input.type == 'RGBA':
                     value = list(value)
                 elif isinstance(value, float):
@@ -381,17 +391,34 @@ def serialize(target):
         
     serialized_tree = serialize_tree(node_group)
 
-    output = json.dumps(serialized_tree, indent=0)
+    output = json.dumps(serialized_tree, indent=2)
+    fileName = name.replace('.', '-')
     if isinstance(target, bpy.types.Material):
-        target['shaderTree'] = output
+        os.makedirs(bpy.path.abspath('//shaders'), exist_ok=True)
+        fileName = 'shaders/' + fileName
+        # target['shaderTree'] = output
     elif isinstance(target, bpy.types.World):
-        bpy.context.scene['worldShaderTree'] = output
+        os.makedirs(bpy.path.abspath('//shaders'), exist_ok=True)
+        fileName = 'shaders/' + fileName
+        # bpy.context.scene['worldShaderTree'] = output
     elif isinstance(target, bpy.types.Scene):
-        bpy.context.scene['compositionShaderTree'] = output
+        os.makedirs(bpy.path.abspath('//shaders'), exist_ok=True)
+        fileName = 'shaders/' + fileName
+        # bpy.context.scene['compositionShaderTree'] = output
     else:
-        bpy.context.scene[name] = output
-        target['logicTree'] = name
+        os.makedirs(bpy.path.abspath('//logic-trees'), exist_ok=True)
+        fileName = 'logic-trees/' + fileName
+    #     bpy.context.scene[name] = output
+    #     target['logicTree'] = name
     # print('set custom attrib?')
+
+    
+    hash = hashlib.md5(output.encode('utf-8')).hexdigest()
+    output = output[:1] + '"hash": "' + hash + '",' + output[1:]
+
+    with open(bpy.path.abspath('//'+fileName+'.json'), "w") as file:
+        file.write(output)
+
 
     return (serialized_tree, name)
 

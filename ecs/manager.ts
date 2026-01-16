@@ -126,6 +126,7 @@ export class Manager<ExactComponentTypes extends defaultComponentTypes> {
     componentAnnotations: Record<keyof ExactComponentTypes, Set<Annotations>>;
 
     state: EntityAdminState<typeof this.ComponentTypes, ExactComponentTypes>;
+    plugins: Map<string, any> = new Map();
 
     componentsReflection: ReflectionClass<ExactComponentTypes>;
 
@@ -205,7 +206,9 @@ export class Manager<ExactComponentTypes extends defaultComponentTypes> {
      * Register pointer data sources that can be referenced by Pointer<T, name> types.
      * @param dataSources Object mapping data source names to their source maps/records
      */
-    registerPointers(dataSources: Record<string, Record<string, any> | Map<unknown, any>>) {
+    registerPointers(
+        dataSources: Record<string, Record<string, any> | Map<unknown, any>>
+    ) {
         for (const [dataSourceName, source] of Object.entries(dataSources)) {
             const forward = new Map<any, any>();
             const reverse = new Map<any, any>();

@@ -29,7 +29,7 @@ export function applyNetwork<
         | string
         | Uint8Array
         | number
-        | (string | number)[]
+        | (string | number | null)[]
         | bigint;
     type BufferMessage = Command | [Command, MessageData];
     type EntityWithSocket = EntityWithComponents<

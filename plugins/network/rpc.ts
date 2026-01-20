@@ -95,6 +95,7 @@ export abstract class RPCActions<
             }
 
             // Extract parameter types using Deepkit reflection
+            // TODO probably need to actually use type info for param deserialize but for now its getting handled generically just fine
             const reflection = ReflectionClass.from(constructor);
             const methodReflection = reflection.getMethod(methodName);
 

@@ -29,6 +29,8 @@ type ComponentTypes = defaultComponentTypes & {
         cooldownStartAt: number;
     }[];
 
+    hotbar: Array<Pointer<Ability, 'abilities'>>;
+
     mapTest: Pointer<Ability, 'mappedAbilities'>;
 };
 
@@ -53,6 +55,7 @@ const entity = manager.quickEntity({
             cooldownStartAt: 100,
         },
     ],
+    hotbar: [abilities.fireball, undefined],
     mapTest: mappedAbilities.get('fireball'),
 });
 

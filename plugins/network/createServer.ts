@@ -1,6 +1,7 @@
-import { applyNetwork } from './networkPlugin';
+import { applyNetwork, NetworkComponentTypes } from './networkPlugin';
 import { createServer as createHTTPServer } from 'http';
 import { Server as WebSocketServer } from 'ws';
+import { defaultComponentTypes } from '../../ecs/manager';
 
 function defaultHTTPServer() {
     const httpServer = createHTTPServer({ noDelay: true });
@@ -39,13 +40,16 @@ function defaultHTTPServer() {
     return httpServer;
 }
 
-export function createServer(
+export function createServer<
+    Commands extends number,
+    ComponentTypes extends defaultComponentTypes & NetworkComponentTypes
+>(
     config: {
         port: number;
         noServer?: boolean;
         httpServer?: ReturnType<typeof createHTTPServer>;
     },
-    network: ReturnType<typeof applyNetwork>
+    network: ReturnType<typeof applyNetwork<Commands, ComponentTypes>>
 ) {
     const httpServer = config.noServer
         ? undefined

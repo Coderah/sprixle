@@ -18,7 +18,7 @@ const WebSocketImpl =
 type BrowserWebSocket = typeof WebSocket extends undefined ? never : WebSocket;
 
 export type NetworkComponentTypes = {
-    socket: ClientWebSocket & Excluded;
+    socket: ClientWebSocket;
 };
 
 export function applyNetwork<
@@ -104,21 +104,18 @@ export function applyNetwork<
 
         if (!data.length) return;
 
+        let first: Command, second: any;
         try {
             const decoded = decodeMessage(data);
-            let first: Command, second: any;
             if (Array.isArray(decoded)) {
                 [first, second] = decoded;
             } else {
                 first = decoded;
             }
-
-            // console.log('[Network] receive', first);
-
-            messageResolvers.get(first)?.(second, client, data);
         } catch (e) {
             console.error('[network] failed to parse incoming message', e);
         }
+        messageResolvers.get(first)?.(second, client, data);
     }
 
     async function message<R>(command: Command) {

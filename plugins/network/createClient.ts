@@ -1,10 +1,14 @@
 import { throttle } from 'lodash';
-import { applyNetwork } from './networkPlugin';
+import { applyNetwork, NetworkComponentTypes } from './networkPlugin';
+import { defaultComponentTypes } from '../../ecs/manager';
 
 // TODO smarter reconnect with backoff and jitter and such
-export function createClient(
+export function createClient<
+    Commands extends number,
+    ComponentTypes extends defaultComponentTypes & NetworkComponentTypes
+>(
     endpoint: string,
-    network: ReturnType<typeof applyNetwork>,
+    network: ReturnType<typeof applyNetwork<Commands, ComponentTypes>>,
     options?: {
         getToken?: () => string | null | undefined;
     }

@@ -146,10 +146,11 @@ export function applyVuePlugin<
         // TODO updating the ref wont actually change the component on the ECS side of things.. fix that
         // Extract ID from various input types
         const getId = (input = entityOrId): EntityId | undefined => {
+            if (!input) return undefined;
             if (typeof input === 'string' || typeof input === 'bigint') {
                 return input;
             }
-            if ('value' in input) {
+            if (typeof input === 'object' && 'value' in input) {
                 return input.value;
             }
             return input.id;

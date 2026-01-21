@@ -1,5 +1,5 @@
+import { getBSONDeserializer, getBSONSerializer } from '@deepkit/bson';
 import {
-    getTypeJitContainer,
     groupAnnotation,
     ReceiveType,
     ReflectionClass,
@@ -10,7 +10,6 @@ import { Vector2, Vector3 } from 'three';
 import uuid from 'uuid-random';
 import '../data/bsonPointerSerializer';
 import { setSerializationManagerContext } from '../data/bsonPointerSerializer';
-import { getBSONSerializer, getBSONDeserializer } from '@deepkit/bson';
 import { memoizedGlobalNow, now } from '../util/now';
 import { keys } from './dict';
 import './object.extensions';
@@ -231,6 +230,7 @@ export class Manager<ExactComponentTypes extends defaultComponentTypes> {
                 forward,
                 reverse,
             });
+            console.log('register data pointer:', registryKey);
         }
     }
 
@@ -548,7 +548,10 @@ export class Manager<ExactComponentTypes extends defaultComponentTypes> {
                         if (
                             componentAnnotations.has('SingletonComponent') &&
                             manager.state.entityMap.get(componentType as any)
-                                ?.size
+                                ?.size &&
+                            manager.state.entityMap
+                                .get(componentType as any)
+                                .first() !== entity.id
                         ) {
                             throw new Error(
                                 `[Entity.components.${

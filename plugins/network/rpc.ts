@@ -1,7 +1,7 @@
-import { ReflectionClass, typeOf } from '@deepkit/type';
-import { applyNetwork, NetworkComponentTypes } from './networkPlugin';
+import { ReflectionClass } from '@deepkit/type';
 import em from '../../../game/entityManager';
 import { defaultComponentTypes } from '../../ecs/manager';
+import { applyNetwork, NetworkComponentTypes } from './networkPlugin';
 
 interface RPCMetadata {
     command: number;
@@ -14,12 +14,13 @@ const rpcRegistry = new Map<Function, RPCMetadata[]>();
 /**
  * Decorator to mark a method as an RPC call
  * @param command The network command ID for this RPC
+ * @group Decorators
  */
-export function RPC<T extends number>(command: T) {
+export function RPC<T extends number, F extends Function>(command: T) {
     return function (
         target: any,
         propertyKey: string | symbol,
-        descriptor: PropertyDescriptor
+        descriptor: TypedPropertyDescriptor<F>
     ) {
         const constructor = target.constructor;
 
@@ -52,7 +53,7 @@ export function RPC<T extends number>(command: T) {
 
             // On server or local: execute the original method
             return originalMethod.apply(this, args);
-        };
+        } as any as F;
 
         return descriptor;
     };
@@ -60,7 +61,7 @@ export function RPC<T extends number>(command: T) {
 
 export abstract class RPCActions<
     TCommands extends number,
-    TComponents extends defaultComponentTypes & NetworkComponentTypes
+    TComponents extends defaultComponentTypes & NetworkComponentTypes,
 > {
     network: ReturnType<typeof applyNetwork<TCommands, TComponents>>;
     isClient: boolean;

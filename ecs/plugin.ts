@@ -46,7 +46,6 @@ export function sprixlePlugin<
 
         const result = func.call(
             { dependencies: resolvedDependencies },
-            manager,
             ...args
         );
 

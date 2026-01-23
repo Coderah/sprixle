@@ -12,6 +12,9 @@ import type {
     Server as WebSocketServer,
 } from 'ws';
 import { sprixlePlugin } from '../../ecs/plugin';
+import applyReconciliation, {
+    ReconciliationComponentTypes,
+} from './reconciliationPlugin';
 
 // Handle WebSocket in both browser and Node.js environments
 const WebSocketImpl =
@@ -22,14 +25,21 @@ export type NetworkComponentTypes = {
     socket: ClientWebSocket;
 };
 
-const dependencies = {};
-const optionalDependencies = new Set();
+const dependencies = {
+    reconciliationPlugin: applyReconciliation,
+};
+const optionalDependencies = new Set<keyof typeof dependencies>([
+    'reconciliationPlugin',
+]);
 
 export default sprixlePlugin(
     function networkPlugin<
         Command,
-        ComponentTypes extends defaultComponentTypes & NetworkComponentTypes,
+        ComponentTypes extends defaultComponentTypes &
+            NetworkComponentTypes &
+            ReconciliationComponentTypes,
     >(manager: Manager<ComponentTypes>, commandType?: ReceiveType<Command>) {
+        const { reconciliationPlugin } = this.dependencies;
         type MessageData =
             | string
             | Uint8Array
@@ -121,6 +131,9 @@ export default sprixlePlugin(
                 console.error('[network] failed to parse incoming message', e);
             }
             messageResolvers.get(first)?.(second, client, data);
+
+            // Resolve reconcilable actions after message handler runs
+            reconciliationPlugin?.resolveReconcilableActions();
         }
 
         async function message<R>(command: Command) {

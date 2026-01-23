@@ -1,6 +1,5 @@
 import { ReflectionClass } from '@deepkit/type';
-import em from '../../../game/entityManager';
-import { defaultComponentTypes } from '../../ecs/manager';
+import { defaultComponentTypes, Entity } from '../../ecs/manager';
 import { applyNetwork, NetworkComponentTypes } from './networkPlugin';
 
 interface RPCMetadata {
@@ -44,11 +43,13 @@ export function RPC<T extends number, F extends Function>(command: T) {
             this: RPCActions<any, any>,
             ...args: any[]
         ) {
-            if (this.isClient) {
+            if (this.isClient && this.isNetworked) {
                 // On client: send to server
                 const params = args.length === 1 ? args[0] : args;
                 this.network.send(command, params);
                 return;
+            } else if (this.isClient) {
+                this.client = this.defaultClientEntity();
             }
 
             // On server or local: execute the original method
@@ -65,13 +66,20 @@ export abstract class RPCActions<
 > {
     network: ReturnType<typeof applyNetwork<TCommands, TComponents>>;
     isClient: boolean;
+    isNetworked: boolean;
+
+    defaultClientEntity: () => Entity<Partial<TComponents>>;
+
+    client: Entity<Partial<TComponents>>;
 
     constructor(
         network: ReturnType<typeof applyNetwork<TCommands, TComponents>>,
-        isClient: boolean
+        isClient: boolean,
+        isNetworked: boolean
     ) {
         this.network = network;
         this.isClient = isClient;
+        this.isNetworked = isNetworked;
     }
 
     /**
@@ -79,6 +87,7 @@ export abstract class RPCActions<
      * This should be called on server startup
      */
     registerServerHandlers() {
+        const self = this;
         const constructor = this.constructor;
         const methods = rpcRegistry.get(constructor);
 
@@ -97,18 +106,27 @@ export abstract class RPCActions<
 
             // Extract parameter types using Deepkit reflection
             // TODO probably need to actually use type info for param deserialize but for now its getting handled generically just fine
-            const reflection = ReflectionClass.from(constructor);
-            const methodReflection = reflection.getMethod(methodName);
+            // const reflection = ReflectionClass.from(constructor);
+            // const methodReflection = reflection.getMethod(methodName);
 
             // Register the receive handler
             this.network.receive(
                 command as any,
-                (value: any, client: typeof em.Entity) => {
-                    // Normalize parameters - if single value in array, extract it
+                (value: any, client: Entity<Partial<TComponents>>) => {
+                    console.log(
+                        '[RPC receive]',
+                        command,
+                        methodName,
+                        value,
+                        client.id
+                    );
+
                     const params = Array.isArray(value) ? value : [value];
 
+                    self.client = client;
+
                     // Call the original method with client as the last parameter
-                    method.apply(this, [...params, client]);
+                    method.apply(self, params);
                 }
             );
 

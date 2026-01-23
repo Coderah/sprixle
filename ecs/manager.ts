@@ -24,6 +24,7 @@ import {
 } from './query';
 import { ConsumerSystem, QuerySystem, System } from './system';
 import { Annotations } from './types';
+import { deserializeBSON, serializeBSON } from '@deepkit/bson';
 
 export type Keys<T> = keyof T;
 export type EntityId = string | bigint;
@@ -57,7 +58,7 @@ type QueryMap = Map<EntityId, Set<QueryName>>; //{ [id: EntityId]: Set<Keys<Comp
 export type EntityAdminState<
     ComponentTypes,
     ExactComponentTypes extends defaultComponentTypes,
-    E = Entity<ComponentTypes>
+    E = Entity<ComponentTypes>,
 > = {
     entities: Map<EntityId, E>;
     /** Maps entity type to set of Entity Ids */
@@ -87,7 +88,7 @@ export type EntityAdminState<
 export type SerializableState<
     ComponentTypes,
     ExactComponentTypes extends defaultComponentTypes,
-    SerializableEntity
+    SerializableEntity,
 > = Omit<
     EntityAdminState<ComponentTypes, ExactComponentTypes, SerializableEntity>,
     'queries' | 'stagedUpdates'
@@ -104,7 +105,7 @@ export type defaultComponentTypes = {
 export type EntityWithComponents<
     ExactComponentTypes extends defaultComponentTypes,
     M extends Manager<ExactComponentTypes>,
-    Components extends Keys<ExactComponentTypes>
+    Components extends Keys<ExactComponentTypes>,
 > = M['Entity'] & {
     components: {
         [K in Components]: ExactComponentTypes[K];
@@ -249,10 +250,12 @@ export class Manager<ExactComponentTypes extends defaultComponentTypes> {
      */
     createSerializer<T>(type?: ReceiveType<T>) {
         const managerId = this.instanceId;
-        setSerializationManagerContext(managerId);
-        const serializer = getBSONSerializer<T>();
+        // const serializer = getBSONSerializer<T>();
 
-        return serializer;
+        return (t: T) => {
+            setSerializationManagerContext(managerId);
+            return serializeBSON<T>(t);
+        };
     }
 
     /**
@@ -260,10 +263,13 @@ export class Manager<ExactComponentTypes extends defaultComponentTypes> {
      */
     createDeserializer<T>(type?: ReceiveType<T>) {
         const managerId = this.instanceId;
-        setSerializationManagerContext(managerId);
-        const deserializer = getBSONDeserializer<T>();
+        // setSerializationManagerContext(managerId);
+        // const deserializer = getBSONDeserializer<T>();
 
-        return deserializer;
+        return (buffer: Uint8Array) => {
+            setSerializationManagerContext(managerId);
+            return deserializeBSON<T>(buffer) as T;
+        };
     }
 
     setState(
@@ -335,7 +341,7 @@ export class Manager<ExactComponentTypes extends defaultComponentTypes> {
 
     createQuery<
         Includes extends Keys<ExactComponentTypes>[],
-        IndexedComponent extends Keys<ExactComponentTypes>
+        IndexedComponent extends Keys<ExactComponentTypes>,
     >(
         queryParameters: QueryParametersInput<
             typeof this.ComponentTypes,
@@ -363,7 +369,7 @@ export class Manager<ExactComponentTypes extends defaultComponentTypes> {
     ): System<ExactComponentTypes, Manager<ExactComponentTypes>, Includes>;
     createSystem<
         Includes extends Keys<ExactComponentTypes>[],
-        IndexedComponent extends Keys<ExactComponentTypes> = null
+        IndexedComponent extends Keys<ExactComponentTypes> = null,
     >(
         source: Query<
             ExactComponentTypes,
@@ -375,7 +381,7 @@ export class Manager<ExactComponentTypes extends defaultComponentTypes> {
     ): QuerySystem<ExactComponentTypes, Includes>;
     createSystem<
         Includes extends Keys<ExactComponentTypes>[],
-        IndexedComponent extends Keys<ExactComponentTypes> = null
+        IndexedComponent extends Keys<ExactComponentTypes> = null,
     >(
         source: ReturnType<
             Query<
@@ -389,7 +395,7 @@ export class Manager<ExactComponentTypes extends defaultComponentTypes> {
     ): ConsumerSystem<ExactComponentTypes, Includes>;
     createSystem<
         Includes extends Keys<ExactComponentTypes>[],
-        IndexedComponent extends Keys<ExactComponentTypes> = null
+        IndexedComponent extends Keys<ExactComponentTypes> = null,
     >(
         sourceOrSystem:
             | Partial<
@@ -459,7 +465,7 @@ export class Manager<ExactComponentTypes extends defaultComponentTypes> {
     protected wrapNested<
         T extends typeof this.Entity,
         K extends Keys<typeof this.ComponentTypes>,
-        V extends Object | Array<unknown>
+        V extends Object | Array<unknown>,
     >(entity: T, componentType: K, value: V): V {
         // @ts-ignore
         if (value.__isSprixleNestedProxy) return value;
@@ -896,7 +902,7 @@ export class Manager<ExactComponentTypes extends defaultComponentTypes> {
             ExactComponentTypes,
             Manager<ExactComponentTypes>,
             K
-        >
+        >,
     >(componentType: K): E {
         // TODO: should we share all singleton under one roof?
         if (!this.entityExists(componentType as string)) {
@@ -916,7 +922,7 @@ export class Manager<ExactComponentTypes extends defaultComponentTypes> {
             ExactComponentTypes,
             Manager<ExactComponentTypes>,
             K
-        >
+        >,
     >(componentType: K) {
         if (!this.entityExists(componentType as string)) return;
 
@@ -961,7 +967,7 @@ export class Manager<ExactComponentTypes extends defaultComponentTypes> {
             ExactComponentTypes,
             Manager<ExactComponentTypes>,
             K
-        >
+        >,
     >(componentType: K): Set<E> {
         // TODO update this to handle removing component type mapping at point of lookup?
         return this.getEntityIds(componentType).map(
@@ -986,7 +992,7 @@ export class Manager<ExactComponentTypes extends defaultComponentTypes> {
             ExactComponentTypes,
             Manager<ExactComponentTypes>,
             K
-        >
+        >,
     >(types: Set<K>): Set<E> {
         const { state } = this;
         const entityMaps = types.map(
@@ -1026,7 +1032,7 @@ export class Manager<ExactComponentTypes extends defaultComponentTypes> {
             ExactComponentTypes,
             Manager<ExactComponentTypes>,
             K
-        >
+        >,
     >(entity: T, type: K, value: (typeof this.ComponentTypes)[K]): E {
         entity.components[type] = value;
         return entity as any as E;
@@ -1034,7 +1040,7 @@ export class Manager<ExactComponentTypes extends defaultComponentTypes> {
 
     removeComponent<
         T extends typeof this.Entity,
-        K extends Keys<typeof this.ComponentTypes>
+        K extends Keys<typeof this.ComponentTypes>,
     >(entity: T, type: K) {
         delete entity.components[type];
         return entity;
@@ -1062,7 +1068,7 @@ export class Manager<ExactComponentTypes extends defaultComponentTypes> {
             ExactComponentTypes,
             Manager<ExactComponentTypes>,
             K
-        >
+        >,
     >(
         entity: T,
         type: K,

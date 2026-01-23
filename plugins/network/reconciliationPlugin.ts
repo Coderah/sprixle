@@ -117,11 +117,23 @@ export default sprixlePlugin(function reconciliationPlugin<
      * where the server hasn't caught up yet.
      */
     function resolveReconcilableActions() {
+        const { stagedUpdates } = manager.state;
+
         for (const [entityId, componentPredictions] of predictions) {
             const entity = manager.state.entities.get(entityId);
             if (!entity) {
                 // Entity no longer exists, clear predictions
                 predictions.delete(entityId);
+                continue;
+            }
+
+            // Entity wasn't updated by server so no reason to check
+            if (!stagedUpdates.has(entityId)) {
+                continue;
+            }
+
+            // Server hasn't resolved a reconciliationVersion so no reason to check
+            if (!stagedUpdates.get(entityId).has('reconciliationVersions')) {
                 continue;
             }
 
@@ -173,6 +185,10 @@ export default sprixlePlugin(function reconciliationPlugin<
                 predictions.delete(entityId);
             }
         }
+        // Reset version counter if there are no predictions left
+        if (predictions.size === 0) {
+            versionCounter = 0;
+        }
     }
 
     /**
@@ -194,6 +210,7 @@ export default sprixlePlugin(function reconciliationPlugin<
      */
     function clearAllPredictions() {
         predictions.clear();
+        versionCounter = 0;
     }
 
     return {

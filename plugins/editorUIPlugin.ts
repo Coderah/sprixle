@@ -28,7 +28,7 @@ export function applyEditorUIPlugin<
     return {
         pipeline,
         tweakpane: primaryPane,
-        addDeltaGraph() {
+        addDeltaGraph(displayFPS = false) {
             const folder = (folders.stats =
                 folders.stats ||
                 primaryPane.addFolder({
@@ -38,17 +38,27 @@ export function applyEditorUIPlugin<
 
             const state = { delta: 0 };
 
+            const rawBlade = folder.addBinding(state, 'delta', {
+                readonly: true,
+                view: 'label',
+                label: displayFPS ? 'FPS' : 'delta',
+                interval: 30,
+                max: 360,
+            });
+
             const blade = folder.addBinding(state, 'delta', {
                 readonly: true,
                 view: 'graph',
+                label: displayFPS ? 'FPS' : 'delta',
                 rows: 2,
                 interval: 60,
+                max: 360,
             });
 
             const binding = (bindings['delta'] = {
                 system: manager.createSystem({
                     tick(delta) {
-                        state.delta = delta;
+                        state.delta = displayFPS ? 1000 / delta : delta;
                     },
                 }),
                 blades: { delta: blade },

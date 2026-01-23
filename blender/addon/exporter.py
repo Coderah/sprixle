@@ -119,6 +119,8 @@ def export(sceneKey):
 
     # add node tree baking
     
+    compositorShaderTree = bpy.context.scene.compositing_node_group
+
     worldShaderTree = bpy.context.scene.world.node_tree
     worldShaderOutput = worldShaderTree.get_output_node('EEVEE')
     worldSurfaceInput = worldShaderOutput.inputs.get('Surface')
@@ -139,6 +141,8 @@ def export(sceneKey):
 
     scene['viewLayer'] = bpy.context.view_layer.name
     scene['worldShader'] = bpy.context.scene.world.name
+    if compositorShaderTree:
+        scene['compositorShader'] = compositorShaderTree.name
     
     # sceneCollection = scene.collection;
     instanceObjectsToClean = []
@@ -157,6 +161,7 @@ def export(sceneKey):
         export_yup=True,
         export_apply=True,
         export_attributes=True,
+        # export_all_vertex_colors=True,
         export_normals=True,
         export_texcoords=True,
         export_shared_accessors=True,

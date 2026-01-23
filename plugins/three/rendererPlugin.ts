@@ -19,6 +19,11 @@ import {
 import { Pipeline } from '../../ecs/system';
 import { SingletonComponent } from '../../ecs/types';
 import { resolutionUniform, uniformTime } from '../nodeTrees/shader/uniforms';
+import { sprixlePlugin } from '../../ecs/plugin';
+import { DepthPass } from './pass/DepthPass';
+import { MainRenderPass } from './pass/MainRenderPass';
+
+THREE.ColorManagement.enabled = true;
 
 type ExtraRendererConfigurationKeys = Pick<
     WebGLRenderer,
@@ -50,8 +55,7 @@ export type RenderConfigurationComponents = {
 };
 
 export enum RenderPassPhase {
-    /** DATA passes are rendered entirely on their own to a texture that can be utilized in the later steps. Much like a depth pass */
-    PREPASS,
+    AOV,
     DEPTH,
     COLOR,
     POST_PROCESS,
@@ -63,6 +67,11 @@ export enum RenderPassPhase {
 export type RenderPassComponents = {
     isRenderPass: true;
     rPassPhase: RenderPassPhase;
+    isExportedRenderPass: true;
+    /** if isExportedRenderPass this will get populated */
+    // TODO make uniform?
+    rPassTextureUniform: THREE.Uniform<THREE.DepthTexture | null>;
+    // r;
     rProgram: Pass;
     rLayers: THREE.Layers;
 };
@@ -102,7 +111,6 @@ const renderConfigurationDefaults: RenderConfigurationComponents = {
 const defaultRenderParameters: WebGLRendererParameters = {
     precision: 'mediump',
     logarithmicDepthBuffer: false,
-    reverseDepthBuffer: false,
     premultipliedAlpha: false,
     powerPreference: 'high-performance',
     preserveDrawingBuffer: false,
@@ -110,8 +118,9 @@ const defaultRenderParameters: WebGLRendererParameters = {
 };
 
 // TODO support editorPlugin somehow? want debug passes
-export function applyRendererPlugin<
-    C extends RendererPluginComponents & defaultComponentTypes
+export default sprixlePlugin(function RendererPlugin<
+    C extends RendererPluginComponents &
+        defaultComponentTypes = RendererPluginComponents & defaultComponentTypes
 >(
     em: Manager<C>,
     renderParameters: WebGLRendererParameters,
@@ -161,65 +170,17 @@ export function applyRendererPlugin<
     const maxAnisotropy = capabilities.getMaxAnisotropy();
 
     let composer = new EffectComposer(renderer);
-    let renderPass = new RenderPass(null, null);
 
-    function reconfigureComposer(entity: ConfigurationEntity) {
-        const { rPixelRatio, rSize, rMSAASamples } = entity.components;
-        const parameters: RenderTargetOptions = {
-            minFilter: THREE.LinearFilter,
-            magFilter: THREE.LinearFilter,
-            format: THREE.RGBAFormat,
-            type: THREE.HalfFloatType,
-            anisotropy: maxAnisotropy,
-        };
+    // TODO allow disabling the basic rendering passes setup
+    em.quickEntity({
+        isRenderPass: true,
+        rPassPhase: RenderPassPhase.COLOR,
+    });
 
-        // TODO introduce depth pass as a isRenderPass entity, add a helper to create it easily.
-        // const depthTarget = new WebGLRenderTarget(
-        //     rSize.width,
-        //     rSize.height,
-        //     parameters
-        // );
-
-        // depthComposer.renderTarget1?.dispose();
-        // depthComposer.renderTarget2?.dispose();
-        // depthComposer = new EffectComposer(renderer, depthTarget);
-        // depthComposer.renderToScreen = false;
-
-        // const depthPass = new RenderPass(em.getSingletonEntityComponent('rScene'), em.getSingletonEntityComponent('rCamera'), depthMaterial);
-        // depthComposer.addPass(depthPass);
-
-        // depthComposer.addPass(new OutputPass());
-
-        // TODO we should be able to re-use and simply resize?
-        const renderTarget = new WebGLRenderTarget(
-            rSize.width * rPixelRatio,
-            rSize.height * rPixelRatio,
-            parameters
-        );
-
-        resolutionUniform.value.set(renderTarget.width, renderTarget.height);
-        renderTarget.samples = rMSAASamples;
-
-        // TODO if renderTarget is not getting re-used the old one should be disposed.
-        renderer.initRenderTarget(renderTarget);
-
-        // debugTexturePass.map = depthTarget.texture;
-        // depthUniform.value = depthTarget.texture;
-
-        composer.renderTarget1?.dispose();
-        composer.renderTarget2?.dispose();
-
-        composer = new EffectComposer(renderer, renderTarget);
-
-        // TODO turn into a isRenderPass entity
-        renderPass = new RenderPass(null, null);
-        renderPass.clearAlpha = 0;
-        composer.addPass(renderPass);
-
-        // TODO utilize isRenderPass POST_PROCESS entities here.
-
-        composer.addPass(new OutputPass());
-    }
+    em.quickEntity({
+        isRenderPass: true,
+        rPassPhase: RenderPassPhase.DEPTH,
+    });
 
     const configurationQuery = em.createQuery({
         includes: Object.keys(renderConfigurationDefaults) as any,
@@ -239,13 +200,111 @@ export function applyRendererPlugin<
         }
     );
 
+    const renderPassQuery = em.createQuery({
+        includes: ['isRenderPass', 'rPassPhase'],
+        index: 'rPassPhase',
+    });
+
+    function setupRenderPass(entity: typeof renderPassQuery.Entity) {
+        const { rPassPhase, rProgram } = entity.components;
+
+        if (rProgram) return;
+
+        if (rPassPhase === RenderPassPhase.DEPTH) {
+            entity.components.isExportedRenderPass = true;
+            entity.components.rPassTextureUniform = new THREE.Uniform(null);
+            entity.components.rProgram = new DepthPass(null, null);
+            entity.components.rProgram.renderToScreen = true;
+        }
+
+        if (rPassPhase === RenderPassPhase.COLOR) {
+            // TODO properly implement depth prepass culling when applicable.
+            entity.components.rProgram = new RenderPass(null, null);
+            entity.components.rProgram.renderToScreen = true;
+        }
+    }
+
+    function reconfigureComposer(entity: ConfigurationEntity) {
+        const { rPixelRatio, rSize, rMSAASamples } = entity.components;
+
+        const depthPass = renderPassQuery.get(RenderPassPhase.DEPTH)?.first();
+
+        const parameters: RenderTargetOptions = {
+            minFilter: THREE.LinearFilter,
+            magFilter: THREE.LinearFilter,
+            format: THREE.RGBAFormat,
+            type: canRenderToFloatType ? THREE.FloatType : THREE.HalfFloatType,
+            anisotropy: maxAnisotropy,
+            depthBuffer: true,
+            // depth: 2,
+            // TODO prepass count (Blender AOV)
+            // count: 1
+        };
+
+        if (depthPass && depthPass.components.rPassTextureUniform) {
+            parameters.depthTexture = new THREE.DepthTexture(
+                rSize.width,
+                rSize.height
+            );
+            depthPass.components.rPassTextureUniform.value =
+                parameters.depthTexture;
+        }
+
+        // TODO we should be able to re-use and simply resize?
+        const renderTarget = new WebGLRenderTarget(
+            // TODO is pixelRatio appropriate here?
+            rSize.width * rPixelRatio,
+            rSize.height * rPixelRatio,
+            parameters
+        );
+
+        resolutionUniform.value.set(renderTarget.width, renderTarget.height);
+        renderTarget.samples = rMSAASamples;
+
+        // TODO if renderTarget is not getting re-used the old one should be disposed.
+        renderer.initRenderTarget(renderTarget);
+
+        composer.renderTarget1?.dispose();
+        composer.renderTarget2?.dispose();
+
+        composer = new EffectComposer(renderer, renderTarget);
+
+        if (depthPass) {
+            setupRenderPass(depthPass);
+            composer.addPass(depthPass.components.rProgram);
+            // depthPass.components.rProgram
+        }
+
+        // TODO turn into a isRenderPass entity
+        const colorPass = renderPassQuery.get(RenderPassPhase.COLOR)?.first();
+        if (colorPass) {
+            setupRenderPass(colorPass);
+            composer.addPass(colorPass.components.rProgram);
+        }
+        // renderPass = new RenderPass(null, null);
+        // renderPass.clearAlpha = 0;
+        // composer.addPass(renderPass);
+
+        // TODO utilize isRenderPass POST_PROCESS entities here.
+        const postProcessPasses = renderPassQuery.get(
+            RenderPassPhase.POST_PROCESS
+        );
+        // TODO enable sortOrder or some such component here when post process passes are order dependent
+        for (let pass of postProcessPasses) {
+            if (!pass.components.rProgram) continue;
+            composer.addPass(pass.components.rProgram);
+        }
+
+        composer.addPass(new OutputPass());
+    }
+
     // TODO make configurable?
     window.addEventListener('resize', () => {
+        configurationEntity.willUpdate('rSize');
         configurationEntity.components.rSize.set(
             window.innerWidth,
             window.innerHeight
         );
-        configurationEntity.flagUpdate('rSize');
     });
 
     const actualRenderSystem = em.createSystem({
@@ -256,9 +315,6 @@ export function applyRendererPlugin<
 
             if (!activeCamera || !activeScene) return;
 
-            renderPass.scene = activeScene;
-            renderPass.camera = activeCamera;
-
             uniformTime.value += delta / 1000;
             renderer.setRenderTarget(null);
             activeCamera.layers.enableAll();
@@ -267,7 +323,18 @@ export function applyRendererPlugin<
             // utilize rLayers
             // depthComposer.render(delta);
 
-            composer.render(delta);
+            if (renderPassQuery.size) {
+                // TODO move to an update() consumer system
+                for (let passEntity of renderPassQuery) {
+                    const { rProgram } = passEntity.components;
+                    if (!rProgram) continue;
+                    rProgram.scene = activeScene;
+                    rProgram.camera = activeCamera;
+                }
+                composer.render(delta);
+            } else {
+                renderer.render(activeScene, activeCamera);
+            }
 
             // TODO implement BASIC/FLAT isRenderPass entities here
             // activeCamera.layers.set(UI_LAYER);
@@ -277,17 +344,21 @@ export function applyRendererPlugin<
 
     const rendererPipeline = new Pipeline(
         em,
+        // renderPassSetupSystem,
         configureRenderSystem,
         actualRenderSystem
     );
     rendererPipeline.tag = 'rendererPipeline';
 
     return {
+        renderer,
+        glCanvas: renderer.domElement,
         rendererPipeline,
+        renderPassQuery,
         configurationEntity,
         checks: {
             maxAnisotropy,
             canRenderToFloatType,
         },
     };
-}
+});

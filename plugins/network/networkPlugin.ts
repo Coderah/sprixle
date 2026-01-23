@@ -130,10 +130,14 @@ export default sprixlePlugin(
             } catch (e) {
                 console.error('[network] failed to parse incoming message', e);
             }
+            manager.subTick();
+
             messageResolvers.get(first)?.(second, client, data);
 
             // Resolve reconcilable actions after message handler runs
             reconciliationPlugin?.resolveReconcilableActions();
+
+            manager.subTick();
         }
 
         async function message<R>(command: Command) {

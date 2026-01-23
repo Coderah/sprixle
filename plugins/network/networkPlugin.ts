@@ -1,5 +1,5 @@
 import { getBsonEncoder } from '@deepkit/bson';
-import { Excluded, ReceiveType, typeOf } from '@deepkit/type';
+import { ReceiveType, typeOf } from '@deepkit/type';
 import {
     defaultComponentTypes,
     EntityId,
@@ -11,6 +11,7 @@ import type {
     WebSocket as ClientWebSocket,
     Server as WebSocketServer,
 } from 'ws';
+import { sprixlePlugin } from '../../ecs/plugin';
 
 // Handle WebSocket in both browser and Node.js environments
 const WebSocketImpl =
@@ -21,271 +22,282 @@ export type NetworkComponentTypes = {
     socket: ClientWebSocket;
 };
 
-export function applyNetwork<
-    Command,
-    ComponentTypes extends defaultComponentTypes & NetworkComponentTypes
->(manager: Manager<ComponentTypes>, commandType?: ReceiveType<Command>) {
-    type MessageData =
-        | string
-        | Uint8Array
-        | number
-        | (string | number | null)[]
-        | bigint;
-    type BufferMessage = Command | [Command, MessageData];
-    type EntityWithSocket = EntityWithComponents<
-        ComponentTypes,
-        Manager<ComponentTypes>,
-        'socket'
-    >;
+const dependencies = {};
+const optionalDependencies = new Set();
 
-    const socketQuery = manager.createQuery({
-        includes: ['socket'],
-        index: 'socket',
-    });
-
-    const networkMessageEncoder = getBsonEncoder(typeOf<BufferMessage>(), {
-        validation: false,
-    });
-
-    let socket: BrowserWebSocket | ClientWebSocket | WebSocketServer;
-    let onConnect = function () {};
-    let onDisconnect = function (e: CloseEvent) {};
-
-    function setNetworkSocket(newSocket: typeof socket) {
-        socket = newSocket;
-        if (newSocket instanceof WebSocketImpl) {
-            onConnect();
-        }
-    }
-
-    function setOnConnect(fn: () => void) {
-        onConnect = fn;
-    }
-
-    function setOnDisconnect(fn: (e: CloseEvent) => void) {
-        onDisconnect = fn;
-    }
-
-    const messageResolvers: Map<
+export default sprixlePlugin(
+    function networkPlugin<
         Command,
-        (
-            response: any,
-            client?: typeof manager.Entity,
-            rawData?: Uint8Array
-        ) => void
-    > = new Map();
+        ComponentTypes extends defaultComponentTypes & NetworkComponentTypes,
+    >(manager: Manager<ComponentTypes>, commandType?: ReceiveType<Command>) {
+        type MessageData =
+            | string
+            | Uint8Array
+            | number
+            | (string | number | null)[]
+            | bigint;
+        type BufferMessage = Command | [Command, MessageData];
+        type EntityWithSocket = EntityWithComponents<
+            ComponentTypes,
+            Manager<ComponentTypes>,
+            'socket'
+        >;
 
-    let incomingMessageCount = 0;
-    function takeIncomingMessageCount() {
-        const count = incomingMessageCount;
-        incomingMessageCount = 0;
-        return count;
-    }
-
-    let incomingDataSize = 0;
-    function takeIncomingDataSize() {
-        const count = incomingDataSize;
-        incomingDataSize = 0;
-        return count;
-    }
-
-    let outgoingMessageCount = 0;
-    function takeOutgoingMessageCount() {
-        const count = outgoingMessageCount;
-        outgoingMessageCount = 0;
-        return count;
-    }
-
-    async function handleIncoming(
-        data: Uint8Array,
-        client?: typeof manager.Entity
-    ) {
-        incomingDataSize += data.byteLength;
-
-        if (!data.length) return;
-
-        let first: Command, second: any;
-        try {
-            const decoded = decodeMessage(data);
-            if (Array.isArray(decoded)) {
-                [first, second] = decoded;
-            } else {
-                first = decoded;
-            }
-        } catch (e) {
-            console.error('[network] failed to parse incoming message', e);
-        }
-        messageResolvers.get(first)?.(second, client, data);
-    }
-
-    async function message<R>(command: Command) {
-        return new Promise<R>(async (resolve) => {
-            messageResolvers.set(command, resolve);
+        const socketQuery = manager.createQuery({
+            includes: ['socket'],
+            index: 'socket',
         });
-    }
 
-    // TODO refactor to handle multiple receivers of the same kind of message?
-    function receive<R>(
-        command: Command,
-        handler: (
-            value: R,
-            client?: EntityWithSocket,
-            rawData?: Uint8Array
-        ) => void
-    ) {
-        if (messageResolvers.has(command)) {
-            console.warn(
-                '[NETWORK] might be overriding incoming handler for',
-                command
-            );
-        }
-        messageResolvers.set(command, handler);
-    }
+        const networkMessageEncoder = getBsonEncoder(typeOf<BufferMessage>(), {
+            validation: false,
+        });
 
-    async function sendRaw(
-        buffer: Uint8Array,
-        targetSocket:
-            | BrowserWebSocket
-            | WebSocketServer
-            | ClientWebSocket
-            | EntityWithSocket = socket
-    ) {
-        if (!targetSocket) {
-            console.warn(
-                '[networkPlugin] attempting to sendRaw without a socket'
-            );
-            return;
-        }
+        let socket: BrowserWebSocket | ClientWebSocket | WebSocketServer;
+        let onConnect = function () {};
+        let onDisconnect = function (e: CloseEvent) {};
 
-        if ('components' in targetSocket) {
-            targetSocket = targetSocket.components.socket;
-        }
-
-        if (!('send' in targetSocket)) {
-            // TODO handle server broadcast
-            // TODO use a query?
-            for (let clientEntity of manager.getEntities('socket')) {
-                // TODO parallel?
-                await sendRaw(buffer, clientEntity);
+        function setNetworkSocket(newSocket: typeof socket) {
+            socket = newSocket;
+            if (newSocket instanceof WebSocketImpl) {
+                onConnect();
             }
-            return;
-        }
-        // TODO rewrite for server send
-        if (!targetSocket || targetSocket.readyState !== targetSocket.OPEN)
-            return;
-
-        outgoingMessageCount++;
-        if ('on' in targetSocket) {
-            await new Promise((resolve) =>
-                targetSocket.send(buffer, { binary: true }, resolve)
-            );
-        } else {
-            targetSocket.send(buffer);
-        }
-    }
-
-    async function send(command: Command): Promise<void>;
-    async function send(command: Command, data: MessageData): Promise<void>;
-    async function send(
-        command: Command,
-        data: MessageData,
-        targetSocket: EntityWithSocket
-    ): Promise<void>;
-    async function send(
-        command: Command,
-        data: MessageData,
-        targetSocket: BrowserWebSocket | ClientWebSocket | WebSocketServer
-    ): Promise<void>;
-    async function send(
-        command: Command,
-        data?: MessageData,
-        targetSocket:
-            | BrowserWebSocket
-            | WebSocketServer
-            | ClientWebSocket
-            | EntityWithSocket = socket
-    ): Promise<void> {
-        if (!targetSocket) {
-            console.warn('[networkPlugin] attempting to send without a socket');
-            return;
         }
 
-        // throttleLog('[Network] send', command);
-
-        if ('components' in targetSocket) {
-            targetSocket = targetSocket.components.socket;
+        function setOnConnect(fn: () => void) {
+            onConnect = fn;
         }
 
-        if (!('send' in targetSocket)) {
-            // TODO handle server broadcast
-            // TODO use a query?
-            for (let clientEntity of manager.getEntities('socket')) {
-                // TODO parallel?
-                await send(command, data, clientEntity);
+        function setOnDisconnect(fn: (e: CloseEvent) => void) {
+            onDisconnect = fn;
+        }
+
+        const messageResolvers: Map<
+            Command,
+            (
+                response: any,
+                client?: typeof manager.Entity,
+                rawData?: Uint8Array
+            ) => void
+        > = new Map();
+
+        let incomingMessageCount = 0;
+        function takeIncomingMessageCount() {
+            const count = incomingMessageCount;
+            incomingMessageCount = 0;
+            return count;
+        }
+
+        let incomingDataSize = 0;
+        function takeIncomingDataSize() {
+            const count = incomingDataSize;
+            incomingDataSize = 0;
+            return count;
+        }
+
+        let outgoingMessageCount = 0;
+        function takeOutgoingMessageCount() {
+            const count = outgoingMessageCount;
+            outgoingMessageCount = 0;
+            return count;
+        }
+
+        async function handleIncoming(
+            data: Uint8Array,
+            client?: typeof manager.Entity
+        ) {
+            incomingDataSize += data.byteLength;
+
+            if (!data.length) return;
+
+            let first: Command, second: any;
+            try {
+                const decoded = decodeMessage(data);
+                if (Array.isArray(decoded)) {
+                    [first, second] = decoded;
+                } else {
+                    first = decoded;
+                }
+            } catch (e) {
+                console.error('[network] failed to parse incoming message', e);
             }
-            return;
+            messageResolvers.get(first)?.(second, client, data);
         }
-        // TODO rewrite for server send
-        if (!targetSocket || targetSocket.readyState !== targetSocket.OPEN)
-            return;
-        const enclosedData = encodeMessage(command, data);
 
-        outgoingMessageCount++;
-        if ('on' in targetSocket) {
-            await new Promise((resolve) =>
-                targetSocket.send(enclosedData, { binary: true }, resolve)
+        async function message<R>(command: Command) {
+            return new Promise<R>(async (resolve) => {
+                messageResolvers.set(command, resolve);
+            });
+        }
+
+        // TODO refactor to handle multiple receivers of the same kind of message?
+        function receive<R>(
+            command: Command,
+            handler: (
+                value: R,
+                client?: EntityWithSocket,
+                rawData?: Uint8Array
+            ) => void
+        ) {
+            if (messageResolvers.has(command)) {
+                console.warn(
+                    '[NETWORK] might be overriding incoming handler for',
+                    command
+                );
+            }
+            messageResolvers.set(command, handler);
+        }
+
+        async function sendRaw(
+            buffer: Uint8Array,
+            targetSocket:
+                | BrowserWebSocket
+                | WebSocketServer
+                | ClientWebSocket
+                | EntityWithSocket = socket
+        ) {
+            if (!targetSocket) {
+                console.warn(
+                    '[networkPlugin] attempting to sendRaw without a socket'
+                );
+                return;
+            }
+
+            if ('components' in targetSocket) {
+                targetSocket = targetSocket.components.socket;
+            }
+
+            if (!('send' in targetSocket)) {
+                // TODO handle server broadcast
+                // TODO use a query?
+                for (let clientEntity of manager.getEntities('socket')) {
+                    // TODO parallel?
+                    await sendRaw(buffer, clientEntity);
+                }
+                return;
+            }
+            // TODO rewrite for server send
+            if (!targetSocket || targetSocket.readyState !== targetSocket.OPEN)
+                return;
+
+            outgoingMessageCount++;
+            if ('on' in targetSocket) {
+                await new Promise((resolve) =>
+                    targetSocket.send(buffer, { binary: true }, resolve)
+                );
+            } else {
+                targetSocket.send(buffer);
+            }
+        }
+
+        async function send(command: Command): Promise<void>;
+        async function send(command: Command, data: MessageData): Promise<void>;
+        async function send(
+            command: Command,
+            data: MessageData,
+            targetSocket: EntityWithSocket
+        ): Promise<void>;
+        async function send(
+            command: Command,
+            data: MessageData,
+            targetSocket: BrowserWebSocket | ClientWebSocket | WebSocketServer
+        ): Promise<void>;
+        async function send(
+            command: Command,
+            data?: MessageData,
+            targetSocket:
+                | BrowserWebSocket
+                | WebSocketServer
+                | ClientWebSocket
+                | EntityWithSocket = socket
+        ): Promise<void> {
+            if (!targetSocket) {
+                console.warn(
+                    '[networkPlugin] attempting to send without a socket'
+                );
+                return;
+            }
+
+            // throttleLog('[Network] send', command);
+
+            if ('components' in targetSocket) {
+                targetSocket = targetSocket.components.socket;
+            }
+
+            if (!('send' in targetSocket)) {
+                // TODO handle server broadcast
+                // TODO use a query?
+                for (let clientEntity of manager.getEntities('socket')) {
+                    // TODO parallel?
+                    await send(command, data, clientEntity);
+                }
+                return;
+            }
+            // TODO rewrite for server send
+            if (!targetSocket || targetSocket.readyState !== targetSocket.OPEN)
+                return;
+            const enclosedData = encodeMessage(command, data);
+
+            outgoingMessageCount++;
+            if ('on' in targetSocket) {
+                await new Promise((resolve) =>
+                    targetSocket.send(enclosedData, { binary: true }, resolve)
+                );
+            } else {
+                targetSocket.send(enclosedData);
+            }
+        }
+
+        function encodeMessage(command: Command, data?: MessageData) {
+            return networkMessageEncoder.encode(
+                data ? [command, data] : command
             );
-        } else {
-            targetSocket.send(enclosedData);
         }
-    }
 
-    function encodeMessage(command: Command, data?: MessageData) {
-        return networkMessageEncoder.encode(data ? [command, data] : command);
-    }
+        function decodeMessage(buffer: Uint8Array) {
+            return networkMessageEncoder.decode(buffer) as BufferMessage;
+        }
 
-    function decodeMessage(buffer: Uint8Array) {
-        return networkMessageEncoder.decode(buffer) as BufferMessage;
-    }
+        function getClientEntity(
+            socket?: ClientWebSocket,
+            id: EntityId = manager.genId()
+        ) {
+            if (!socket) return manager.getEntity(id);
 
-    function getClientEntity(
-        socket?: ClientWebSocket,
-        id: EntityId = manager.genId()
-    ) {
-        if (!socket) return manager.getEntity(id);
+            const existingEntity = socketQuery.get(socket).first();
 
-        const existingEntity = socketQuery.get(socket).first();
+            return (
+                existingEntity ||
+                (manager.quickEntity(
+                    //@ts-ignore
+                    {
+                        socket,
+                    },
+                    id
+                ) as EntityWithSocket)
+            );
+        }
 
-        return (
-            existingEntity ||
-            (manager.quickEntity(
-                //@ts-ignore
-                {
-                    socket,
-                },
-                id
-            ) as EntityWithSocket)
-        );
-    }
-
-    return {
-        manager,
-        receive,
-        message,
-        encodeMessage,
-        decodeMessage,
-        send,
-        sendRaw,
-        setNetworkSocket,
-        setOnConnect,
-        setOnDisconnect,
-        takeIncomingMessageCount,
-        takeIncomingDataSize,
-        takeOutgoingMessageCount,
-        handleDisconnect: (e: CloseEvent) => {
-            onDisconnect?.(e);
-        },
-        handleIncoming,
-        getClientEntity,
-    };
-}
+        return {
+            manager,
+            receive,
+            message,
+            encodeMessage,
+            decodeMessage,
+            send,
+            sendRaw,
+            setNetworkSocket,
+            setOnConnect,
+            setOnDisconnect,
+            takeIncomingMessageCount,
+            takeIncomingDataSize,
+            takeOutgoingMessageCount,
+            handleDisconnect: (e: CloseEvent) => {
+                onDisconnect?.(e);
+            },
+            handleIncoming,
+            getClientEntity,
+        };
+    },
+    dependencies,
+    { optionalDependencies }
+);

@@ -1,3 +1,4 @@
+import { forwardTypeArguments } from '@deepkit/core';
 import { ReceiveType, resolveReceiveType } from '@deepkit/type';
 import { Manager } from './manager';
 import { mapValues } from 'lodash';
@@ -10,16 +11,19 @@ export function sprixlePlugin<
         this: { dependencies: { [K in keyof Deps]: ReturnType<Deps[K]> } },
         manager: Manager<any>,
         ...args: any[]
-    ) => any
+    ) => any,
 >(
     func: T,
     dependencies: Deps = {} as Deps,
+    options: { optionalDependencies?: Set<keyof Deps> } = {},
     dependencyTypes?: ReceiveType<Deps>
-) {
+): T {
     dependencyTypes = Object.values(dependencies).map((t) =>
+        //@ts-ignore
         resolveReceiveType(t)
     );
 
+    //@ts-ignore
     const type = resolveReceiveType(func);
 
     if (!('name' in type) || !type.name || typeof type.name !== 'string') {
@@ -36,6 +40,8 @@ export function sprixlePlugin<
             const dep = manager.plugins.get(pf.pluginName);
 
             if (!dep) {
+                if (options?.optionalDependencies?.has(pf.pluginName))
+                    return null;
                 throw new Error(
                     `[Sprixle] Plugin dependency missing for ${applicator.pluginName}: ${pf.pluginName}.`
                 );
@@ -44,6 +50,7 @@ export function sprixlePlugin<
             return dep;
         });
 
+        forwardTypeArguments(applicator, func);
         const result = func.call(
             { dependencies: resolvedDependencies },
             ...args
@@ -57,7 +64,7 @@ export function sprixlePlugin<
         manager.plugins.set(name, result);
 
         return result;
-    }) as ((...args: Parameters<T>) => ReturnType<T>) & { pluginName: string };
+    }) as T & { pluginName: string };
 
     applicator.pluginName = name;
 

@@ -4,6 +4,10 @@ Map.prototype.first = function <K, V>(this: Map<K, V>) {
     return this.values()[0];
 };
 
+Map.prototype.last = function <K, V>(this: Map<K, V>) {
+    return this.values()[this.size - 1];
+};
+
 Set.prototype.keyBy = function <T, K extends keyof T>(this: Set<T>, key: K) {
     const result = new Map<K, T>();
 
@@ -99,6 +103,10 @@ Set.prototype.map = function <T, V>(
 
 Set.prototype.first = function <T>(this: Set<T>) {
     return this.values().next().value;
+};
+
+Set.prototype.last = function <K, V>(this: Map<K, V>) {
+    return this.values()[this.size - 1];
 };
 
 Set.prototype.equals = function <T>(this: Set<T>, b: Set<T>) {

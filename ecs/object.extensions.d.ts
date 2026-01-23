@@ -1,10 +1,12 @@
 declare interface Map<K, V> {
     first(): V;
+    last(): V;
 }
 
 declare interface Set<T> {
     equals(b: Set<T>): boolean;
     first(): T;
+    last(): T;
     keyBy<K extends keyof T>(key: K): Map<K, T>;
     map<V>(callbackFn: (value: T) => V): Set<V>;
     reduce<A>(callbackFn: (accumulator: A, value: T) => A, accumulator: A): A;

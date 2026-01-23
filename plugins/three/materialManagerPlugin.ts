@@ -18,6 +18,7 @@ import { defaultComponentTypes, Manager } from '../../ecs/manager';
 import { Pipeline } from '../../ecs/system';
 import uuid from 'uuid-random';
 import { BatchedObject3DRef } from './BatchedMeshManager';
+import { sprixlePlugin } from '../../ecs/plugin';
 
 export type MaterialManagerComponentTypes = {
     object3D: Object3D;
@@ -48,7 +49,7 @@ function objectWithMaterial(o: Object3D) {
     return o;
 }
 
-export function applyMaterialManagerPlugin<
+export default sprixlePlugin(function materialManagerPlugin<
     ComponentTypes extends defaultComponentTypes & MaterialManagerComponentTypes
 >(
     em: Manager<ComponentTypes>,
@@ -262,4 +263,4 @@ export function applyMaterialManagerPlugin<
         garbageCollectMaterials,
         materialPipeline,
     };
-}
+});

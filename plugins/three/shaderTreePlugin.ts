@@ -3,7 +3,7 @@ import {
     ReflectionClass,
     resolveReceiveType,
 } from '@deepkit/type';
-import { FrontSide, InstancedMesh, ShaderMaterial } from 'three';
+import { FrontSide, GLSL3, InstancedMesh, ShaderMaterial } from 'three';
 import { BatchedMesh } from 'three-stdlib';
 import { UnionOrIntersectionType } from 'typescript';
 import { blenderEvents } from '../../blender/realtime';
@@ -18,15 +18,20 @@ import {
     ShaderTreeMethods,
 } from '../nodeTrees/createCompiler';
 import blenderShaders, { includesRegex } from '../nodeTrees/shader/blender';
-import { MaterialManagerComponentTypes } from './materialManagerPlugin';
+import materialManagerPlugin, {
+    MaterialManagerComponentTypes,
+} from './materialManagerPlugin';
+import { sprixlePlugin } from '../../ecs/plugin';
 
 export type ShaderTreeComponentTypes = {
     shaderTree: NodeTree;
 } & MaterialManagerComponentTypes;
 
+const dependencies = { materialManagerPlugin };
+
 // TODO allow passing in custom transpiler methods
 /** This plugin handles compiling and applying ShaderTree format (from blender addon) */
-export function applyShaderTreePlugin<
+export default sprixlePlugin(function shaderTreePlugin<
     C extends defaultComponentTypes & ShaderTreeComponentTypes,
     M extends ShaderTreeMethods
 >(em: Manager<C>, methods: M, methodsType?: ReceiveType<M>) {
@@ -55,6 +60,7 @@ export function applyShaderTreePlugin<
         // TODO: allow passing in things like side, etc.
         compilationCache.uniforms.envMapIntensity = { value: 1.0 };
         const material = new ShaderMaterial({
+            glslVersion: GLSL3,
             lights: compilationCache.features.has('lights'),
             // TODO control
             side: FrontSide,
@@ -238,4 +244,5 @@ export function applyShaderTreePlugin<
     }
 
     return shaderTreeSystem;
-}
+},
+dependencies);

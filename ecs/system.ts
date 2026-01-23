@@ -82,11 +82,6 @@ export interface ConsumerSystem<
         >,
         delta: number
     ) => boolean | void;
-    /**
-     * Please replace with forNew otherwise your build will error. This is an unfortunate consequence of introducing type reflection in build steps
-     * @deprecated
-     */
-    new?: (error: Error) => {};
     /** Runs for each new entity each frame */
     forNew?: (
         entity: EntityWithComponents<
@@ -148,6 +143,7 @@ export class Pipeline<ExactComponentTypes extends defaultComponentTypes> {
     getTimeScale?: () => number;
     /** should this pipeline run this tick? */
     condition = () => true;
+    interval: ReturnType<typeof interval>;
 
     /** can be overridden to add better detail to performance timeline */
     tag = `UntaggedPipeline[${now()}]`;
@@ -183,6 +179,11 @@ export class Pipeline<ExactComponentTypes extends defaultComponentTypes> {
     now = 0;
 
     tick(delta: number) {
+        if (this.interval) {
+            const intervalDelta = this.interval(delta);
+            if (!intervalDelta) return;
+            delta = intervalDelta;
+        }
         if (this.useInternalTime) setTimeActivePipeline(this);
 
         if (!this.deltaPerTick) {

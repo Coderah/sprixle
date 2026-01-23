@@ -17,7 +17,7 @@ export function sprixlePlugin<
     dependencies: Deps = {} as Deps,
     options: { optionalDependencies?: Set<keyof Deps> } = {},
     dependencyTypes?: ReceiveType<Deps>
-): T {
+) {
     dependencyTypes = Object.values(dependencies).map((t) =>
         //@ts-ignore
         resolveReceiveType(t)
@@ -64,7 +64,8 @@ export function sprixlePlugin<
         manager.plugins.set(name, result);
 
         return result;
-    }) as T & { pluginName: string };
+    }) as ((...args: Parameters<T>) => ReturnType<T>) &
+        T & { pluginName: string };
 
     applicator.pluginName = name;
 

@@ -15,11 +15,11 @@ export function methodCommand<C extends RPCActions<any, any>>(
 
         return {
             type,
-            fn: inst[methodName] as any,
+            fn: (inst[methodName] as Function).bind(inst) as any,
         };
     }
 
     throw new Error(
-        `[Console] cannot identify method ${methodName.toString()} in class.`
+        `[Console] cannot identify method ${methodName.toString()} in non-class.`
     );
 }

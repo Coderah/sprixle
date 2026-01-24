@@ -1,5 +1,5 @@
-import { getBSONDeserializer, getBSONSerializer } from '@deepkit/bson';
 import { ReceiveType, resolveReceiveType } from '@deepkit/type';
+import { defaultComponentTypes, Manager } from '../ecs/manager';
 
 /**
 TODO
@@ -28,9 +28,14 @@ so all references for abilityBlueprints become data.abilityBlueprints fairly str
 This also reinforces how important it is for things to reference const data via lookup key instead of being a direct reference / copying the data. Also possible to introduce some kind of abstraction there I'm just not sure its worth the complexity yet, but it could be cool.
  */
 
-export function applyGameDataPlugin<D>(data: D, type?: ReceiveType<D>) {
-    const encodeGameData = getBSONSerializer<D>();
-    const decodeGameData = getBSONDeserializer<D>();
+export function applyGameDataPlugin<
+    D extends Record<string, any>,
+    ComponentTypes extends defaultComponentTypes,
+>(manager: Manager<ComponentTypes>, data: D, type?: ReceiveType<D>) {
+    manager.registerPointers(data);
+
+    const encodeGameData = manager.createSerializer<D>();
+    const decodeGameData = manager.createDeserializer<D>();
 
     // TODO
     function persistGameData() {}
@@ -38,5 +43,10 @@ export function applyGameDataPlugin<D>(data: D, type?: ReceiveType<D>) {
     // TODO
     function loadGameData() {}
 
-    return { loadGameData, persistGameData, encodeGameData, decodeGameData };
+    return {
+        loadGameData,
+        persistGameData,
+        encodeGameData,
+        decodeGameData,
+    };
 }

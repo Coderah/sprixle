@@ -1,9 +1,12 @@
 import { getBSONDeserializer, getBSONSerializer } from '@deepkit/bson';
 import {
+    dataAnnotation,
     groupAnnotation,
     ReceiveType,
     ReflectionClass,
+    ReflectionKind,
     resolveReceiveType,
+    Type,
 } from '@deepkit/type';
 import { each } from 'lodash';
 import { Vector2, Vector3 } from 'three';
@@ -112,6 +115,16 @@ export type EntityWithComponents<
     };
 };
 
+/** Represents a path to a Pointer type within a component */
+export type PointerPath = {
+    /** The top-level component name */
+    component: string;
+    /** Path segments to reach the pointer (e.g., ['[]', 'blueprint'] for array item's blueprint property) */
+    path: string[];
+    /** The data source name referenced by this pointer */
+    dataSourceName: string;
+};
+
 // TODO: add `clone` method? Handle queries being made in a singleton manner.
 // TODO: tie query/consumer and system together more meaningfully for performance and cleanup
 export class Manager<ExactComponentTypes extends defaultComponentTypes> {
@@ -124,6 +137,8 @@ export class Manager<ExactComponentTypes extends defaultComponentTypes> {
     componentTypesSet: Readonly<Set<keyof ExactComponentTypes>>;
     componentNames: readonly Keys<ExactComponentTypes>[];
     componentAnnotations: Record<keyof ExactComponentTypes, Set<Annotations>>;
+    /** Cached paths to all Pointer components, grouped by data source name */
+    pointerPaths: Map<string, PointerPath[]>;
 
     state: EntityAdminState<typeof this.ComponentTypes, ExactComponentTypes>;
     plugins: Map<string, any> = new Map();
@@ -182,9 +197,21 @@ export class Manager<ExactComponentTypes extends defaultComponentTypes> {
                 return result;
             }, {}) as Record<keyof ExactComponentTypes, Set<Annotations>>;
 
+        // Discover all pointer paths in component types, grouped by data source name
+        const pointerPaths = new Map<string, PointerPath[]>();
+        for (const prop of reflection.getProperties()) {
+            const paths = findPointerPaths(prop.type, prop.name);
+            for (const path of paths) {
+                const existing = pointerPaths.get(path.dataSourceName) || [];
+                existing.push(path);
+                pointerPaths.set(path.dataSourceName, existing);
+            }
+        }
+
         this.componentNames = extractedComponentNames;
         this.componentTypesSet = new Set(extractedComponentNames);
         this.componentAnnotations = componentAnnotations;
+        this.pointerPaths = pointerPaths;
 
         this.state = this.createInitialState();
     }
@@ -201,6 +228,69 @@ export class Manager<ExactComponentTypes extends defaultComponentTypes> {
         ) => void;
         deregister?: (entity: Entity<Partial<ExactComponentTypes>>) => void;
     };
+
+    /**
+     * Replace existing pointer references in entities when a data source is re-registered.
+     * Used for hot-reloading pointer data.
+     */
+    private replacePointerReferences(
+        dataSourceName: string,
+        existingRegistry: { forward: Map<any, any>; reverse: Map<any, any> },
+        newForward: Map<any, any>
+    ) {
+        const pathsForDataSource = this.pointerPaths.get(dataSourceName);
+        if (!pathsForDataSource) return;
+
+        for (const pointerPath of pathsForDataSource) {
+            const componentKey =
+                pointerPath.component as keyof ExactComponentTypes;
+
+            // Use entityMap for efficient lookup of entities with this component
+            const entityIds = this.state.entityMap.get(componentKey);
+            if (!entityIds) continue;
+
+            for (const entityId of entityIds) {
+                const entity = this.state.entities.get(entityId);
+                if (!entity) continue;
+
+                const componentValue = entity.components[componentKey];
+                if (componentValue === undefined) continue;
+
+                // Handle top-level pointers (empty path) specially
+                if (pointerPath.path.length === 0) {
+                    const oldKey = existingRegistry.reverse.get(componentValue);
+                    if (oldKey !== undefined) {
+                        const newValue = newForward.get(oldKey);
+                        if (newValue !== undefined) {
+                            entity.components[componentKey] =
+                                newValue as ExactComponentTypes[typeof componentKey];
+                        }
+                    }
+                    continue;
+                }
+
+                // Get all pointer locations at this nested path
+                const pointerLocations = getPointersAtPath(
+                    componentValue,
+                    pointerPath.path
+                );
+
+                for (const { parent, key, value } of pointerLocations) {
+                    if (value === undefined) continue;
+
+                    // Find the key for the old value in the old registry
+                    const oldKey = existingRegistry.reverse.get(value);
+                    if (oldKey === undefined) continue;
+
+                    // Look up the new value using the same key
+                    const newValue = newForward.get(oldKey);
+                    if (newValue !== undefined) {
+                        parent[key] = newValue;
+                    }
+                }
+            }
+        }
+    }
 
     /**
      * Register pointer data sources that can be referenced by Pointer<T, name> types.
@@ -227,6 +317,14 @@ export class Manager<ExactComponentTypes extends defaultComponentTypes> {
 
             // Store in global registry for serializers
             const registryKey = `${this.instanceId}:${dataSourceName}`;
+
+            const existingPointers =
+                Manager.globalPointerRegistry.get(registryKey);
+
+            if (existingPointers) {
+                this.replacePointerReferences(dataSourceName, existingPointers, forward);
+            }
+
             Manager.globalPointerRegistry.set(registryKey, {
                 forward,
                 reverse,
@@ -1097,5 +1195,134 @@ export class Manager<ExactComponentTypes extends defaultComponentTypes> {
         type: K
     ): (typeof this.ComponentTypes)[K] {
         return entity.components[type];
+    }
+}
+
+/**
+ * Recursively traverse a type to find all Pointer annotations
+ * @param type The type to traverse
+ * @param componentName The top-level component name
+ * @param currentPath The current path segments
+ * @returns Array of PointerPath objects
+ */
+function findPointerPaths(
+    type: Type,
+    componentName: string,
+    currentPath: string[] = []
+): PointerPath[] {
+    const results: PointerPath[] = [];
+
+    // Follow type aliases to their underlying type
+    // Type aliases (e.g., `type AbilitySlot = Pointer<...>`) have an 'origin' property
+    if ('origin' in type && type.origin) {
+        return findPointerPaths(type.origin as Type, componentName, currentPath);
+    }
+
+    // Check if this type itself is a Pointer
+    const dataSourceName = dataAnnotation.get(type, 'Pointer') as
+        | string
+        | undefined;
+    if (dataSourceName) {
+        results.push({
+            component: componentName,
+            path: [...currentPath],
+            dataSourceName,
+        });
+        // Don't recurse further into pointer types
+        return results;
+    }
+
+    // Handle arrays - recurse into element type
+    // Check for direct array type (T[])
+    if (type.kind === ReflectionKind.array && 'type' in type) {
+        const elementPaths = findPointerPaths(
+            type.type as Type,
+            componentName,
+            [...currentPath, '[]']
+        );
+        results.push(...elementPaths);
+    }
+
+    // Handle object literals - recurse into each property
+    if (type.kind === ReflectionKind.objectLiteral && 'types' in type) {
+        for (const prop of type.types as Type[]) {
+            if (
+                prop.kind === ReflectionKind.propertySignature &&
+                'name' in prop &&
+                'type' in prop
+            ) {
+                const propPaths = findPointerPaths(
+                    prop.type as Type,
+                    componentName,
+                    [...currentPath, prop.name as string]
+                );
+                results.push(...propPaths);
+            }
+        }
+    }
+
+    // Handle class types similarly to object literals
+    if (type.kind === ReflectionKind.class && 'types' in type) {
+        for (const prop of type.types as Type[]) {
+            if (
+                prop.kind === ReflectionKind.property &&
+                'name' in prop &&
+                'type' in prop
+            ) {
+                const propPaths = findPointerPaths(
+                    prop.type as Type,
+                    componentName,
+                    [...currentPath, prop.name as string]
+                );
+                results.push(...propPaths);
+            }
+        }
+    }
+
+    return results;
+}
+
+/**
+ * Get a value at a nested path within an object
+ * @param obj The object to traverse
+ * @param path Path segments (use '[]' to indicate array iteration)
+ * @returns Array of {parent, key, value} for each pointer location found
+ */
+function getPointersAtPath(
+    obj: any,
+    path: string[]
+): Array<{ parent: any; key: string | number; value: any }> {
+    if (!obj || path.length === 0) {
+        return [];
+    }
+
+    const [segment, ...rest] = path;
+
+    if (segment === '[]') {
+        // Array iteration
+        if (!Array.isArray(obj)) return [];
+
+        if (rest.length === 0) {
+            // The array elements themselves are pointers
+            return obj.map((value, index) => ({
+                parent: obj,
+                key: index,
+                value,
+            }));
+        }
+
+        // Recurse into each array element
+        return obj.flatMap((item) => getPointersAtPath(item, rest));
+    } else {
+        // Property access
+        if (!(segment in obj)) return [];
+
+        if (rest.length === 0) {
+            // This property is the pointer
+            return [{ parent: obj, key: segment, value: obj[segment] }];
+        }
+
+        // Recurse into the property
+        return getPointersAtPath(obj[segment], rest);
     }
 }

@@ -23,13 +23,15 @@ const mappedAbilities = new Map<keyof typeof abilities, Ability>([
     ['fireball', abilities.fireball],
 ]);
 
+type AbilitySlot = Pointer<Ability, 'abilities'>;
+
 type ComponentTypes = defaultComponentTypes & {
     abilities: {
         blueprint: Pointer<Ability, 'abilities'>;
         cooldownStartAt: number;
     }[];
 
-    hotbar: Array<Pointer<Ability, 'abilities'>>;
+    hotbar: AbilitySlot[];
 
     mapTest: Pointer<Ability, 'mappedAbilities'>;
 };
@@ -88,3 +90,18 @@ assert.ok(
 assert.ok(
     deserializedEntity.components.abilities[0].blueprint.anotherStat === 1000
 );
+
+// test hot reloading logic
+const newAbilities = {
+    fireball: {
+        stat: 10,
+        anotherStat: 300,
+    },
+} satisfies Record<string, Ability>;
+
+manager.registerPointers({
+    abilities: newAbilities,
+});
+
+assert.ok(entity.components.abilities[0].blueprint === newAbilities.fireball);
+assert.ok(entity.components.hotbar[0] === newAbilities.fireball);

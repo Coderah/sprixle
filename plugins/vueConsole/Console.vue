@@ -47,7 +47,7 @@ import {
 
 interface OutputLine {
     text: string;
-    type: 'command' | 'result' | 'error';
+    type: 'command' | 'log' | 'result' | 'error';
 }
 
 interface CommandDefinition {
@@ -112,7 +112,7 @@ console.log = (...args: []) => {
         )
         .join(' ');
 
-    outputLines.value.push({ text: resultStr, type: 'result' });
+    outputLines.value.push({ text: resultStr, type: 'log' });
 };
 
 // Helper to check if command is explicit definition
@@ -527,11 +527,14 @@ onUnmounted(() => {
     word-break: break-all;
 
     &.command {
-        color: #888;
+        color: #efefef;
     }
 
     &.result {
         color: #8f8;
+    }
+    &.log {
+        color: #adadad;
     }
 
     &.error {

@@ -161,14 +161,13 @@ export function applyVuePlugin<
             ? manager.getEntity(initialId)
             : undefined;
         const initialValue = initialEntity?.components[component];
-        const ref = shallowRef<C[K] | undefined>(
-            initialValue === undefined ? placeholder : initialValue
+        const ref: ShallowRef<C[K] | undefined> = shallowRef<C[K] | undefined>(
+            initialValue === undefined && placeholder
+                ? placeholder
+                : initialValue
         );
 
         let currentId = initialId;
-        let entityComponentWatchers:
-            | Map<Keys<C>, Set<ShallowRef<any>>>
-            | undefined;
 
         const registerWatcher = (id: EntityId) => {
             if (!componentWatchers.has(id)) {
@@ -182,10 +181,8 @@ export function applyVuePlugin<
             return watchers;
         };
 
-        const unregisterWatcher = (
-            id: EntityId,
-            watchers: Map<Keys<C>, Set<ShallowRef<any>>>
-        ) => {
+        const unregisterWatcher = (id: EntityId) => {
+            const watchers = componentWatchers.get(id);
             const refs = watchers.get(component);
             if (refs) {
                 refs.delete(ref);
@@ -203,25 +200,24 @@ export function applyVuePlugin<
             if (newId === currentId) return;
 
             // Unregister from old ID
-            if (currentId && entityComponentWatchers) {
-                unregisterWatcher(currentId, entityComponentWatchers);
+            if (currentId) {
+                unregisterWatcher(currentId);
             }
 
             // Register for new ID and update value
             currentId = newId;
             if (newId) {
-                entityComponentWatchers = registerWatcher(newId);
+                registerWatcher(newId);
                 const entity = manager.getEntity(newId);
                 ref.value = entity?.components[component] || placeholder;
             } else {
-                entityComponentWatchers = undefined;
                 ref.value = undefined;
             }
         };
 
         // Register initial watcher if we have an ID
         if (currentId) {
-            entityComponentWatchers = registerWatcher(currentId);
+            registerWatcher(currentId);
         }
 
         // If entityOrId is a ref, watch for ID changes
@@ -231,15 +227,15 @@ export function applyVuePlugin<
             });
 
             onUnmounted(() => {
-                if (currentId && entityComponentWatchers) {
-                    unregisterWatcher(currentId, entityComponentWatchers);
+                if (currentId) {
+                    unregisterWatcher(currentId);
                 }
             });
         } else {
             // Cleanup on unmount for static IDs
             onUnmounted(() => {
-                if (currentId && entityComponentWatchers) {
-                    unregisterWatcher(currentId, entityComponentWatchers);
+                if (currentId) {
+                    unregisterWatcher(currentId);
                 }
             });
         }

@@ -522,20 +522,17 @@ export class Manager<ExactComponentTypes extends defaultComponentTypes> {
         const timestamp = now();
 
         const isFromDeserialized = typeof idOrDeserialized === 'object';
-        const id = !isFromDeserialized ? idOrDeserialized : idOrDeserialized.id;
 
         const manager = this;
 
         // TODO ensure Nested deserializes properly
-        const components = isFromDeserialized
-            ? idOrDeserialized.components
-            : ({
-                  createdAt: timestamp,
-                  updatedAt: timestamp,
-              } as typeof this.ComponentTypes);
+        const components = {
+            createdAt: timestamp,
+            updatedAt: timestamp,
+        } as typeof this.ComponentTypes;
 
         const entity = {
-            id,
+            id: !isFromDeserialized ? idOrDeserialized : idOrDeserialized.id,
             previousComponents: {},
             components: new Proxy(components, {
                 set(target, componentType, value = null) {
@@ -575,7 +572,9 @@ export class Manager<ExactComponentTypes extends defaultComponentTypes> {
                         }
                     }
 
-                    const entityIsRegistered = manager.state.entities.has(id);
+                    const entityIsRegistered = manager.state.entities.has(
+                        entity.id
+                    );
 
                     // TODO figure out how Nested components handle previousComponents?
                     if (
@@ -665,6 +664,10 @@ export class Manager<ExactComponentTypes extends defaultComponentTypes> {
                 components[componentType] = value;
             },
         } as typeof this.Entity;
+
+        if (isFromDeserialized) {
+            this.addComponents(entity, idOrDeserialized.components);
+        }
 
         return entity;
     }

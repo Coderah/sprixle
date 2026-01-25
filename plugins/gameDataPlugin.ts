@@ -1,5 +1,6 @@
-import { ReceiveType, resolveReceiveType } from '@deepkit/type';
+import { Group, ReceiveType, resolveReceiveType } from '@deepkit/type';
 import { defaultComponentTypes, Manager } from '../ecs/manager';
+import { sprixlePlugin } from '../ecs/plugin';
 
 /**
 TODO
@@ -28,11 +29,38 @@ so all references for abilityBlueprints become data.abilityBlueprints fairly str
 This also reinforces how important it is for things to reference const data via lookup key instead of being a direct reference / copying the data. Also possible to introduce some kind of abstraction there I'm just not sure its worth the complexity yet, but it could be cool.
  */
 
-export function applyGameDataPlugin<
+export type GameDataDependent = Group<'GameDataDependent'>;
+
+export default sprixlePlugin(function GameDataPlugin<
     D extends Record<string, any>,
     ComponentTypes extends defaultComponentTypes,
 >(manager: Manager<ComponentTypes>, data: D, type?: ReceiveType<D>) {
     manager.registerPointers(data);
+
+    if (manager.plugins.has('GameDataPlugin')) {
+        const oldPlugin = manager.plugins.get('GameDataPlugin') as ReturnType<
+            typeof GameDataPlugin
+        >;
+
+        const { data: oldData } = oldPlugin;
+
+        // Ensure oldData references match new data
+        for (let [key, value] of Object.entries(data)) {
+            oldData[key] = value;
+        }
+
+        // re-applying must mean reload.
+        for (let [componentName, annotations] of Object.entries(
+            manager.componentAnnotations
+        )) {
+            //@ts-ignore
+            if (annotations.has('GameDataDependent')) {
+                for (let entity of manager.getEntities(componentName as any)) {
+                    entity.willUpdate(componentName as any);
+                }
+            }
+        }
+    }
 
     const encodeGameData = manager.createSerializer<D>();
     const decodeGameData = manager.createDeserializer<D>();
@@ -44,9 +72,10 @@ export function applyGameDataPlugin<
     function loadGameData() {}
 
     return {
+        data,
         loadGameData,
         persistGameData,
         encodeGameData,
         decodeGameData,
     };
-}
+});

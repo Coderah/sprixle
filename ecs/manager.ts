@@ -191,9 +191,12 @@ export class Manager<ExactComponentTypes extends defaultComponentTypes> {
         const componentAnnotations = reflection
             .getProperties()
             .reduce((result, p) => {
-                result[p.name] = new Set(
+                const annotations = new Set(
                     groupAnnotation.getAnnotations(p.type)
                 );
+                if (annotations.size) {
+                    result[p.name] = annotations;
+                }
                 return result;
             }, {}) as Record<keyof ExactComponentTypes, Set<Annotations>>;
 
@@ -322,7 +325,11 @@ export class Manager<ExactComponentTypes extends defaultComponentTypes> {
                 Manager.globalPointerRegistry.get(registryKey);
 
             if (existingPointers) {
-                this.replacePointerReferences(dataSourceName, existingPointers, forward);
+                this.replacePointerReferences(
+                    dataSourceName,
+                    existingPointers,
+                    forward
+                );
             }
 
             Manager.globalPointerRegistry.set(registryKey, {
@@ -1215,7 +1222,11 @@ function findPointerPaths(
     // Follow type aliases to their underlying type
     // Type aliases (e.g., `type AbilitySlot = Pointer<...>`) have an 'origin' property
     if ('origin' in type && type.origin) {
-        return findPointerPaths(type.origin as Type, componentName, currentPath);
+        return findPointerPaths(
+            type.origin as Type,
+            componentName,
+            currentPath
+        );
     }
 
     // Check if this type itself is a Pointer

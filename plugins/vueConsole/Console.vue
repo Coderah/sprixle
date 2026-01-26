@@ -391,6 +391,7 @@ function executeCommand() {
                 text: `Error: ${e instanceof Error ? e.message : String(e)}`,
                 type: 'error',
             });
+            console.error(e);
         }
     }
 

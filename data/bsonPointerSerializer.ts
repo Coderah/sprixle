@@ -34,6 +34,21 @@ export function getPointerRegistry(managerId: string, dataSourceName: string) {
     return Manager.getPointerRegistry(managerId, dataSourceName);
 }
 
+bsonBinarySerializer.bsonSerializeRegistry.prepend(
+    ReflectionKind.any,
+    (type, state) => {
+        const dataSourceName = dataAnnotation.get(type, 'Pointer');
+        if (!dataSourceName) {
+            return;
+        }
+
+        console.error(type);
+        throw new Error(
+            `Pointer Type "${type.typeName}" incorrectly determined as 'any'`
+        );
+    }
+);
+
 // Add serialization hooks for pointer components
 bsonBinarySerializer.bsonSerializeRegistry.prepend(
     ReflectionKind.objectLiteral,

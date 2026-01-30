@@ -11,7 +11,7 @@ import { Pipeline } from '../ecs/system';
 
 export function applyVuePlugin<
     C extends defaultComponentTypes,
-    M extends Manager<C> = Manager<C>
+    M extends Manager<C> = Manager<C>,
 >(manager: M, init: () => any) {
     const vuePipeline = new Pipeline(manager, {
         init,
@@ -344,9 +344,16 @@ export function applyVuePlugin<
      * @example
      * const playerId = useSingletonEntityComponent('selfPlayerId');
      */
-    function useSingletonEntityComponent<K extends Keys<C>>(component: K) {
+    function useSingletonEntityComponent<K extends Keys<C>>(
+        component: K,
+        placeholder?: C[K]
+    ) {
         // Singleton entity ID is the component name itself
-        return useComponent(component as string as EntityId, component);
+        return useComponent(
+            component as string as EntityId,
+            component,
+            placeholder
+        );
     }
 
     /**
@@ -362,7 +369,7 @@ export function applyVuePlugin<
     function useQuery<
         Includes extends Keys<C>[],
         IndexedComponent extends Keys<C>,
-        E extends EntityWithComponents<C, M, Includes[number]>
+        E extends EntityWithComponents<C, M, Includes[number]>,
     >(query: Query<C, Includes, M, IndexedComponent, E>) {
         const cache = new Map<string, ShallowRef<typeof manager.Entity>>();
 
@@ -430,7 +437,7 @@ export function applyVuePlugin<
     function useQueryIndexedBy<
         Includes extends Keys<C>[],
         IndexedComponent extends Keys<C>,
-        E extends EntityWithComponents<C, M, Includes[number]>
+        E extends EntityWithComponents<C, M, Includes[number]>,
     >(
         query: Query<C, Includes, M, IndexedComponent, E>,
         indexValue: { value: C[IndexedComponent] } | C[IndexedComponent]

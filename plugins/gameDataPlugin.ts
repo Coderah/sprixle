@@ -1,4 +1,4 @@
-import { Group, ReceiveType, resolveReceiveType } from '@deepkit/type';
+import { Group, ReceiveType } from '@deepkit/type';
 import { defaultComponentTypes, Manager } from '../ecs/manager';
 import { sprixlePlugin } from '../ecs/plugin';
 
@@ -31,7 +31,7 @@ This also reinforces how important it is for things to reference const data via 
 
 export type GameDataDependent = Group<'GameDataDependent'>;
 
-export default sprixlePlugin(function GameDataPlugin<
+function GameDataPlugin<
     D extends Record<string, any>,
     ComponentTypes extends defaultComponentTypes,
 >(manager: Manager<ComponentTypes>, data: D, type?: ReceiveType<D>) {
@@ -39,15 +39,18 @@ export default sprixlePlugin(function GameDataPlugin<
 
     if (manager.plugins.has('GameDataPlugin')) {
         const oldPlugin = manager.plugins.get('GameDataPlugin') as ReturnType<
-            typeof GameDataPlugin
+            typeof GameDataPlugin<D, ComponentTypes>
         >;
 
         const { data: oldData } = oldPlugin;
 
         // Ensure oldData references match new data
         for (let [key, value] of Object.entries(data)) {
+            // @ts-ignore
             oldData[key] = value;
         }
+
+        data = oldData as D;
 
         // re-applying must mean reload.
         for (let [componentName, annotations] of Object.entries(
@@ -78,4 +81,6 @@ export default sprixlePlugin(function GameDataPlugin<
         encodeGameData,
         decodeGameData,
     };
-});
+}
+
+export default sprixlePlugin(GameDataPlugin);

@@ -371,24 +371,21 @@ export function applyVuePlugin<
         IndexedComponent extends Keys<C>,
         E extends EntityWithComponents<C, M, Includes[number]>,
     >(query: Query<C, Includes, M, IndexedComponent, E>) {
-        const cache = new Map<string, ShallowRef<typeof manager.Entity>>();
-
         const ref = shallowRef(query.entities.map((id) => getEntityRef<E>(id)));
 
-        function getEntityRef<E = typeof manager.Entity>(id: string) {
-            if (!cache.has(id)) {
+        function getEntityRef(id: EntityId) {
+            if (!entityWatchers.has(id) || !entityWatchers.get(id).size) {
                 const entityRef = shallowRef(
                     manager.getEntity(id)
                 ) as ShallowRef<E>;
-                cache.set(id, entityRef);
 
                 // Register this ref with entityWatchers so patchHandlers updates it
-                if (!entityWatchers.has(id)) {
-                    entityWatchers.set(id, new Set());
-                }
+                entityWatchers.set(id, new Set());
                 entityWatchers.get(id)!.add(entityRef);
+
+                return entityRef;
             }
-            return cache.get(id) as ShallowRef<E>;
+            return entityWatchers.get(id).first();
         }
 
         // Consumer and System work to track entity list changes
@@ -442,8 +439,6 @@ export function applyVuePlugin<
         query: Query<C, Includes, M, IndexedComponent, E>,
         indexValue: { value: C[IndexedComponent] } | C[IndexedComponent]
     ) {
-        const cache = new Map<EntityId, ShallowRef<typeof manager.Entity>>();
-
         const getIndexValue = (): C[IndexedComponent] | undefined => {
             if (typeof indexValue === 'object' && 'value' in indexValue) {
                 return indexValue.value;
@@ -462,17 +457,19 @@ export function applyVuePlugin<
         const ref = shallowRef(getEntitiesForIndex(getIndexValue()));
 
         function getEntityRef(entity: E) {
-            if (!cache.has(entity.id)) {
+            if (
+                !entityWatchers.has(entity.id) ||
+                !entityWatchers.get(entity.id).size
+            ) {
                 const entityRef = shallowRef(entity) as ShallowRef<E>;
-                cache.set(entity.id, entityRef);
 
                 // Register this ref with entityWatchers so patchHandlers updates it
-                if (!entityWatchers.has(entity.id)) {
-                    entityWatchers.set(entity.id, new Set());
-                }
+                entityWatchers.set(entity.id, new Set());
                 entityWatchers.get(entity.id)!.add(entityRef);
+
+                return entityRef;
             }
-            return cache.get(entity.id) as ShallowRef<E>;
+            return entityWatchers.get(entity.id).first();
         }
 
         // Consumer and System work to track entity list changes
@@ -502,16 +499,15 @@ export function applyVuePlugin<
 
         // Cleanup cached refs on unmount
         onUnmounted(() => {
-            for (let [id, entityRef] of cache) {
-                const watchers = entityWatchers.get(id);
+            for (let entity of ref.value) {
+                const watchers = entityWatchers.get(entity.value.id);
                 if (watchers) {
-                    watchers.delete(entityRef);
+                    watchers.delete(entity);
                     if (watchers.size === 0) {
-                        entityWatchers.delete(id);
+                        entityWatchers.delete(entity.value.id);
                     }
                 }
             }
-            cache.clear();
             // TODO consumers could leak if done a lot... needs resolved regardless
         });
 

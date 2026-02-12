@@ -464,6 +464,15 @@ export class Manager<ExactComponentTypes extends defaultComponentTypes> {
     ) {
         const query = new Query(this, queryParameters);
 
+        // any indexed component needs to track previous
+        if (queryParameters.index) {
+            this.componentAnnotations[queryParameters.index] =
+                this.componentAnnotations[queryParameters.index] || new Set();
+            this.componentAnnotations[queryParameters.index].add(
+                'TrackPrevious'
+            );
+        }
+
         if (this.state.queries.has(query.queryName))
             return this.state.queries.get(query.queryName) as Query<
                 ExactComponentTypes,
@@ -951,7 +960,6 @@ export class Manager<ExactComponentTypes extends defaultComponentTypes> {
         keys(entity.components).forEach((key) => {
             this.removeEntityMapping(entity, key);
         });
-
         state.entities.delete(entity.id);
         state.componentMap.delete(entity.id);
         state.deletedEntities.add(entity);

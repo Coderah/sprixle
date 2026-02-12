@@ -1,3 +1,5 @@
 assets/boilerplate-test.glb filter=lfs diff=lfs merge=lfs -text
 assets/shader-compile-test.glb filter=lfs diff=lfs merge=lfs -text
 assets/tree_day.glb filter=lfs diff=lfs merge=lfs -text
+assets/*.blend filter=lfs diff=lfs merge=lfs -text
+assets/*.glb filter=lfs diff=lfs merge=lfs -text

@@ -1,35 +1,26 @@
 import {
+    AgXToneMapping,
     AmbientLight,
     BasicShadowMap,
-    DirectionalLight,
-    DoubleSide,
-    FrontSide,
-    HalfFloatType,
-    LessEqualDepth,
+    Camera,
+    Light,
     Material,
     Mesh,
-    MeshBasicMaterial,
-    MeshLambertMaterial,
-    MeshStandardMaterial,
     Object3D,
     PCFShadowMap,
-    PCFSoftShadowMap,
     PerspectiveCamera,
     Scene,
-    SphereGeometry,
     Vector2,
-    VSMShadowMap,
 } from 'three';
 import { GLTFLoader, OrbitControls, UnrealBloomPass } from 'three-stdlib';
 import { defaultComponentTypes, Manager } from '../ecs/manager';
 import { Pipeline } from '../ecs/system';
+import { applyEditorUIPlugin } from '../plugins/editorUIPlugin';
 import rendererPlugin, {
     RendererPluginComponents,
     RenderPassPhase,
 } from '../plugins/three/rendererPlugin';
-import { memoizedGlobalNow, now } from '../util/now';
-import { applyEditorUIPlugin } from '../plugins/editorUIPlugin';
-import { interval } from '../util/timing';
+import { now } from '../util/now';
 
 type ComponentTypes = defaultComponentTypes & RendererPluginComponents;
 
@@ -57,9 +48,10 @@ const { renderer, glCanvas, rendererPipeline, configurationEntity } =
         },
         {
             // rToneMapping:
+            rToneMapping: AgXToneMapping,
             rShadowMap: {
                 enabled: true,
-                type: BasicShadowMap,
+                type: PCFShadowMap,
                 autoUpdate: true,
             },
         }
@@ -85,58 +77,77 @@ camera.lookAt(0, 0, 0);
 em.setSingletonEntityComponent('rCamera', camera);
 const scene = new Scene();
 
-const light = new DirectionalLight('yellow', 3);
-light.castShadow = true;
-light.shadow.mapSize.width = 2048; // default is 512
-light.shadow.mapSize.height = 2048; // default is 512
-light.shadow.camera.near = 0.5; // default is 0.5
-light.shadow.camera.far = 20; // default is 50
-// For DirectionalLight, an OrthographicCamera is used for the shadow view, so adjust the size
-light.shadow.camera.left = -8;
-light.shadow.camera.right = 8;
-light.shadow.camera.top = 8;
-light.shadow.camera.bottom = -8;
-// light.shadow.radius = 0.2;
-// light.shadow.blurSamples = 2;
-light.shadow.bias = -0.000005;
-light.shadow.normalBias = 0.4;
-light.position.set(-3, 3, 3);
-light.lookAt(0, 0, 0);
+// const light = new DirectionalLight('yellow', 3);
+// light.castShadow = true;
+// light.shadow.mapSize.width = 2048; // default is 512
+// light.shadow.mapSize.height = 2048; // default is 512
+// light.shadow.camera.near = 0.5; // default is 0.5
+// light.shadow.camera.far = 20; // default is 50
+// // For DirectionalLight, an OrthographicCamera is used for the shadow view, so adjust the size
+// light.shadow.camera.left = -8;
+// light.shadow.camera.right = 8;
+// light.shadow.camera.top = 8;
+// light.shadow.camera.bottom = -8;
+// // light.shadow.radius = 0.2;
+// // light.shadow.blurSamples = 2;
+// light.shadow.bias = -0.000005;
+// light.shadow.normalBias = 0.4;
+// light.position.set(-3, 3, 3);
+// light.lookAt(0, 0, 0);
 const lightParent = new Object3D();
 scene.add(lightParent);
-lightParent.add(light);
-scene.add(new AmbientLight('white', 0.25));
+// lightParent.add(light);
+scene.add(new AmbientLight('white', 0.05 * 3));
 
 const gltfLoader = new GLTFLoader();
 
-gltfLoader
-    .loadAsync('assets/full_gameready_city_buildings_iv_hongkong.glb')
-    .then((gltf) => {
-        // gltf.scene.scale.setScalar(0.2);
-        gltf.scene.traverse((o) => {
-            if (o instanceof Mesh) {
-                o.frustumCulled = false;
-                o.castShadow = o.receiveShadow = true;
-                if (o.material instanceof Material) {
-                    if (o.material.transparent || o.material.alphaHash) {
-                        // o.material.depthTest = false;
-                        // o.material.side = DoubleSide;
-                        // o.material.depthWrite = false;
-                        // o.material.depthFunc = LessEqualDepth;
-                        // o.layers.set(2);
-                        o.material.allowOverride = false;
-                        // o.renderOrder = 2;
-                    }
-                    // o.material.side = FrontSide;
-                    // o.material.transparent = true;
-                    // o.material.alph;
-                    // o.material.alphaTest = 0.05;
+gltfLoader.loadAsync('assets/sponza-test.glb').then((gltf) => {
+    // gltf.scene.scale.setScalar(0.2);
+    const lights = [];
+    gltf.scene.traverse((o) => {
+        if (o instanceof Mesh) {
+            // o.frustumCulled = false;
+            o.castShadow = o.receiveShadow = true;
+            if (o.material instanceof Material) {
+                if (o.material.transparent || o.material.alphaHash) {
+                    // o.material.depthTest = false;
+                    // o.material.side = DoubleSide;
+                    // o.material.depthWrite = false;
+                    // o.material.depthFunc = LessEqualDepth;
+                    // o.layers.set(2);
+                    o.material.allowOverride = false;
+                    // o.renderOrder = 2;
                 }
+                // o.material.side = FrontSide;
+                // o.material.transparent = true;
+                // o.material.alph;
+                // o.material.alphaTest = 0.05;
             }
-        });
-        scene.add(gltf.scene);
-        console.log(gltf);
+        } else if (o instanceof Light) {
+            console.log('light setup shadow', o);
+            lights.push(o);
+            o.castShadow = true;
+            o.shadow.mapSize.width = 2048; // default is 512
+            o.shadow.mapSize.height = 2048; // default is 512
+            o.shadow.camera.near = 0.5; // default is 0.5
+            o.shadow.camera.far = 20; // default is 50
+            // For Directionalo, an OrthographicCamera is used for the shadow view, so adjust the size
+            o.shadow.camera.left = -10;
+            o.shadow.camera.right = 10;
+            o.shadow.camera.top = 10;
+            o.shadow.camera.bottom = -10;
+            o.shadow.radius = 0.2;
+            o.shadow.blurSamples = 2;
+            o.shadow.bias = -0.001;
+            o.shadow.normalBias = 0.1;
+        } else if (o instanceof Camera) {
+            em.setSingletonEntityComponent('rCamera', o);
+        }
     });
+    lightParent.add(...lights);
+    scene.add(gltf.scene);
+    console.log(gltf);
+});
 
 // for (let i = -250; i < 250; i++) {
 //     const mesh = new Mesh(
@@ -168,10 +179,11 @@ const orbitControls = new OrbitControls(camera, glCanvas);
 const bloomPass = em.quickEntity({
     isRenderPass: true,
     rPassPhase: RenderPassPhase.POST_PROCESS,
-    rProgram: new UnrealBloomPass(new Vector2(512, 512), 0.2, 0.001, 0.2),
+    rProgram: new UnrealBloomPass(new Vector2(1024, 1024), 0.2, 0.001, 0.2),
 });
 
 let time = now();
+let rotation = 0;
 function tick() {
     const newTime = now();
     const delta = newTime - time;
@@ -179,10 +191,15 @@ function tick() {
 
     // stats.begin();
 
+    // orbitControls.object = em.getSingletonEntityComponent('rCamera');
+
     orbitControls.update();
 
+    rotation += delta * 0.0005;
+    // lightParent.rotation.x = Math.sin(rotation) * 0.2;
+    lightParent.rotation.y = Math.sin(rotation) * 0.2;
+
     mainPipeline.tick(delta);
-    lightParent.rotateY(0.005);
 
     em.tick();
 

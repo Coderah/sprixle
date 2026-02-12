@@ -5,7 +5,6 @@ import {
     SerializableEntity,
 } from '../ecs/manager';
 import { Pointer } from '../ecs/types';
-import { typeOf } from '@deepkit/type';
 
 type Ability = {
     stat: number;

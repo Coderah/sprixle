@@ -1,11 +1,12 @@
 import { Vector2, Vector3 } from 'three';
 import { defaultComponentTypes, Manager } from '../ecs/manager';
 import assert from 'assert';
+import { TrackPrevious } from '../ecs/types';
 
 type ComponentTypes = defaultComponentTypes & {
-    vec2: Vector2;
-    vec3: Vector3;
-    testBool: boolean;
+    vec2: Vector2 & TrackPrevious;
+    vec3: Vector3 & TrackPrevious;
+    testBool: boolean & TrackPrevious;
 };
 
 const manager = new Manager<ComponentTypes>();

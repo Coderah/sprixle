@@ -1,4 +1,8 @@
-import { getBSONDeserializer, getBSONSerializer } from '@deepkit/bson';
+import {
+    bsonBinarySerializer,
+    getBSONDeserializer,
+    getBSONSerializer,
+} from '@deepkit/bson';
 import {
     dataAnnotation,
     groupAnnotation,
@@ -355,11 +359,14 @@ export class Manager<ExactComponentTypes extends defaultComponentTypes> {
      */
     createSerializer<T>(type?: ReceiveType<T>) {
         const managerId = this.instanceId;
+        // setSerializationManagerContext(managerId);
         // const serializer = getBSONSerializer<T>();
+
+        // return serializer;
 
         return (t: T) => {
             setSerializationManagerContext(managerId);
-            return serializeBSON<T>(t);
+            return serializeBSON<T>(t, bsonBinarySerializer);
         };
     }
 
@@ -370,10 +377,11 @@ export class Manager<ExactComponentTypes extends defaultComponentTypes> {
         const managerId = this.instanceId;
         // setSerializationManagerContext(managerId);
         // const deserializer = getBSONDeserializer<T>();
+        // return deserializer
 
         return (buffer: Uint8Array) => {
             setSerializationManagerContext(managerId);
-            return deserializeBSON<T>(buffer) as T;
+            return deserializeBSON<T>(buffer, 0, bsonBinarySerializer) as T;
         };
     }
 
@@ -555,6 +563,9 @@ export class Manager<ExactComponentTypes extends defaultComponentTypes> {
     ) {
         this.state.stagedUpdates.getOrCreate(entity.id).add(componentType);
 
+        const componentAnnotations = this.componentAnnotations[componentType];
+        if (!componentAnnotations?.has('TrackPrevious')) return;
+
         const value = entity.components[componentType];
         if (value && (value instanceof Vector2 || value instanceof Vector3)) {
             if (!entity.previousComponents[componentType]) {
@@ -690,7 +701,8 @@ export class Manager<ExactComponentTypes extends defaultComponentTypes> {
                         if (
                             (value instanceof Vector2 ||
                                 value instanceof Vector3) &&
-                            target[componentType]
+                            target[componentType] &&
+                            componentAnnotations?.has('TrackPrevious')
                         ) {
                             if (!entity.previousComponents[componentType]) {
                                 entity.previousComponents[componentType] =
@@ -701,8 +713,10 @@ export class Manager<ExactComponentTypes extends defaultComponentTypes> {
                                 );
                             }
                         } else {
-                            entity.previousComponents[componentType] =
-                                target[componentType];
+                            if (componentAnnotations?.has('TrackPrevious')) {
+                                entity.previousComponents[componentType] =
+                                    target[componentType];
+                            }
 
                             manager.flagUpdate(
                                 entity,
@@ -745,9 +759,15 @@ export class Manager<ExactComponentTypes extends defaultComponentTypes> {
                     return true;
                 },
                 deleteProperty(target, p) {
-                    // @ts-ignore
-                    entity.previousComponents[p as keyof ExactComponentTypes] =
-                        entity.components[p as keyof ExactComponentTypes];
+                    const componentAnnotations =
+                        manager.componentAnnotations[p];
+
+                    if (componentAnnotations?.has('TrackPrevious')) {
+                        // @ts-ignore
+                        entity.previousComponents[
+                            p as keyof ExactComponentTypes
+                        ] = entity.components[p as keyof ExactComponentTypes];
+                    }
                     delete target[p];
                     manager.removeEntityMapping(
                         entity,

@@ -11,4 +11,7 @@ type PointerMaps = Map<unknown, unknown> | Record<string, unknown>;
 export type Pointer<T extends PointerMaps, PointerDataName extends string> = T &
     Data<'Pointer', PointerDataName>;
 
-export type Annotations = 'Nested' | 'SingletonComponent';
+// TODO add TrackPrevious and only update previousComponents if this flag is on the type
+export type TrackPrevious = Group<'TrackPrevious'>;
+
+export type Annotations = 'Nested' | 'SingletonComponent' | 'TrackPrevious';

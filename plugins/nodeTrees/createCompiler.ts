@@ -1340,6 +1340,35 @@ export function createNodeTreeCompiler<M extends LogicTreeMethods>(
                                     : property.toString()
                             );
                         }
+                    } else if (p.type.kind === ReflectionKind.rest) {
+                        for (let input of Object.values(n.inputs)) {
+                            if (
+                                !Array.isArray(input) &&
+                                input.type === 'CUSTOM'
+                            )
+                                continue;
+                            const compiledInput = compileNodeSocket(
+                                tree,
+                                n,
+                                //@ts-ignore
+                                { type: typeOf<any>() },
+                                input,
+                                compilationCache,
+                                'input'
+                            );
+                            if (
+                                isMethodTranspiler &&
+                                compiledInput.internalValue
+                            ) {
+                                compiledParameters.push(
+                                    compiledInput.internalValue
+                                );
+                            } else {
+                                compiledParameters.push(
+                                    compiledInput.value?.toString()
+                                );
+                            }
+                        }
                     } else {
                         compiledParameters.push(
                             isMethodTranspiler ? undefined : 'undefined'

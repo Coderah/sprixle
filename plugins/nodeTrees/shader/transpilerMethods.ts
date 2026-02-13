@@ -453,6 +453,22 @@ export const transpilerMethods = {
             return [`gl_FragColor = ${Surface}`];
         },
     },
+    // Render Layers node for compositor input
+    R_LAYERS(
+        compilationCache: CompilationCache,
+        ...args: Array<GLSL['vec3'] | GLSL['vec4']>
+    ): GLSL<{
+        Image: GLSL['vec4'];
+    }> {
+        compilationCache.uniforms.tDiffuse = { value: null };
+        return [`texture2D(tDiffuse, vUv)`] as any;
+    },
+
+    CompositorNodeImageCoordinates(
+        Image: GLSL['vec4']
+    ): GLSL<{ Normalized: GLSL['vec2'] }> {
+        return [`vUv`] as any;
+    },
     GROUP_OUTPUT(
         compilationCache: CompilationCache,
         Image: GLSL['vec4'],

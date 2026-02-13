@@ -55,7 +55,7 @@ export default sprixlePlugin(function materialManagerPlugin<
         MaterialManagerComponentTypes,
 >(
     em: Manager<ComponentTypes>,
-    components: Array<keyof ComponentTypes> = ['object3D']
+    components: Array<keyof ComponentTypes> = ['object3D', 'rProgram']
 ) {
     type M = Manager<ComponentTypes>;
     const objectQuery = em.createQuery({
@@ -185,6 +185,9 @@ export default sprixlePlugin(function materialManagerPlugin<
                     const object = objectWithMaterial(materialObject);
                     if (object) {
                         reuseMaterial(object);
+                        if (object instanceof ShaderPass) {
+                            object.uniforms = object.material.uniforms;
+                        }
                     }
                     continue;
                 }
@@ -236,6 +239,9 @@ export default sprixlePlugin(function materialManagerPlugin<
                             object.material !== material
                         ) {
                             object.material = material;
+                            if (object instanceof ShaderPass) {
+                                object.uniforms = object.material.uniforms;
+                            }
                         }
                         continue;
                     }

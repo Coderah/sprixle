@@ -21,7 +21,6 @@ import { SingletonComponent } from '../../ecs/types';
 import { resolutionUniform, uniformTime } from '../nodeTrees/shader/uniforms';
 import { sprixlePlugin } from '../../ecs/plugin';
 import { DepthPass } from './pass/DepthPass';
-import { MainRenderPass } from './pass/MainRenderPass';
 
 THREE.ColorManagement.enabled = true;
 
@@ -93,7 +92,7 @@ const renderConfigurationDefaults: RenderConfigurationComponents = {
     rClearColor: new Color('black'),
     rClearAlpha: 1,
 
-    rPixelRatio: window.devicePixelRatio,
+    rPixelRatio: window.devicePixelRatio || 1,
 
     rMSAASamples: 0,
 
@@ -222,6 +221,13 @@ export default sprixlePlugin(function RendererPlugin<
             entity.components.rProgram = new RenderPass(null, null);
             entity.components.rProgram.renderToScreen = true;
         }
+
+        if (
+            rPassPhase === RenderPassPhase.POST_PROCESS &&
+            rProgram instanceof ShaderPass
+        ) {
+            rProgram.uniforms = rProgram.material.uniforms;
+        }
     }
 
     function reconfigureComposer(entity: ConfigurationEntity) {
@@ -292,6 +298,7 @@ export default sprixlePlugin(function RendererPlugin<
         // TODO enable sortOrder or some such component here when post process passes are order dependent
         for (let pass of postProcessPasses) {
             if (!pass.components.rProgram) continue;
+            setupRenderPass(pass);
             composer.addPass(pass.components.rProgram);
         }
 

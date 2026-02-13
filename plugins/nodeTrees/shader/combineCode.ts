@@ -255,6 +255,8 @@ export function combineFragmentShader(
     const f = makeF(compilationCache);
     const nF = makeNF(compilationCache);
     return glsl`
+    layout(location = 0) out vec4 pc_FragColor;
+    #define gl_FragColor pc_FragColor
     #include <common>
     #include <packing>
     #include <dithering_pars_fragment>
@@ -353,7 +355,7 @@ export function combineFragmentShader(
 
         // #include <alphatest_fragment>
         // TODO
-        if (gl_FragColor.a < .1) {
+        if (pc_FragColor.a < .1) {
             discard;
             return;
         }

@@ -1,12 +1,7 @@
 import {
-    AgXToneMapping,
     AmbientLight,
-    BasicShadowMap,
-    Camera,
-    Light,
-    Material,
     Mesh,
-    Object3D,
+    NeutralToneMapping,
     PCFShadowMap,
     PerspectiveCamera,
     Scene,
@@ -19,19 +14,19 @@ import {
     ShaderPass,
     UnrealBloomPass,
 } from 'three-stdlib';
+import { enableNodeTreeBlenderConnection } from '../blender/realtime';
 import { defaultComponentTypes, Manager } from '../ecs/manager';
 import { Pipeline } from '../ecs/system';
 import { applyEditorUIPlugin } from '../plugins/editorUIPlugin';
+import materialManagerPlugin from '../plugins/three/materialManagerPlugin';
 import rendererPlugin, {
     RendererPluginComponents,
     RenderPassPhase,
 } from '../plugins/three/rendererPlugin';
-import { now } from '../util/now';
 import shaderTreePlugin, {
     ShaderTreeComponentTypes,
 } from '../plugins/three/shaderTreePlugin';
-import materialManagerPlugin from '../plugins/three/materialManagerPlugin';
-import { enableNodeTreeBlenderConnection } from '../blender/realtime';
+import { now } from '../util/now';
 
 type ComponentTypes = defaultComponentTypes &
     RendererPluginComponents &
@@ -60,8 +55,8 @@ const { renderer, glCanvas, rendererPipeline, configurationEntity } =
             // outputBufferType: HalfFloatType,
         },
         {
-            // rToneMapping:
-            rToneMapping: AgXToneMapping,
+            rMSAASamples: 4,
+            rToneMapping: NeutralToneMapping,
             rShadowMap: {
                 enabled: false,
                 type: PCFShadowMap,
@@ -70,10 +65,7 @@ const { renderer, glCanvas, rendererPipeline, configurationEntity } =
         }
     );
 
-const { materialPipeline } = materialManagerPlugin(em, [
-    'object3D',
-    'rProgram',
-]);
+const { materialPipeline } = materialManagerPlugin(em);
 const nodes = {};
 const shaderTreeSystem = shaderTreePlugin<ComponentTypes, typeof nodes>(
     em,
@@ -97,7 +89,7 @@ const mainPipeline = new Pipeline(
 mainPipeline.init();
 
 const camera = new PerspectiveCamera(
-    39,
+    50,
     configurationEntity.components.rSize.x /
         configurationEntity.components.rSize.y
 );
@@ -112,30 +104,23 @@ em.setSingletonEntityComponent('rScene', scene);
 
 const orbitControls = new OrbitControls(camera, glCanvas);
 
-// mainPipeline.interval = interval(1000 / 80);
-// mainPipeline.interval.accumulative = false;
-
-// renderer.autoClear = false;
-// renderer.autoClearDepth = false;
+const compositorPass = em.quickEntity(
+    {
+        isRenderPass: true,
+        rPassPhase: RenderPassPhase.POST_PROCESS,
+        rProgram: new ShaderPass(
+            new ShaderMaterial({ name: 'test-color-composer' }),
+            'tDiffuse'
+        ),
+    },
+    'compositorPassTest'
+);
 
 const bloomPass = em.quickEntity({
     isRenderPass: true,
     rPassPhase: RenderPassPhase.POST_PROCESS,
     rProgram: new UnrealBloomPass(new Vector2(1024, 1024), 0.2, 0.001, 0.2),
 });
-
-const compositorPass = em.quickEntity(
-    {
-        isRenderPass: true,
-        rPassPhase: RenderPassPhase.POST_PROCESS,
-        rProgram: new ShaderPass(
-            new ShaderMaterial({ name: 'test-color-composer' })
-        ),
-    },
-    'compositorPassTest'
-);
-
-console.log('CompositorPass', compositorPass);
 
 fetch('assets/shaders/test-color-composer.json')
     .then((response) => {
@@ -146,9 +131,26 @@ fetch('assets/shaders/test-color-composer.json')
             materialName: 'test-color-composer',
             shaderTree: body,
         });
-        // compositorPass.components.materialName = 'test-color-composer';
-        // compositorPass.components.shaderTree = body;
     });
+
+const gltfLoader = new GLTFLoader();
+
+gltfLoader.loadAsync('assets/Scene.glb').then((gltf) => {
+    // gltf.scene.scale.setScalar(0.2);
+    const lights = [];
+
+    gltf.scene.traverse((object) => {
+        if (object instanceof Mesh) {
+            em.quickEntity({
+                object3D: object,
+            });
+        }
+    });
+    // em.setSingletonEntityComponent('rCamera', gltf.cameras[0]);
+    scene.add(gltf.scene);
+    scene.add(new AmbientLight(0xffffff, 0.04 * 3));
+    console.log(gltf);
+});
 
 let time = now();
 let rotation = 0;

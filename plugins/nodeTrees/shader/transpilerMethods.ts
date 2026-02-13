@@ -16,6 +16,7 @@ import {
     NearestFilter,
     RepeatWrapping,
     SRGBColorSpace,
+    Texture,
     TextureLoader,
     Vector3,
 } from 'three';
@@ -450,7 +451,7 @@ export const transpilerMethods = {
             return [];
         },
         fragment: function (Surface: GLSL['vec4']) {
-            return [`gl_FragColor = ${Surface}`];
+            return [`pc_FragColor = ${Surface}`];
         },
     },
     // Render Layers node for compositor input
@@ -475,7 +476,7 @@ export const transpilerMethods = {
         ...args: any[]
     ) {
         if (compilationCache.treeType === 'composition') {
-            return [`gl_FragColor = ${Image}`];
+            return [`pc_FragColor = ${Image}`];
         }
         if (Image) args.unshift(Image);
         return [`return $structReference(${args.join(', ')})`];
@@ -759,8 +760,8 @@ export const transpilerMethods = {
                 discard;
                 return;
             }
-            // if (gl_FragColor.a > .1) {
-            // gl_FragColor.rgb = vec3(fragDepth);
+            // if (pc_FragColor.a > .1) {
+            // pc_FragColor.rgb = vec3(fragDepth);
             // }
             `,
         ];

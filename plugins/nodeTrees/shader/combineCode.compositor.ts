@@ -62,6 +62,7 @@ export function combineCompositorFragmentShader(
     compilationCache: CompilationCache
 ) {
     return glsl`
+    layout(location = 0) out vec4 pc_FragColor;
     uniform sampler2D tDiffuse;
     uniform float opacity;
     

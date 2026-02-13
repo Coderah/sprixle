@@ -8,17 +8,17 @@ import {
     InstancedMesh,
     Material,
     Matrix3,
-    Matrix4,
     Mesh,
     Object3D,
     Points,
     Texture,
 } from 'three';
-import { defaultComponentTypes, Manager } from '../../ecs/manager';
-import { Pipeline } from '../../ecs/system';
+import { ShaderPass } from 'three-stdlib';
 import uuid from 'uuid-random';
-import { BatchedObject3DRef } from './BatchedMeshManager';
+import { defaultComponentTypes, Manager } from '../../ecs/manager';
 import { sprixlePlugin } from '../../ecs/plugin';
+import { Pipeline } from '../../ecs/system';
+import { BatchedObject3DRef } from './BatchedMeshManager';
 
 export type MaterialManagerComponentTypes = {
     object3D: Object3D;
@@ -29,14 +29,15 @@ export type MaterialManagerComponentTypes = {
     environmentMap: Texture;
 };
 
-function objectWithMaterial(o: Object3D) {
+function objectWithMaterial(o: Object): { material: Material } {
     if (o instanceof BatchedObject3DRef) {
         return o._manager.getBatchedMesh(o);
     }
 
     if (
         !(
-            (o instanceof Mesh ||
+            (o instanceof ShaderPass ||
+                o instanceof Mesh ||
                 o instanceof InstancedMesh ||
                 o instanceof BatchedMesh ||
                 o instanceof Points) &&
@@ -50,7 +51,8 @@ function objectWithMaterial(o: Object3D) {
 }
 
 export default sprixlePlugin(function materialManagerPlugin<
-    ComponentTypes extends defaultComponentTypes & MaterialManagerComponentTypes
+    ComponentTypes extends defaultComponentTypes &
+        MaterialManagerComponentTypes,
 >(
     em: Manager<ComponentTypes>,
     components: Array<keyof ComponentTypes> = ['object3D']
@@ -177,9 +179,16 @@ export default sprixlePlugin(function materialManagerPlugin<
         forNew(entity) {
             // TODO traverse
             for (let component of components) {
-                const object3D = entity.components[component];
-                if (!object3D) continue;
-                object3D.traverse((o) => {
+                const materialObject = entity.components[component];
+                if (!materialObject) continue;
+                if (!(materialObject instanceof Object3D)) {
+                    const object = objectWithMaterial(materialObject);
+                    if (object) {
+                        reuseMaterial(object);
+                    }
+                    continue;
+                }
+                materialObject.traverse((o) => {
                     const object = objectWithMaterial(o);
 
                     if (!object) return;
@@ -216,9 +225,21 @@ export default sprixlePlugin(function materialManagerPlugin<
             applyEnvironmentMapToMaterial(material);
             for (let objectEntity of objectQuery) {
                 for (let component of components) {
-                    const object3D = objectEntity.components[component];
-                    if (!object3D) continue;
-                    object3D.traverse((o) => {
+                    const materialObject = objectEntity.components[component];
+                    if (!materialObject) continue;
+                    if (!(materialObject instanceof Object3D)) {
+                        const object = objectWithMaterial(materialObject);
+
+                        if (
+                            object &&
+                            object.material.name === materialName &&
+                            object.material !== material
+                        ) {
+                            object.material = material;
+                        }
+                        continue;
+                    }
+                    materialObject.traverse((o) => {
                         const object = objectWithMaterial(o);
 
                         if (

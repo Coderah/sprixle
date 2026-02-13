@@ -77,6 +77,14 @@ def handleDepsGraphUpdate(scene, graph):
             (data, name) = node_trees.serialize(bpy.context.scene)
 
             print('serialized scene compositor tree on change', update.id.name)
+
+            if data and server:
+                print('sending compositor shader', name)
+                server.send_message_to_all(json.dumps({
+                        "name": name.replace('.',''),
+                        "type": 'shaderTree',
+                        "data": data
+                    }, indent=0))
         
         elif isinstance(update.id, bpy.types.Scene):
             serializers.view_layer(bpy.context.view_layer)
@@ -89,7 +97,7 @@ def handleDepsGraphUpdate(scene, graph):
                 print('sending shaderTree', update.id.name)
                 graphs_serialized.append(material)
                 server.send_message_to_all(json.dumps({
-                    "name": name,
+                    "name": name.replace('.',''),
                     "type": 'shaderTree',
                     "data": data
                 }, indent=0))

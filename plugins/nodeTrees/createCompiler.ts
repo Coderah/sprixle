@@ -47,8 +47,13 @@ import {
     getReturnType,
     getStructReference,
 } from './util';
+import {
+    combineCompositorFragmentShader,
+    combineCompositorVertexShader,
+} from './shader/combineCode.compositor';
 
 export interface CompilationCache {
+    treeType: NodeTree['$treeType'];
     defines: Set<string>;
     compiledInputs: {
         current: shaderTargetInputs;
@@ -177,6 +182,7 @@ export interface Node {
 export type NodeTree = {
     [key: string]: Node;
 } & {
+    $treeType: 'environment' | 'material' | 'composition';
     $internalTrees: {
         [key: string]: NodeTree;
     };
@@ -524,8 +530,8 @@ export function createNodeTreeCompiler<M extends LogicTreeMethods>(
                             socketReference === 'y'
                                 ? 'z'
                                 : socketReference === 'z'
-                                ? 'y'
-                                : socketReference;
+                                  ? 'y'
+                                  : socketReference;
                     }
                     //  else {
                     //     if (socketReference === 'y') {
@@ -560,8 +566,8 @@ export function createNodeTreeCompiler<M extends LogicTreeMethods>(
                             inputNode.type === 'SHADERTORGB'
                                 ? 'Shader'
                                 : inputNode.type === 'REROUTE'
-                                ? 'Input'
-                                : socketReference
+                                  ? 'Input'
+                                  : socketReference
                         ],
                         compilationCache,
                         'input'
@@ -578,6 +584,7 @@ export function createNodeTreeCompiler<M extends LogicTreeMethods>(
 
                     let inputType = compilationCache.inputTypes[reference];
                     // console.log('input', reference, socketReference, inputType);
+                    // TODO add a warning here if missing key, its possible blender nodes renamed a field
                     let inputNotLiteralOrMissingKey =
                         inputType?.kind !== ReflectionKind.objectLiteral ||
                         !inputType?.types.find(
@@ -777,8 +784,10 @@ export function createNodeTreeCompiler<M extends LogicTreeMethods>(
                     );
                 }
                 // TODO logicTree hold onto a static vector?
-            } else {
+            } else if (value) {
                 value = value.toString();
+            } else {
+                value = 'COMPILATION_ERROR[null input]';
             }
         }
         // console.log('[compileNodeSocket]', n, p, ReflectionKind[p.type.kind]);
@@ -1403,15 +1412,6 @@ export function createNodeTreeCompiler<M extends LogicTreeMethods>(
                     }
 
                     if (
-                        parameters.type !== 'LogicTree' &&
-                        n.type === 'GROUP_OUTPUT'
-                    ) {
-                        result = [
-                            `return $structReference(${compiledParameters.join(
-                                ', '
-                            )})`,
-                        ];
-                    } else if (
                         returnType.typeName === 'GLSL' &&
                         returnType.typeArguments[0].kind ===
                             ReflectionKind.objectLiteral
@@ -1556,6 +1556,8 @@ export function createNodeTreeCompiler<M extends LogicTreeMethods>(
             : shaderTargetInputs.Fragment,
         parentCompilationCache?: CompilationCache
     ) {
+        const treeType = nodeTree.$treeType || parentCompilationCache?.treeType;
+
         // Handle root-level stuff
         if (nodeTree.$internalTrees) {
             parameters.currentInternalTrees = nodeTree.$internalTrees;
@@ -1607,6 +1609,7 @@ export function createNodeTreeCompiler<M extends LogicTreeMethods>(
         }
 
         const compilationCache: CompilationCache = {
+            treeType: treeType,
             defines: new Set(),
             compiledInputs: {
                 current: currentTarget,
@@ -1675,14 +1678,25 @@ export function createNodeTreeCompiler<M extends LogicTreeMethods>(
                 //     depthTranspiled = compileNodeTree(nodeTree, 'depth');
                 // }
 
-                vertexShader = combineVertexShader(
-                    transpiled,
-                    compilationCache
-                );
-                fragmentShader = combineFragmentShader(
-                    transpiled,
-                    compilationCache
-                );
+                if (treeType === 'composition') {
+                    vertexShader = combineCompositorVertexShader(
+                        transpiled,
+                        compilationCache
+                    );
+                    fragmentShader = combineCompositorFragmentShader(
+                        transpiled,
+                        compilationCache
+                    );
+                } else {
+                    vertexShader = combineVertexShader(
+                        transpiled,
+                        compilationCache
+                    );
+                    fragmentShader = combineFragmentShader(
+                        transpiled,
+                        compilationCache
+                    );
+                }
             } else if (internal === 'depth') {
                 vertexShader = combineDepthVertexShader(
                     transpiled,

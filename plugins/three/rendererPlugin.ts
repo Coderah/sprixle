@@ -9,7 +9,7 @@ import {
     WebGLRendererParameters,
     WebGLRenderTarget,
 } from 'three';
-import { EffectComposer, Pass, RenderPass } from 'three-stdlib';
+import { EffectComposer, Pass, RenderPass, ShaderPass } from 'three-stdlib';
 import { OutputPass } from 'three/examples/jsm/postprocessing/OutputPass';
 import {
     defaultComponentTypes,
@@ -119,8 +119,8 @@ const defaultRenderParameters: WebGLRendererParameters = {
 
 // TODO support editorPlugin somehow? want debug passes
 export default sprixlePlugin(function RendererPlugin<
-    C extends RendererPluginComponents &
-        defaultComponentTypes = RendererPluginComponents & defaultComponentTypes
+    C extends RendererPluginComponents & defaultComponentTypes =
+        RendererPluginComponents & defaultComponentTypes,
 >(
     em: Manager<C>,
     renderParameters: WebGLRendererParameters,
@@ -328,8 +328,17 @@ export default sprixlePlugin(function RendererPlugin<
                 for (let passEntity of renderPassQuery) {
                     const { rProgram } = passEntity.components;
                     if (!rProgram) continue;
+                    // if ('scene' in rProgram) {
+
                     rProgram.scene = activeScene;
                     rProgram.camera = activeCamera;
+                    // }
+                    // TODO move this to materialManagerPlugin?
+                    if (rProgram instanceof ShaderPass) {
+                        if (passEntity.components.material) {
+                            rProgram.material = passEntity.components.material;
+                        }
+                    }
                 }
                 composer.render(delta);
             } else {

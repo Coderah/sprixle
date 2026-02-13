@@ -104,7 +104,7 @@ export const transpilerMethods = {
         attribute_name: string,
         linkedOutput: string,
         compilationCache: CompilationCache
-    ): If<'linkedOutput', { Vector: GLSL['vec3']; Fac: GLSL['float'] }> {
+    ): If<'linkedOutput', { Vector: GLSL['vec3']; Factor: GLSL['float'] }> {
         const reference = camelCase(attribute_name);
         const varyingReference = camelCase(
             'v' + attribute_name[0].toUpperCase() + attribute_name.substring(1)
@@ -164,7 +164,7 @@ export const transpilerMethods = {
         Hue: GLSL['float'],
         Saturation: GLSL['float'],
         Value: GLSL['float'],
-        Fac: GLSL['float'],
+        Factor: GLSL['float'],
         Color: GLSL['vec4'],
         node: Node,
         compilationCache: CompilationCache
@@ -175,7 +175,7 @@ export const transpilerMethods = {
 
         return [
             `vec4 ${reference}Color = vec4(0.);`,
-            `hue_sat(${Hue}, ${Saturation}, ${Value}, ${Fac}, ${Color}, ${reference}Color);`,
+            `hue_sat(${Hue}, ${Saturation}, ${Value}, ${Factor}, ${Color}, ${reference}Color);`,
             `${reference}Color`,
         ];
     },
@@ -245,7 +245,7 @@ export const transpilerMethods = {
         return ['0.0'];
     },
     TEX_NOISE(
-        Vector: GLSL['vec3'],
+        Vector: GLSL['vec3'] = 'vec3(vUv, 1.0)',
         W: GLSL['float'] = '0.',
         Offset: GLSL['float'] = '0.',
         Gain: GLSL['float'] = '0.',
@@ -259,14 +259,14 @@ export const transpilerMethods = {
         noise_dimensions: string,
         node: Node,
         compilationCache: CompilationCache
-    ): GLSL<{ Fac: GLSL['float']; Color: GLSL['vec4'] }> {
+    ): GLSL<{ Factor: GLSL['float']; Color: GLSL['vec4'] }> {
         const reference = camelCase(node.id);
 
         // compilationCache.shader.fragmentIncludes.add(shaderIncludes.noise);
         addBlenderDependency(noise, compilationCache);
 
         return [
-            `float ${reference}Fac = 0.0;`,
+            `float ${reference}Factor = 0.0;`,
             `vec4 ${reference}Color = vec4(vec3(0.0),1.);`,
             `node_noise_tex_fbm_${noise_dimensions.toLowerCase()}(
                     ${Vector},
@@ -279,10 +279,10 @@ export const transpilerMethods = {
                     ${Gain},
                     ${Distortion},
                     ${normalize ? '1.0' : '0.0'},
-                    ${reference}Fac,
+                    ${reference}Factor,
                     ${reference}Color
             );`,
-            `${reference}Fac, ${reference}Color`,
+            `${reference}Factor, ${reference}Color`,
         ] as any;
     },
     VECTOR_ROTATE(
@@ -316,7 +316,7 @@ export const transpilerMethods = {
     },
     /** color ramp */
     VALTORGB(
-        Fac: GLSL['float'],
+        Factor: GLSL['float'],
         elements: ColorStop[],
         color_mode: InterpolationType,
         interpolation: string,
@@ -350,7 +350,7 @@ export const transpilerMethods = {
 
         // console.log('[ColorRamp] compile', ...arguments);
         return [
-            `texture2D(${reference}, vec2(compute_color_map_coordinate(clamp(${Fac}, 0.0, 1.0)), ${compositeReference.uv.y}))`,
+            `texture2D(${reference}, vec2(compute_color_map_coordinate(clamp(${Factor}, 0.0, 1.0)), ${compositeReference.uv.y}))`,
         ];
     },
     EMISSION(Color: GLSL['vec3'], Strength: GLSL['float']): GLSL['vec3'] {
@@ -453,8 +453,19 @@ export const transpilerMethods = {
             return [`gl_FragColor = ${Surface}`];
         },
     },
-    MIX_SHADER(Fac: GLSL['float'], Shader: GLSL['vec4'][]): GLSL['vec4'] {
-        return [`mix(${Shader[0]}, ${Shader[1]}, ${Fac})`];
+    GROUP_OUTPUT(
+        compilationCache: CompilationCache,
+        Image: GLSL['vec4'],
+        ...args: any[]
+    ) {
+        if (compilationCache.treeType === 'composition') {
+            return [`gl_FragColor = ${Image}`];
+        }
+        if (Image) args.unshift(Image);
+        return [`return $structReference(${args.join(', ')})`];
+    },
+    MIX_SHADER(Factor: GLSL['float'], Shader: GLSL['vec4'][]): GLSL['vec4'] {
+        return [`mix(${Shader[0]}, ${Shader[1]}, ${Factor})`];
     },
     COMBXYZ(
         // TODO figure out why making this a float causes average and +'.z'
@@ -506,12 +517,12 @@ export const transpilerMethods = {
         ) {
             // TODO evaluate if objectNormal would be more appropriate in place of vNormal for displacement target
             return [
-                'position, vec2(uv.x, 1.0 - uv.y), vNormal, position, reflect(normalize(vViewPosition), normalize(vNormal))',
+                'position, vec2(uv.x, uv.y), vNormal, position, reflect(normalize(vViewPosition), normalize(vNormal))',
             ] as any;
         }
 
         return [
-            'vPosition, vec2(vUv.x, 1.0 - vUv.y), vNormal, vPosition, reflect(normalize(vViewPosition), normalize(vNormal))',
+            'vPosition, vec2(vUv.x, vUv.y), vNormal, vPosition, reflect(normalize(vViewPosition), normalize(vNormal))',
         ] as any;
     },
     NEW_GEOMETRY(compilationCache: CompilationCache): GLSL<{

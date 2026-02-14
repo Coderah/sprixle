@@ -20,7 +20,7 @@ vec4 mix_add(float fac, vec4 col1, vec4 col2)
     return outcol;
 }
 
-vec4 mix_mult(float fac, vec4 col1, vec4 col2)
+vec4 mix_multiply(float fac, vec4 col1, vec4 col2)
 {
     vec4 outcol = mix(col1, col1 * col2, fac);
     outcol.a = col1.a;

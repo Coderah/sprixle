@@ -238,6 +238,24 @@ def serialize(target):
         for input in node.inputs:
             if not input.enabled: continue
             value = None
+            if hasattr(input, 'default_value'):
+                    value = input.default_value
+
+            if isinstance(value, (bpy.types.Object, bpy.types.Material)):
+                value = f"{value.name}"
+            elif input.type == 'VECTOR' or isinstance(value, (mathutils.Vector, mathutils.Euler)):
+                print(node, value)
+                if len(value) < 3:
+                    value = [value[0], value[1]]
+                else:
+                    value = [value[0], value[1], value[2]]
+            elif input.type == 'RGBA':
+                value = list(value)
+            elif isinstance(value, float):
+                value = round(value, 6)
+            elif is_struct(value):
+                value = None
+
             name = input.name
             if input.is_linked:
                 links = []
@@ -262,33 +280,18 @@ def serialize(target):
                         "socket": 'Output' if link.from_node.mute else link.from_socket.name
                     })
 
-                value = {"type": 'linked', "links": links, "intended_type": f"{input.type}"}
+                value = {"type": 'linked', "links": links, "intended_type": f"{input.type}", "default_value": value, }
 
                 if node.mute and 'Input' not in node_data['inputs']:
                     name = 'Input'
 
                 if value['intended_type'] == 'VECTOR':
                     value['incoming_vector_space'] = calculate_vector_space(input.links[0].from_node, input.links[0].from_socket)
+                    value['intended_type'] = 'VECTOR' + str(len(input.default_value))
             else:
-                if hasattr(input, 'default_value'):
-                    value = input.default_value
-
-                if isinstance(value, (bpy.types.Object, bpy.types.Material)):
-                    value = f"{value.name}"
-                elif input.type == 'VECTOR' or isinstance(value, (mathutils.Vector, mathutils.Euler)):
-                    print(node, value)
-                    if len(value) < 3:
-                        value = [value[0], value[1]]
-                    else:
-                        value = [value[0], value[1], value[2]]
-                elif input.type == 'RGBA':
-                    value = list(value)
-                elif isinstance(value, float):
-                    value = round(value, 6)
-                elif is_struct(value):
-                    value = None
-
                 value = {"value": value, "type": f"{input.type}", "input_hidden": input.hide_value}
+                if input.type == 'VECTOR':
+                    value['type'] = 'VECTOR' + str(len(input.default_value))
                 
             if input.label:
                 value['label'] = input.label
@@ -313,6 +316,20 @@ def serialize(target):
         for output in node.outputs:
             name = output.name
             value = None
+
+            if hasattr(output, 'default_value'):
+                value = output.default_value
+        
+            if isinstance(value, (bpy.types.Object, bpy.types.Material)):
+                value = f"{value.name}"
+            elif isinstance(value, (mathutils.Vector, mathutils.Euler)):
+                value = list(value)
+                # value = [value[0], value[1], value[2]]
+            elif isinstance(value, float):
+                value = round(value, 6)
+            if is_struct(value):
+                value = None
+
             if output.is_linked:
                 links = []
 
@@ -330,24 +347,17 @@ def serialize(target):
                         "socket": 'Input' if link.to_node.mute else link.to_socket.name
                     })
 
-                value = {"type": 'linked', "links": links, "intended_type": f"{output.type}"}
+                value = {"type": 'linked', "links": links, "intended_type": f"{output.type}", "default_value": value}
                 if node.mute and 'Output' not in node_data['outputs']:
                     name = 'Output'
+
+                if value['intended_type'] == 'VECTOR':
+                    # value['incoming_vector_space'] = calculate_vector_space(input.links[0].from_node, input.links[0].from_socket)
+                    value['intended_type'] = 'VECTOR' + str(len(output.default_value))
             else:
-                if hasattr(output, 'default_value'):
-                    value = output.default_value
-            
-                if isinstance(value, (bpy.types.Object, bpy.types.Material)):
-                    value = f"{value.name}"
-                elif isinstance(value, (mathutils.Vector, mathutils.Euler)):
-                    # value = list(value)
-                    value = [value[0], value[1], value[2]]
-                elif isinstance(value, float):
-                    value = round(value, 6)
-                if is_struct(value):
-                    value = None
-                
                 value = {"value": value, "type": f"{output.type}"}
+                if output.type == 'VECTOR':
+                    value['type'] = 'VECTOR' + str(len(output.default_value))
 
             if node.type == 'VALUE':
                 node_data['properties']['value'] = output.default_value

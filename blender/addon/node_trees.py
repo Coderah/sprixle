@@ -360,7 +360,7 @@ def serialize(target):
                 
             node_data['outputs'][name] = value
 
-        if node.type == 'GROUP' and not node.node_tree == None:
+        if node.type == 'GROUP' and not node.node_tree == None and not node.mute:
             node_data['name'] = node.node_tree.name
 
             if len(node.node_tree.nodes) > 2:

@@ -1,0 +1,66 @@
+{"hash": "30db59f89bbda726124f8e6a7c2abaf1",
+  "$treeType": "environment",
+  "$internalTrees": {},
+  "World Output": {
+    "id": "World Output",
+    "type": "OUTPUT_WORLD",
+    "name": "OUTPUT_WORLD",
+    "inputs": {
+      "Surface": {
+        "type": "linked",
+        "links": [
+          {
+            "node": "Background",
+            "socket": "Background"
+          }
+        ],
+        "intended_type": "SHADER"
+      },
+      "Volume": {
+        "value": null,
+        "type": "SHADER",
+        "input_hidden": false
+      }
+    },
+    "outputs": {},
+    "properties": {
+      "is_active_output": true,
+      "target": "ALL"
+    }
+  },
+  "Background": {
+    "id": "Background",
+    "type": "BACKGROUND",
+    "name": "BACKGROUND",
+    "inputs": {
+      "Color": {
+        "value": [
+          0.051269471645355225,
+          0.051269471645355225,
+          0.051269471645355225,
+          1.0
+        ],
+        "type": "RGBA",
+        "input_hidden": false
+      },
+      "Strength": {
+        "value": 1.0,
+        "type": "VALUE",
+        "input_hidden": false
+      }
+    },
+    "outputs": {
+      "Background": {
+        "type": "linked",
+        "links": [
+          {
+            "node": "World Output",
+            "socket": "Surface"
+          }
+        ],
+        "intended_type": "SHADER"
+      }
+    },
+    "properties": {}
+  }
+}

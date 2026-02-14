@@ -224,7 +224,7 @@ void main() {
 	// #endif
     
     // TODO it seems likely this does not match blenders implementation
-    vWorldNormal =  normalize(worldNormal);
+    vWorldNormal =  normalize(worldNormal.xyz);
 
     #endif
 

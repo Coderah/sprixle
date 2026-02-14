@@ -1,0 +1,426 @@
+{"hash": "620a25c77add38e82324a71830689f4f",
+  "$treeType": "material",
+  "$internalTrees": {},
+  "Material Output": {
+    "id": "Material Output",
+    "type": "OUTPUT_MATERIAL",
+    "name": "OUTPUT_MATERIAL",
+    "inputs": {
+      "Surface": {
+        "type": "linked",
+        "links": [
+          {
+            "node": "Diffuse BSDF",
+            "socket": "BSDF"
+          }
+        ],
+        "intended_type": "SHADER"
+      },
+      "Volume": {
+        "value": null,
+        "type": "SHADER",
+        "input_hidden": false
+      },
+      "Displacement": {
+        "value": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "type": "VECTOR",
+        "input_hidden": true,
+        "vector_space": "PRESERVE"
+      },
+      "Thickness": {
+        "value": 0.0,
+        "type": "VALUE",
+        "input_hidden": true
+      }
+    },
+    "outputs": {},
+    "properties": {
+      "is_active_output": true,
+      "target": "ALL",
+      "vector_space": "PRESERVE"
+    }
+  },
+  "Diffuse BSDF": {
+    "id": "Diffuse BSDF",
+    "type": "BSDF_DIFFUSE",
+    "name": "BSDF_DIFFUSE",
+    "inputs": {
+      "Color": {
+        "value": [
+          1.0,
+          1.0,
+          1.0,
+          1.0
+        ],
+        "type": "RGBA",
+        "input_hidden": false
+      },
+      "Roughness": {
+        "value": 1.0,
+        "type": "VALUE",
+        "input_hidden": false
+      },
+      "Normal": {
+        "value": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "type": "VECTOR",
+        "input_hidden": true,
+        "vector_space": "PRESERVE"
+      }
+    },
+    "outputs": {
+      "BSDF": {
+        "type": "linked",
+        "links": [
+          {
+            "node": "Shader to RGB",
+            "socket": "Shader"
+          },
+          {
+            "node": "Material Output",
+            "socket": "Surface"
+          }
+        ],
+        "intended_type": "SHADER"
+      }
+    },
+    "properties": {
+      "vector_space": "PRESERVE"
+    }
+  },
+  "Geometry": {
+    "id": "Geometry",
+    "type": "NEW_GEOMETRY",
+    "name": "NEW_GEOMETRY",
+    "inputs": {},
+    "outputs": {
+      "Position": {
+        "type": "linked",
+        "links": [
+          {
+            "node": "Noise Texture",
+            "socket": "Vector"
+          }
+        ],
+        "intended_type": "VECTOR",
+        "vector_space": "WORLD"
+      },
+      "Normal": {
+        "value": null,
+        "type": "VECTOR",
+        "vector_space": "OBJECT_NORMAL"
+      },
+      "Tangent": {
+        "value": null,
+        "type": "VECTOR",
+        "vector_space": "TANGENT"
+      },
+      "True Normal": {
+        "value": null,
+        "type": "VECTOR",
+        "vector_space": "OBJECT_NORMAL"
+      },
+      "Incoming": {
+        "value": null,
+        "type": "VECTOR",
+        "vector_space": "WORLD"
+      },
+      "Parametric": {
+        "value": null,
+        "type": "VECTOR",
+        "vector_space": "UV"
+      },
+      "Backfacing": {
+        "value": 0.0,
+        "type": "VALUE"
+      },
+      "Pointiness": {
+        "value": 0.0,
+        "type": "VALUE"
+      },
+      "Random Per Island": {
+        "value": 0.0,
+        "type": "VALUE"
+      }
+    },
+    "properties": {
+      "vector_space": "WORLD"
+    }
+  },
+  "AOV Output": {
+    "id": "AOV Output",
+    "type": "OUTPUT_AOV",
+    "name": "OUTPUT_AOV",
+    "inputs": {
+      "Color": {
+        "value": [
+          0.0,
+          0.0,
+          0.0,
+          1.0
+        ],
+        "type": "RGBA",
+        "input_hidden": false
+      },
+      "Value": {
+        "value": 0.0,
+        "type": "VALUE",
+        "input_hidden": false
+      }
+    },
+    "outputs": {},
+    "properties": {
+      "aov_name": "Test"
+    }
+  },
+  "Shader to RGB": {
+    "id": "Shader to RGB",
+    "type": "SHADERTORGB",
+    "name": "SHADERTORGB",
+    "inputs": {
+      "Shader": {
+        "type": "linked",
+        "links": [
+          {
+            "node": "Diffuse BSDF",
+            "socket": "BSDF"
+          }
+        ],
+        "intended_type": "SHADER"
+      }
+    },
+    "outputs": {
+      "Color": {
+        "value": null,
+        "type": "RGBA"
+      },
+      "Alpha": {
+        "value": 0.0,
+        "type": "VALUE"
+      }
+    },
+    "properties": {}
+  },
+  "Combine Color": {
+    "id": "Combine Color",
+    "type": "COMBINE_COLOR",
+    "name": "COMBINE_COLOR",
+    "inputs": {
+      "Red": {
+        "value": 0.0,
+        "type": "VALUE",
+        "input_hidden": false,
+        "label": "Red"
+      },
+      "Green": {
+        "value": 0.0,
+        "type": "VALUE",
+        "input_hidden": false,
+        "label": "Green"
+      },
+      "Blue": {
+        "value": 0.0,
+        "type": "VALUE",
+        "input_hidden": false,
+        "label": "Blue"
+      }
+    },
+    "outputs": {
+      "Color": {
+        "value": null,
+        "type": "RGBA"
+      }
+    },
+    "properties": {
+      "mode": "RGB"
+    }
+  },
+  "Texture Coordinate": {
+    "id": "Texture Coordinate",
+    "type": "TEX_COORD",
+    "name": "TEX_COORD",
+    "inputs": {},
+    "outputs": {
+      "Generated": {
+        "value": null,
+        "type": "VECTOR",
+        "vector_space": "OBJECT_GENERATED"
+      },
+      "Normal": {
+        "type": "linked",
+        "links": [
+          {
+            "node": "Layer Weight",
+            "socket": "Normal"
+          }
+        ],
+        "intended_type": "VECTOR",
+        "vector_space": "OBJECT_NORMAL"
+      },
+      "UV": {
+        "value": null,
+        "type": "VECTOR",
+        "vector_space": "UV"
+      },
+      "Object": {
+        "value": null,
+        "type": "VECTOR",
+        "vector_space": "OBJECT"
+      },
+      "Camera": {
+        "value": null,
+        "type": "VECTOR",
+        "vector_space": "CAMERA"
+      },
+      "Window": {
+        "value": null,
+        "type": "VECTOR",
+        "vector_space": "SCREEN"
+      },
+      "Reflection": {
+        "value": null,
+        "type": "VECTOR",
+        "vector_space": "WORLD_REFLECTION"
+      }
+    },
+    "properties": {
+      "from_instancer": false,
+      "vector_space": "OBJECT_GENERATED"
+    }
+  },
+  "Fresnel": {
+    "id": "Fresnel",
+    "type": "FRESNEL",
+    "name": "FRESNEL",
+    "inputs": {
+      "IOR": {
+        "value": 1.5,
+        "type": "VALUE",
+        "input_hidden": false
+      },
+      "Normal": {
+        "value": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "type": "VECTOR",
+        "input_hidden": true,
+        "vector_space": "OBJECT_NORMAL"
+      }
+    },
+    "outputs": {
+      "Factor": {
+        "value": 0.0,
+        "type": "VALUE"
+      }
+    },
+    "properties": {
+      "vector_space": "OBJECT_NORMAL"
+    }
+  },
+  "Layer Weight": {
+    "id": "Layer Weight",
+    "type": "LAYER_WEIGHT",
+    "name": "LAYER_WEIGHT",
+    "inputs": {
+      "Blend": {
+        "value": 0.5,
+        "type": "VALUE",
+        "input_hidden": false
+      },
+      "Normal": {
+        "type": "linked",
+        "links": [
+          {
+            "node": "Texture Coordinate",
+            "socket": "Normal"
+          }
+        ],
+        "intended_type": "VECTOR",
+        "incoming_vector_space": "OBJECT_NORMAL",
+        "vector_space": "OBJECT_NORMAL"
+      }
+    },
+    "outputs": {
+      "Fresnel": {
+        "value": 0.0,
+        "type": "VALUE"
+      },
+      "Facing": {
+        "value": 0.0,
+        "type": "VALUE"
+      }
+    },
+    "properties": {
+      "vector_space": "OBJECT_NORMAL"
+    }
+  },
+  "Noise Texture": {
+    "id": "Noise Texture",
+    "type": "TEX_NOISE",
+    "name": "TEX_NOISE",
+    "inputs": {
+      "Vector": {
+        "type": "linked",
+        "links": [
+          {
+            "node": "Geometry",
+            "socket": "Position"
+          }
+        ],
+        "intended_type": "VECTOR",
+        "incoming_vector_space": "WORLD",
+        "vector_space": "PRESERVE"
+      },
+      "Scale": {
+        "value": 1.0,
+        "type": "VALUE",
+        "input_hidden": false
+      },
+      "Detail": {
+        "value": 2.0,
+        "type": "VALUE",
+        "input_hidden": false
+      },
+      "Roughness": {
+        "value": 0.5,
+        "type": "VALUE",
+        "input_hidden": false
+      },
+      "Lacunarity": {
+        "value": 2.0,
+        "type": "VALUE",
+        "input_hidden": false
+      },
+      "Distortion": {
+        "value": 0.0,
+        "type": "VALUE",
+        "input_hidden": false
+      }
+    },
+    "outputs": {
+      "Factor": {
+        "value": 0.0,
+        "type": "VALUE"
+      },
+      "Color": {
+        "value": null,
+        "type": "RGBA"
+      }
+    },
+    "properties": {
+      "noise_dimensions": "3D",
+      "noise_type": "FBM",
+      "normalize": true,
+      "vector_space": "PRESERVE"
+    }
+  }
+}

@@ -21,6 +21,9 @@ module.exports = {
         static: {
             directory: path.resolve(__dirname, './assets'),
             publicPath: '/assets',
+            watch: {
+                ignored: /.(glb|blend|blend1|json)$/,
+            },
         },
     },
     entry: './test/index.ts',

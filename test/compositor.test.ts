@@ -1,5 +1,6 @@
 import {
     AmbientLight,
+    Color,
     Mesh,
     NeutralToneMapping,
     PCFShadowMap,
@@ -9,9 +10,11 @@ import {
     Vector2,
 } from 'three';
 import {
+    FXAAShader,
     GLTFLoader,
     OrbitControls,
     ShaderPass,
+    SMAAPass,
     UnrealBloomPass,
 } from 'three-stdlib';
 import { enableNodeTreeBlenderConnection } from '../blender/realtime';
@@ -55,7 +58,7 @@ const { renderer, glCanvas, rendererPipeline, configurationEntity } =
             // outputBufferType: HalfFloatType,
         },
         {
-            rMSAASamples: 4,
+            // rMSAASamples: 8,
             rToneMapping: NeutralToneMapping,
             rShadowMap: {
                 enabled: false,
@@ -116,11 +119,17 @@ const compositorPass = em.quickEntity(
     'compositorPassTest'
 );
 
-const bloomPass = em.quickEntity({
-    isRenderPass: true,
-    rPassPhase: RenderPassPhase.POST_PROCESS,
-    rProgram: new UnrealBloomPass(new Vector2(1024, 1024), 0.2, 0.001, 0.2),
-});
+// const bloomPass = em.quickEntity({
+//     isRenderPass: true,
+//     rPassPhase: RenderPassPhase.POST_PROCESS,
+//     rProgram: new UnrealBloomPass(new Vector2(1024, 1024), 0.2, 0.001, 0.2),
+// });
+
+// const fxaaPass = em.quickEntity({
+//     isRenderPass: true,
+//     rPassPhase: RenderPassPhase.POST_PROCESS,
+//     rProgram: new SMAAPass(1024, 1024),
+// });
 
 fetch('assets/shaders/test-color-composer.json')
     .then((response) => {
@@ -146,9 +155,10 @@ gltfLoader.loadAsync('assets/Scene.glb').then((gltf) => {
             });
         }
     });
-    // em.setSingletonEntityComponent('rCamera', gltf.cameras[0]);
+    em.setSingletonEntityComponent('rCamera', gltf.cameras[0]);
     scene.add(gltf.scene);
-    scene.add(new AmbientLight(0xffffff, 0.04 * 3));
+    scene.add(new AmbientLight(0xffffff, 0.04 * 3.1));
+    scene.background = new Color(0xffffff).multiplyScalar(0.04);
     console.log(gltf);
 });
 

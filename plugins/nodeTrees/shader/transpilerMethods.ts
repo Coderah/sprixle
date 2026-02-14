@@ -374,6 +374,9 @@ export const transpilerMethods = {
     BSDF_TRANSPARENT(Color: GLSL['vec3']): GLSL['vec4'] {
         return [`vec4(0.,0.,0.,1. - clamp(length(${Color}), 0., 1.))`];
     },
+    HOLDOUT(): GLSL['vec4'] {
+        return [`vec4(0.,0.,0.,0.)`];
+    },
     BSDF_DIFFUSE(
         Color: GLSL['vec3'],
         Normal: GLSL['vec3'] = 'normalize(vNormal)',
@@ -474,9 +477,13 @@ export const transpilerMethods = {
         ...args: Array<GLSL['vec3'] | GLSL['vec4']>
     ): GLSL<{
         Image: GLSL['vec4'];
+        Alpha: GLSL['float'];
     }> {
         compilationCache.uniforms.tDiffuse = { value: null };
-        return [`texture2D(tDiffuse, vUv)`] as any;
+        return [
+            `vec4 tDiffuseSample = texture2D(tDiffuse, vUv);`,
+            `tDiffuseSample, tDiffuseSample.a`,
+        ] as any;
     },
 
     CompositorNodeImageCoordinates(

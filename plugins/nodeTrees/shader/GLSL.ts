@@ -130,8 +130,16 @@ export function getGLSLType(intended_type: InputType) {
         case 'FLOAT':
             type = typeOf<GLSL['float']>();
             break;
+        case 'VECTOR2':
+            type = typeOf<GLSL['vec2']>();
+            break;
         case 'VECTOR':
+        case 'VECTOR3':
             type = typeOf<GLSL['vec3']>();
+            break;
+
+        case 'VECTOR4':
+            type = typeOf<GLSL['vec4']>();
             break;
         case 'RGBA':
         case 'SHADER':

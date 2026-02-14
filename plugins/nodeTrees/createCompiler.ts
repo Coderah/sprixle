@@ -38,7 +38,11 @@ import {
     combineDepthVertexShader,
 } from './shader/combineCode.depth';
 import { CompositeTexture } from './shader/compositeTexture';
-import GLSL, { convertVecSize, dynamicNodeToType } from './shader/GLSL';
+import GLSL, {
+    convertVecSize,
+    dynamicNodeToType,
+    getGLSLType,
+} from './shader/GLSL';
 import staticShaderNodeTranspilers from './shader/staticNodeTranspilers';
 import { transpilerMethods as shaderTranspilerMethods } from './shader/transpilerMethods';
 import {
@@ -101,6 +105,9 @@ export type InputType =
     | 'OBJECT'
     | 'GEOMETRY'
     | 'VECTOR'
+    | 'VECTOR2'
+    | 'VECTOR3'
+    | 'VECTOR4'
     | 'STRING'
     | 'FLOAT'
     | 'BOOLEAN'
@@ -122,6 +129,7 @@ export type GenericLinkedSocket = GenericNodeSocket & {
         node: string;
         socket: string;
     }[];
+    default_value: string | boolean | number | string[] | number[];
 };
 
 export type VectorSpace =
@@ -140,7 +148,7 @@ export type VectorSpace =
 export type LinkedSocket =
     | GenericLinkedSocket
     | (GenericLinkedSocket & {
-          intended_type: 'VECTOR';
+          intended_type: 'VECTOR' | 'VECTOR2' | 'VECTOR3' | 'VECTOR4';
           vector_space: VectorSpace;
       });
 
@@ -151,7 +159,7 @@ type GenericValuedNodeSocket = GenericNodeSocket & {
 export type NodeSocket =
     | GenericValuedNodeSocket
     | (GenericValuedNodeSocket & {
-          type: 'VECTOR';
+          type: 'VECTOR' | 'VECTOR2' | 'VECTOR3' | 'VECTOR4';
           vector_space: VectorSpace;
           incoming_vector_space?: VectorSpace;
       });
@@ -503,7 +511,7 @@ export function createNodeTreeCompiler<M extends LogicTreeMethods>(
 
                 if (
                     inputNode.type === 'GROUP_INPUT' &&
-                    inputSocket.type === 'VECTOR' &&
+                    inputSocket.type.startsWith('VECTOR') &&
                     incomingVectorSpace === 'PRESERVE' &&
                     compilationCache.shader.currentVectorSpace !== 'UV' &&
                     compilationCache.shader.currentVectorSpace !== 'PRESERVE'
@@ -702,7 +710,7 @@ export function createNodeTreeCompiler<M extends LogicTreeMethods>(
             parameterReflection &&
             // TODO can be more specific (destructure the rest type)
             parameterType.kind !== ReflectionKind.rest &&
-            socket.type !== 'VECTOR' &&
+            !socket.type.startsWith('VECTOR') &&
             socket.type !== 'RGBA' &&
             // TODO make sure this is safe (hack to solve next TODO temporarily)
             socket.type !== 'VALUE' &&
@@ -735,7 +743,10 @@ export function createNodeTreeCompiler<M extends LogicTreeMethods>(
                 // TODO deal with precision errors?
                 value =
                     socket.type === 'INT' ? value.toString() : value.toFixed(4);
-            } else if (socket.type === 'VECTOR' || socket.type === 'RGBA') {
+            } else if (
+                socket.type.startsWith('VECTOR') ||
+                socket.type === 'RGBA'
+            ) {
                 if ('vector_space' in socket) {
                     vectorSpace =
                         'vector_space' in socket
@@ -757,12 +768,13 @@ export function createNodeTreeCompiler<M extends LogicTreeMethods>(
                 }
                 if (parameters.type === 'LogicTree') {
                     value = `new Vector${
-                        socket.type === 'VECTOR' ? '3' : '4'
+                        socket.type.startsWith('VECTOR') ? '3' : '4'
                     }(${value.join(', ')})`;
                 } else {
                     // TODO if input is less than 3/4 just create and directly input the correct vector rather than converting in glsl
                     // TODO leverage vectorSpace
-                    let values = value as any as Array<number>;
+                    let values = (value ||
+                        socket.default_value) as any as Array<number>;
 
                     const { currentVectorSpace } = compilationCache.shader;
 
@@ -774,13 +786,15 @@ export function createNodeTreeCompiler<M extends LogicTreeMethods>(
                         values = [values[0], values[2], values[1]];
                     }
 
-                    value = `vec3(${values
-                        .slice(0, 3)
+                    const size = values.length;
+
+                    value = `vec${size}(${values
+                        .slice(0, size)
                         .map((v) => v.toFixed(4))
                         .join(', ')})`;
                     value = convertVecSize(
                         value,
-                        typeOf<GLSL['vec3']>(),
+                        getGLSLType(socket.type || socket.intended_type),
                         parameterType
                     );
                 }

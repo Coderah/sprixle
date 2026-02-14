@@ -5,6 +5,10 @@ export const uniformTime = {
     value: now(),
 };
 
+export const uniformFrame = {
+    value: 0,
+};
+
 export const depthUniform = {
     value: new Texture(),
 };

@@ -18,7 +18,11 @@ import {
 } from '../../ecs/manager';
 import { Pipeline } from '../../ecs/system';
 import { SingletonComponent } from '../../ecs/types';
-import { resolutionUniform, uniformTime } from '../nodeTrees/shader/uniforms';
+import {
+    resolutionUniform,
+    uniformFrame,
+    uniformTime,
+} from '../nodeTrees/shader/uniforms';
 import { sprixlePlugin } from '../../ecs/plugin';
 import { DepthPass } from './pass/DepthPass';
 
@@ -322,6 +326,7 @@ export default sprixlePlugin(function RendererPlugin<
 
             if (!activeCamera || !activeScene) return;
 
+            uniformFrame.value++;
             uniformTime.value += delta / 1000;
             renderer.setRenderTarget(null);
             activeCamera.layers.enableAll();

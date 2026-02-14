@@ -37,6 +37,7 @@ import {
     depthUniform,
     resolutionUniform,
 } from './uniforms';
+import { filterGLSL, KernelType } from './blender/kernelFilters';
 
 const mathOperationSymbols = {
     MULTIPLY: '*',
@@ -179,6 +180,19 @@ export const transpilerMethods = {
             `hue_sat(${Hue}, ${Saturation}, ${Value}, ${Factor}, ${Color}, ${reference}Color);`,
             `${reference}Color`,
         ];
+    },
+    FILTER(
+        Image: GLSL['vec4'],
+        Factor: GLSL['float'],
+        Type: string & KernelType,
+        compilationCache: CompilationCache
+    ): GLSL['vec4'] {
+        const [include, filterFnReference] = filterGLSL(Type);
+        addContextualShaderInclude(compilationCache, include);
+
+        // TODO encode sampler into Image/Color types to be carried
+        // and add GLSL['sampler2D'] as a type that can reach for sampler vs sampled image data
+        return [`${filterFnReference}(tDiffuse, ${Factor}, vUv)`];
     },
     /* {
     "id": "White Noise Texture",

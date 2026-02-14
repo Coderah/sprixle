@@ -8,6 +8,7 @@ import gpu_shader_common_mix_rgb from './gpu_shader_common_mix_rgb';
 import gpu_shader_material_fresnel from './gpu_shader_material_fresnel';
 import gpu_shader_material_layer_weight from './gpu_shader_material_layer_weight';
 import gpu_shader_material_tex_white_noise from './gpu_shader_material_tex_white_noise';
+import gpu_shader_compositor_texture_utilities from './gpu_shader_compositor_texture_utilities';
 import hue_sat_val from './hue_sat_val';
 import noise from './noise';
 
@@ -19,6 +20,7 @@ const all = {
     gpu_shader_material_layer_weight,
     hue_sat_val,
     gpu_shader_material_tex_white_noise,
+    gpu_shader_compositor_texture_utilities,
     noise,
 };
 

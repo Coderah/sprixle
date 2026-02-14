@@ -168,7 +168,7 @@ def serialize(target):
     def serialize_node(node, node_tree, internal_trees):
         node_data = {
             "id": node.name,
-            "type": node.type,
+            "type": 'REROUTE' if node.mute else node.type,
             "name": node.name,
             "inputs": {},
             "outputs": {},
@@ -238,6 +238,7 @@ def serialize(target):
         for input in node.inputs:
             if not input.enabled: continue
             value = None
+            name = input.name
             if input.is_linked:
                 links = []
 
@@ -258,10 +259,13 @@ def serialize(target):
                     # if not handleReroute(link):
                     links.append({
                         "node": link.from_node.name,
-                        "socket": link.from_socket.name
+                        "socket": 'Output' if link.from_node.mute else link.from_socket.name
                     })
 
                 value = {"type": 'linked', "links": links, "intended_type": f"{input.type}"}
+
+                if node.mute and 'Input' not in node_data['inputs']:
+                    name = 'Input'
 
                 if value['intended_type'] == 'VECTOR':
                     value['incoming_vector_space'] = calculate_vector_space(input.links[0].from_node, input.links[0].from_socket)
@@ -295,7 +299,7 @@ def serialize(target):
                 if not 'vector_space' in node_data['properties'] or node_data['properties']['vector_space'] == 'PRESERVE':
                     node_data['properties']['vector_space'] = value['vector_space']
 
-            if input.name in node_data['inputs']:
+            if input.name in node_data['inputs'] and not node.mute:
                 existingValue = node_data['inputs'][input.name]
 
                 if isinstance(existingValue, (list, tuple)):
@@ -304,10 +308,10 @@ def serialize(target):
                 else:
                     value = [existingValue, value]
 
-
-            node_data['inputs'][input.name] = value
+            node_data['inputs'][name] = value
             
         for output in node.outputs:
+            name = output.name
             value = None
             if output.is_linked:
                 links = []
@@ -323,10 +327,12 @@ def serialize(target):
                     # else:
                     links.append({
                         "node": link.to_node.name,
-                        "socket": link.to_socket.name
+                        "socket": 'Input' if link.to_node.mute else link.to_socket.name
                     })
 
                 value = {"type": 'linked', "links": links, "intended_type": f"{output.type}"}
+                if node.mute and 'Output' not in node_data['outputs']:
+                    name = 'Output'
             else:
                 if hasattr(output, 'default_value'):
                     value = output.default_value
@@ -352,7 +358,7 @@ def serialize(target):
                 if not 'vector_space' in node_data['properties'] or node_data['properties']['vector_space'] == 'PRESERVE':
                     node_data['properties']['vector_space'] = value['vector_space']
                 
-            node_data['outputs'][output.name] = value
+            node_data['outputs'][name] = value
 
         if node.type == 'GROUP' and not node.node_tree == None:
             node_data['name'] = node.node_tree.name

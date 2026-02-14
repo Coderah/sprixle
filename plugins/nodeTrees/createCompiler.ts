@@ -1556,7 +1556,8 @@ export function createNodeTreeCompiler<M extends LogicTreeMethods>(
             : shaderTargetInputs.Fragment,
         parentCompilationCache?: CompilationCache
     ) {
-        const treeType = nodeTree.$treeType || parentCompilationCache?.treeType;
+        const treeType =
+            internal === true ? 'internal' : internal || nodeTree.$treeType;
 
         // Handle root-level stuff
         if (nodeTree.$internalTrees) {

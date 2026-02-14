@@ -27,17 +27,6 @@ const staticNodeTranspilers: {
         return [];
     },
 
-    VALUE(tree, node, compilationCache) {
-        const reference = getReference(node);
-        addCompiledInput(
-            reference,
-            `float ${reference} = ${node.properties.value.toFixed(4)};`,
-            compilationCache
-        );
-
-        return [];
-    },
-
     RGB(tree, node, compilationCache) {
         const reference = getReference(node);
         compilationCache.inputTypes[reference] = typeOf<GLSL['vec3']>();

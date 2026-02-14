@@ -7,7 +7,13 @@ import {
     TypeMethod,
 } from '@deepkit/type';
 
-const reservedWords = new Set(['mix', 'attribute', 'clamp', 'filter']);
+const reservedWords = new Set([
+    'mix',
+    'attribute',
+    'clamp',
+    'filter',
+    'switch',
+]);
 export function getReference(n: Node): string;
 export function getReference(n: string): string;
 export function getReference(n: string | Node): string {

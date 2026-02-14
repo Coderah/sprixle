@@ -36,8 +36,11 @@ import {
     cameraNearUniform,
     depthUniform,
     resolutionUniform,
+    uniformFrame,
+    uniformTime,
 } from './uniforms';
 import { filterGLSL, KernelType } from './blender/kernelFilters';
+import gpu_shader_common_color_utils from './blender/gpu_shader_common_color_utils';
 
 const mathOperationSymbols = {
     MULTIPLY: '*',
@@ -132,6 +135,20 @@ export const transpilerMethods = {
 
         return [varyingReference];
     },
+    VALUE(value: GLSL['float']): GLSL['float'] {
+        return [`${parseFloat(value).toFixed(4)}`];
+    },
+    SCENE_TIME(
+        compilationCache: CompilationCache
+    ): GLSL<{ Seconds: GLSL['float']; Frame: GLSL['float'] }> {
+        compilationCache.uniforms.uTime = uniformTime;
+        compilationCache.uniforms.uFrame = uniformFrame;
+
+        addContextualShaderInclude(compilationCache, 'uniform float uTime;');
+        addContextualShaderInclude(compilationCache, 'uniform float uFrame;');
+
+        return [`uTime, uFrame`] as any;
+    },
     TEX_IMAGE(
         Vector: GLSL['vec2'],
         image: string,
@@ -193,6 +210,14 @@ export const transpilerMethods = {
         // TODO encode sampler into Image/Color types to be carried
         // and add GLSL['sampler2D'] as a type that can reach for sampler vs sampled image data
         return [`${filterFnReference}(tDiffuse, ${Factor}, vUv)`];
+    },
+    // TODO figure out how to respect passthrough type here
+    SWITCH(
+        Switch: GLSL['bool'],
+        Off: GLSL['vec4'],
+        On: GLSL['vec4']
+    ): GLSL['vec4'] {
+        return [`(${Switch}) ? ${On} : ${Off}`];
     },
     /* {
     "id": "White Noise Texture",
@@ -488,8 +513,19 @@ export const transpilerMethods = {
 
     CompositorNodeImageCoordinates(
         Image: GLSL['vec4']
-    ): GLSL<{ Normalized: GLSL['vec2'] }> {
-        return [`vUv`] as any;
+    ): GLSL<{ Normalized: GLSL['vec2']; Uniform: GLSL['vec2'] }> {
+        // const float2 centered_coordinates = (float2(texel) + 0.5f) - float2(size) / 2.0f;
+
+        // const int max_size = max(size.x, size.y);
+        // const float2 normalized_coordinates = (centered_coordinates / max_size) * 2.0f;
+
+        // TODO support picking up texture reference from Image input instead of hard coding Image
+        return [
+            `vec2 size = vec2(textureSize(tDiffuse, 0));`,
+            `vec2 centered_coordinates = (vUv + 0.5f) - size / 2.0f;`,
+            `float max_size = max(size.x, size.y);`,
+            `vUv, (centered_coordinates / max_size) * 2.0f`,
+        ] as any;
     },
     GROUP_OUTPUT(
         compilationCache: CompilationCache,
@@ -499,7 +535,7 @@ export const transpilerMethods = {
         if (compilationCache.treeType === 'composition') {
             return [`pc_FragColor = ${Image}`];
         }
-        if (Image) args.unshift(Image);
+        // if (Image) args.unshift(Image);
         return [`return $structReference(${args.join(', ')})`];
     },
     MIX_SHADER(Factor: GLSL['float'], Shader: GLSL['vec4'][]): GLSL['vec4'] {
@@ -507,9 +543,9 @@ export const transpilerMethods = {
     },
     COMBXYZ(
         // TODO figure out why making this a float causes average and +'.z'
-        X: number,
-        Y: number,
-        Z: number,
+        X: GLSL['float'],
+        Y: GLSL['float'],
+        Z: GLSL['float'],
         compilationCache: CompilationCache
     ): GLSL['vec3'] {
         // TODO maybe leverage compilationCache.shader.currentVectorSpace?
@@ -518,6 +554,70 @@ export const transpilerMethods = {
         //     return [`vec3(${X}, ${Z}, ${Y})`];
         // }
         return [`vec3(${X}, ${Y}, ${Z})`];
+    },
+    COMBINE_COLOR(
+        Red: GLSL['float'],
+        Green: GLSL['float'],
+        Blue: GLSL['float'],
+        Alpha: GLSL['float'] = '1.0',
+        mode: 'HSL' | 'HSV' | 'RGB',
+        node: Node,
+        compilationCache: CompilationCache
+    ): GLSL['vec4'] {
+        const reference = camelCase(node.id);
+
+        addBlenderDependency(gpu_shader_common_color_utils, compilationCache);
+
+        switch (mode) {
+            case 'RGB':
+                return [`vec4(${Red}, ${Green}, ${Blue}, ${Alpha});`];
+            case 'HSV':
+                return [
+                    `vec4 ${reference}Col = vec4(0.);`,
+                    `hsv_to_rgb(vec4(${Red}, ${Green}, ${Blue}, ${Alpha}), ${reference}Col);`,
+                    `${reference}Col`,
+                ];
+            case 'HSL':
+                return [
+                    `vec4 ${reference}Col = vec4(0.);`,
+                    `hsl_to_rgb(vec4(${Red}, ${Green}, ${Blue} ${Alpha}), ${reference}Col);`,
+                    `${reference}Col`,
+                ];
+        }
+    },
+    SEPARATE_COLOR(
+        Image: GLSL['vec4'],
+        mode: 'HSL' | 'HSV' | 'RGB',
+        node: Node,
+        compilationCache: CompilationCache
+    ): GLSL<{
+        Red: GLSL['float'];
+        Green: GLSL['float'];
+        Blue: GLSL['float'];
+        Alpha: GLSL['float'];
+    }> {
+        const reference = camelCase(node.id);
+
+        addBlenderDependency(gpu_shader_common_color_utils, compilationCache);
+
+        switch (mode) {
+            case 'RGB':
+                return [
+                    `${Image}.r, ${Image}.g, ${Image}.b, ${Image}.a`,
+                ] as any;
+            case 'HSV':
+                return [
+                    `vec4 ${reference}Col = vec4(0.);`,
+                    `rgb_to_hsv(${Image}, ${reference}Col);`,
+                    `${reference}Col.r, ${reference}Col.g, ${reference}Col.b, ${reference}Col.a`,
+                ] as any;
+            case 'HSL':
+                return [
+                    `vec4 ${reference}Col = vec4(0.);`,
+                    `rgb_to_hsl(${Image}, ${reference}Col);`,
+                    `${reference}Col.r, ${reference}Col.g, ${reference}Col.b, ${reference}Col.a`,
+                ] as any;
+        }
     },
     OBJECT_INFO(compilationCache: CompilationCache): GLSL['vec3'] {
         // make vPosition available

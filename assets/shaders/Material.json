@@ -1,4 +1,4 @@
-{"hash": "35282cf69e9fc3b5c30df7df83844ba1",
+{"hash": "4817fef486de5c5c701dbd76988c3008",
   "$treeType": "material",
   "$internalTrees": {},
   "Material Output": {
@@ -10,11 +10,12 @@
         "type": "linked",
         "links": [
           {
-            "node": "Diffuse BSDF",
-            "socket": "BSDF"
+            "node": "Mix",
+            "socket": "Output"
           }
         ],
-        "intended_type": "SHADER"
+        "intended_type": "SHADER",
+        "default_value": null
       },
       "Volume": {
         "value": null,
@@ -27,7 +28,7 @@
           0.0,
           0.0
         ],
-        "type": "VECTOR",
+        "type": "VECTOR3",
         "input_hidden": true,
         "vector_space": "PRESERVE"
       },
@@ -70,7 +71,7 @@
           0.0,
           0.0
         ],
-        "type": "VECTOR",
+        "type": "VECTOR3",
         "input_hidden": true,
         "vector_space": "PRESERVE"
       }
@@ -82,13 +83,10 @@
           {
             "node": "Shader to RGB",
             "socket": "Shader"
-          },
-          {
-            "node": "Material Output",
-            "socket": "Surface"
           }
         ],
-        "intended_type": "SHADER"
+        "intended_type": "SHADER",
+        "default_value": null
       }
     },
     "properties": {
@@ -134,7 +132,8 @@
             "socket": "BSDF"
           }
         ],
-        "intended_type": "SHADER"
+        "intended_type": "SHADER",
+        "default_value": null
       }
     },
     "outputs": {
@@ -146,7 +145,8 @@
             "socket": "Input"
           }
         ],
-        "intended_type": "RGBA"
+        "intended_type": "RGBA",
+        "default_value": null
       },
       "Alpha": {
         "value": 0.0,
@@ -163,7 +163,7 @@
     "outputs": {
       "Generated": {
         "value": null,
-        "type": "VECTOR",
+        "type": "VECTOR3",
         "vector_space": "OBJECT_GENERATED"
       },
       "Normal": {
@@ -174,32 +174,33 @@
             "socket": "Normal"
           }
         ],
-        "intended_type": "VECTOR",
+        "intended_type": "VECTOR3",
+        "default_value": null,
         "vector_space": "OBJECT_NORMAL"
       },
       "UV": {
         "value": null,
-        "type": "VECTOR",
+        "type": "VECTOR3",
         "vector_space": "UV"
       },
       "Object": {
         "value": null,
-        "type": "VECTOR",
+        "type": "VECTOR3",
         "vector_space": "OBJECT"
       },
       "Camera": {
         "value": null,
-        "type": "VECTOR",
+        "type": "VECTOR3",
         "vector_space": "CAMERA"
       },
       "Window": {
         "value": null,
-        "type": "VECTOR",
+        "type": "VECTOR3",
         "vector_space": "SCREEN"
       },
       "Reflection": {
         "value": null,
-        "type": "VECTOR",
+        "type": "VECTOR3",
         "vector_space": "WORLD_REFLECTION"
       }
     },
@@ -224,7 +225,7 @@
           0.0,
           0.0
         ],
-        "type": "VECTOR",
+        "type": "VECTOR3",
         "input_hidden": true,
         "vector_space": "OBJECT_NORMAL"
       }
@@ -257,15 +258,27 @@
             "socket": "Normal"
           }
         ],
-        "intended_type": "VECTOR",
+        "intended_type": "VECTOR3",
+        "default_value": [
+          0.0,
+          0.0,
+          0.0
+        ],
         "incoming_vector_space": "OBJECT_NORMAL",
         "vector_space": "OBJECT_NORMAL"
       }
     },
     "outputs": {
       "Fresnel": {
-        "value": 0.0,
-        "type": "VALUE"
+        "type": "linked",
+        "links": [
+          {
+            "node": "Mix",
+            "socket": "Input"
+          }
+        ],
+        "intended_type": "VALUE",
+        "default_value": 0.0
       },
       "Facing": {
         "value": 0.0,
@@ -294,18 +307,99 @@
             "socket": "Color"
           }
         ],
-        "intended_type": "VALUE"
+        "intended_type": "VALUE",
+        "default_value": 0.5
       }
     },
     "outputs": {
-      "Value": {
-        "value": 0.0,
-        "type": "VALUE"
+      "Output": {
+        "type": "linked",
+        "links": [
+          {
+            "node": "Mix",
+            "socket": "Input"
+          }
+        ],
+        "intended_type": "VALUE",
+        "default_value": 0.0
       }
     },
     "properties": {
       "operation": "SUBTRACT",
       "use_clamp": false
+    }
+  },
+  "Mix": {
+    "id": "Mix",
+    "type": "REROUTE",
+    "name": "MIX",
+    "inputs": {
+      "Factor": {
+        "value": 1.0,
+        "type": "VALUE",
+        "input_hidden": false
+      },
+      "Input": {
+        "type": "linked",
+        "links": [
+          {
+            "node": "Math",
+            "socket": "Output"
+          }
+        ],
+        "intended_type": "RGBA",
+        "default_value": [
+          0.5,
+          0.5,
+          0.5,
+          1.0
+        ]
+      },
+      "B": {
+        "type": "linked",
+        "links": [
+          {
+            "node": "Layer Weight",
+            "socket": "Fresnel"
+          }
+        ],
+        "intended_type": "RGBA",
+        "default_value": [
+          0.5,
+          0.5,
+          0.5,
+          1.0
+        ]
+      }
+    },
+    "outputs": {
+      "Result": {
+        "value": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "type": "ROTATION"
+      },
+      "Output": {
+        "type": "linked",
+        "links": [
+          {
+            "node": "Material Output",
+            "socket": "Surface"
+          }
+        ],
+        "intended_type": "RGBA",
+        "default_value": null
+      }
+    },
+    "properties": {
+      "data_type": "RGBA",
+      "factor_mode": "UNIFORM",
+      "blend_type": "ADD",
+      "clamp_factor": true,
+      "clamp_result": false,
+      "vector_space": "PRESERVE"
     }
   }
 }

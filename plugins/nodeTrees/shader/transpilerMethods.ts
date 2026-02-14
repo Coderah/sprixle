@@ -61,6 +61,7 @@ type VertexShader<T extends string = 'default'> = {
 
 // REFERENCE: https://github.com/blender/blender/blob/a7bc3e3418d8e1c085f2393ff8d5deded43fb21d/source/blender/gpu/shaders/common/gpu_shader_common_math.glsl
 const mathFunctions = {
+    LENGTH: 'length($1)',
     REFLECT: `reflect($1, normalize($2))`,
     REFRACT: `refract($1, normalize($2), $Scale)`,
     CROSS_PRODUCT: `cross($1, $2)`,
@@ -84,6 +85,8 @@ const mathFunctions = {
     NORMALIZE: `normalize($1)`,
     COMPARE: `(abs($1 - $2) <= max($3, 1e-5)) ? 1.0 : 0.0`,
     SIGN: `sign($1)`,
+    MINIMUM: 'min($1, $2)',
+    MAXIMUM: 'max($1, $2)',
 };
 
 const mixFunctions = {
@@ -217,6 +220,12 @@ export const transpilerMethods = {
         Off: GLSL['vec4'],
         On: GLSL['vec4']
     ): GLSL['vec4'] {
+        if (Switch === 'true') {
+            return [`${On}`];
+        } else if (Switch === 'false') {
+            return [`${Off}`];
+        }
+
         return [`(${Switch}) ? ${On} : ${Off}`];
     },
     /* {
@@ -328,11 +337,13 @@ export const transpilerMethods = {
     VECTOR_ROTATE(
         Vector: GLSL['vec3'],
         Angle: GLSL['float'],
-        Axis: GLSL['vec3'],
-        Center: GLSL['vec3'],
+        Axis: GLSL['vec3'] = 'vec3(0.)',
+        Center: GLSL['vec3'] = 'vec3(0.)',
         invert: boolean,
-        rotation_type: string
+        rotation_type: string,
+        compilationCache: CompilationCache
     ): GLSL['vec3'] {
+        addContextualShaderInclude(compilationCache, blenderVector);
         // TODO implement other rotation_types;
         return [
             `rotate_around_axis(${Vector} - ${Center}, normalize(${Axis}), ${Angle} * ${
@@ -522,10 +533,19 @@ export const transpilerMethods = {
         // TODO support picking up texture reference from Image input instead of hard coding Image
         return [
             `vec2 size = vec2(textureSize(tDiffuse, 0));`,
-            `vec2 centered_coordinates = (vUv + 0.5f) - size / 2.0f;`,
-            `float max_size = max(size.x, size.y);`,
-            `vUv, (centered_coordinates / max_size) * 2.0f`,
+            `vec2 centered_coordinates = (vUv - .5) * size;`,
+            `float aspectRatio = size.x / size.y;
+            float max_size = max(size.x, size.y);
+                
+            centered_coordinates *= aspectRatio;`,
+            `vUv, (centered_coordinates / max_size) * 2.0`,
         ] as any;
+    },
+    CompositorNodeImageInfo(Image: GLSL['vec4']): GLSL<{
+        Dimensions: GLSL['vec2'];
+    }> {
+        // TODO extract texture reference from Image
+        return [`vec2(textureSize(tDiffuse, 0))`] as any;
     },
     GROUP_OUTPUT(
         compilationCache: CompilationCache,
@@ -580,7 +600,7 @@ export const transpilerMethods = {
             case 'HSL':
                 return [
                     `vec4 ${reference}Col = vec4(0.);`,
-                    `hsl_to_rgb(vec4(${Red}, ${Green}, ${Blue} ${Alpha}), ${reference}Col);`,
+                    `hsl_to_rgb(vec4(${Red}, ${Green}, ${Blue}, ${Alpha}), ${reference}Col);`,
                     `${reference}Col`,
                 ];
         }
@@ -609,13 +629,13 @@ export const transpilerMethods = {
                 return [
                     `vec4 ${reference}Col = vec4(0.);`,
                     `rgb_to_hsv(${Image}, ${reference}Col);`,
-                    `${reference}Col.r, ${reference}Col.g, ${reference}Col.b, ${reference}Col.a`,
+                    `${reference}Col[0], ${reference}Col[1], ${reference}Col[2], ${reference}Col[3]`,
                 ] as any;
             case 'HSL':
                 return [
                     `vec4 ${reference}Col = vec4(0.);`,
                     `rgb_to_hsl(${Image}, ${reference}Col);`,
-                    `${reference}Col.r, ${reference}Col.g, ${reference}Col.b, ${reference}Col.a`,
+                    `${reference}Col[0], ${reference}Col[1], ${reference}Col[2], ${reference}Col[3]`,
                 ] as any;
         }
     },
@@ -680,12 +700,13 @@ export const transpilerMethods = {
     },
     VECT_MATH(
         operation: string,
-        Scale: number = 1,
+        Scale: GLSL['float'] = 1,
         Vector: GLSL['vec3'][]
     ): If<
         'operation',
         {
             DOT_PRODUCT: GLSL['float'];
+            LENGTH: GLSL['float'];
             else: GLSL['vec3'];
         }
     > {

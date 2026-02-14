@@ -1,4 +1,4 @@
-{"hash": "30db59f89bbda726124f8e6a7c2abaf1",
+{"hash": "e92164078872b1a7f6a7be36f3a3933f",
   "$treeType": "environment",
   "$internalTrees": {},
   "World Output": {
@@ -14,7 +14,8 @@
             "socket": "Background"
           }
         ],
-        "intended_type": "SHADER"
+        "intended_type": "SHADER",
+        "default_value": null
       },
       "Volume": {
         "value": null,
@@ -58,7 +59,8 @@
             "socket": "Surface"
           }
         ],
-        "intended_type": "SHADER"
+        "intended_type": "SHADER",
+        "default_value": null
       }
     },
     "properties": {}

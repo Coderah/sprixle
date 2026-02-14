@@ -156,6 +156,7 @@ gltfLoader.loadAsync('assets/Scene.glb').then((gltf) => {
         }
     });
     em.setSingletonEntityComponent('rCamera', gltf.cameras[0]);
+    orbitControls.object = gltf.cameras[0];
     scene.add(gltf.scene);
     scene.add(new AmbientLight(0xffffff, 0.04 * 3.1));
     scene.background = new Color(0xffffff).multiplyScalar(0.04);

@@ -1,4 +1,5 @@
 import {
+    getAnnotationMeta,
     metaAnnotation,
     ReflectionClass,
     ReflectionKind,
@@ -784,7 +785,7 @@ export function createNodeTreeCompiler<M extends LogicTreeMethods>(
                     );
                 }
                 // TODO logicTree hold onto a static vector?
-            } else if (value) {
+            } else if (value !== undefined) {
                 value = value.toString();
             } else {
                 value = 'COMPILATION_ERROR[null input]';
@@ -1105,7 +1106,7 @@ export function createNodeTreeCompiler<M extends LogicTreeMethods>(
 
                 if (!isMethodTranspiler) defines.add(n.name);
 
-                const vertexShaderTargetInfo = metaAnnotation.getForName(
+                const vertexShaderTargetInfo = metaAnnotation.getOption(
                     methodReflection.return,
                     'VertexShader'
                 );

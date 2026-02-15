@@ -72,7 +72,7 @@ export function convertVecSize(
     if (!from || !to || (!from.startsWith('vec') && !to.startsWith('vec'))) {
         console.warn(
             '[convertVecSize] cannot convert because fromType or toType were invalid',
-            { from, to, fromType, toType }
+            { reference, from, to, fromType, toType }
         );
         return reference;
     }

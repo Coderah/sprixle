@@ -421,9 +421,9 @@ export const transpilerMethods = {
         if (feature === 'N_SPHERE_RADIUS') {
             lines.push(`${reference}Params.max_distance = 0.0;`);
         } else if (feature === 'DISTANCE_TO_EDGE' || dim === '1d') {
-            const mult = feature === 'F2' ? ' * 2.0' : '';
+            // const mult = feature === 'F2' ? ' * 2.0' : '';
             lines.push(
-                `${reference}Params.max_distance = (0.5 + 0.5 * ${reference}Params.randomness)${mult};`
+                `${reference}Params.max_distance = (0.5 + 0.5 * ${reference}Params.randomness);`
             );
         } else {
             const vecType =
@@ -479,6 +479,13 @@ export const transpilerMethods = {
     ): GLSL['vec3'] {
         addContextualShaderInclude(compilationCache, blenderVector);
         // TODO implement other rotation_types;
+        if (rotation_type === 'X_AXIS') {
+            Axis = 'vec3(1., 0., 0.)';
+        } else if (rotation_type === 'Y_AXIS') {
+            Axis = 'vec3(0., 1., 0.)';
+        } else if (rotation_type === 'Z_AXIS') {
+            Axis = 'vec3(0., 0., 1.)';
+        }
         return [
             `rotate_around_axis(${Vector} - ${Center}, normalize(${Axis}), ${Angle} * ${
                 invert ? '-1.' : '1.'
@@ -667,7 +674,7 @@ export const transpilerMethods = {
         // TODO support picking up texture reference from Image input instead of hard coding Image
         return [
             `vec2 size = vec2(textureSize(tDiffuse, 0));`,
-            `vec2 centered_coordinates = (vUv - .5) * size;`,
+            `vec2 centered_coordinates = (vUv - .5) * size / 2.;`,
             `float aspectRatio = size.x / size.y;
             float max_size = max(size.x, size.y);
                 
@@ -888,17 +895,48 @@ export const transpilerMethods = {
             'data_type',
             { FLOAT: GLSL['float']; FLOAT_VECTOR: GLSL['vec3'] }
         >,
-        // TODO
-        interpolation_type: string,
-        compilationCache: CompilationCache
+        Steps: If<
+            'data_type',
+            { FLOAT: GLSL['float']; FLOAT_VECTOR: GLSL['vec3'] }
+        >,
+        interpolation_type:
+            | 'SMOOTHSTEP'
+            | 'SMOOTHERSTEP'
+            | 'STEPPED'
+            | 'LINEAR',
+        compilationCache: CompilationCache,
+        node: Node
     ): If<'data_type', { FLOAT: GLSL['float']; FLOAT_VECTOR: GLSL['vec3'] }> {
+        const reference = getReference(node.id);
         addContextualShaderInclude(compilationCache, shaderIncludes.mapRange);
 
-        return [
-            `mapRange(${
-                Vector || Value
-            }, ${FromMin}, ${FromMax}, ${ToMin}, ${ToMax})`,
-        ];
+        // TODO determine if fromMax !== fromMin check in gpu_shader_material_map_range is important enough to work in
+
+        switch (interpolation_type) {
+            case 'SMOOTHSTEP':
+                return [
+                    `float ${reference}Factor = (${FromMin} > ${FromMax}) ? 1.0 - smoothstep(${FromMax}, ${FromMin}, ${Value}) :
+                                         smoothstep(${FromMin}, ${FromMax}, ${Value});`,
+                    `${ToMin} + ${reference}Factor * (${ToMax} - ${ToMin})`,
+                ];
+            case 'SMOOTHERSTEP':
+                return [
+                    `float ${reference}Factor = (${FromMin} > ${FromMax}) ? 1.0 - smootherstep(${FromMax}, ${FromMin}, ${Value}) :
+                                         smootherstep(${FromMin}, ${FromMax}, ${Value});`,
+                    `${ToMin} + ${reference}Factor * (${ToMax} - ${ToMin})`,
+                ];
+            case 'STEPPED':
+                return [
+                    `float ${reference}Factor = (${Value} - ${FromMin}) / (${FromMax} - ${FromMin});`,
+                    `${reference}Factor = (${Steps} > 0.0) ? floor(${reference}Factor * (${Steps} + 1.0)) / ${Steps} : 0.0;`,
+                    `${ToMin} + ${reference}Factor * (${ToMax} - ${ToMin})`,
+                ];
+            case 'LINEAR':
+            default:
+                return [
+                    `${ToMin} + ((${Value} - ${FromMin}) / (${FromMax} - ${FromMin})) * (${ToMax} - ${ToMin})`,
+                ];
+        }
     },
     /**
      * Only partially supported currently
@@ -936,6 +974,12 @@ export const transpilerMethods = {
                 VECTOR: GLSL['vec3'];
             }
         > {
+        if (clamp_factor) {
+            Factor = `clamp(${Factor}, 0., 1.)`;
+        }
+
+        let output = `mix(${A}, ${B}, ${Factor})`;
+
         if (data_type === 'RGBA') {
             addBlenderDependency(gpu_shader_common_mix_rgb, compilationCache);
 
@@ -944,10 +988,14 @@ export const transpilerMethods = {
                 fn = mixFunctions.RGBA[blend_type];
             }
 
-            return [`${fn}(${Factor}, ${A}, ${B})`];
+            output = `${fn}(${Factor}, ${A}, ${B})`;
         }
 
-        return [`mix(${A}, ${B}, ${Factor})`];
+        if (clamp_result) {
+            output = `clamp(${output}, 0., 1.)`;
+        }
+
+        return [output];
     },
     MATH(
         operation: string,

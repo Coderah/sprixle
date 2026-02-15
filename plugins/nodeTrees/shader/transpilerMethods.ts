@@ -26,6 +26,7 @@ import hue_sat_val from './blender/hue_sat_val';
 import fresnel from './blender/gpu_shader_material_fresnel';
 import clamp from './blender/clamp';
 import gpu_shader_material_tex_white_noise from './blender/gpu_shader_material_tex_white_noise';
+import gpu_shader_material_fractal_voronoi from './blender/gpu_shader_material_fractal_voronoi';
 import { getReference } from '../util';
 import gpu_shader_material_layer_weight from './blender/gpu_shader_material_layer_weight';
 import { getCompositeTexture } from './compositeTexture';
@@ -333,6 +334,139 @@ export const transpilerMethods = {
             );`,
             `${reference}Factor, ${reference}Color`,
         ] as any;
+    },
+    TEX_VORONOI(
+        Vector: GLSL['vec3'] = 'vec3(vUv, 1.0)',
+        W: GLSL['float'] = '0.0',
+        Scale: GLSL['float'] = '5.0',
+        Detail: GLSL['float'] = '0.0',
+        Roughness: GLSL['float'] = '0.5',
+        Lacunarity: GLSL['float'] = '2.0',
+        Smoothness: GLSL['float'] = '1.0',
+        Exponent: GLSL['float'] = '0.5',
+        Randomness: GLSL['float'] = '1.0',
+        voronoi_dimensions: string,
+        distance: string,
+        feature: string,
+        normalize: boolean,
+        node: Node,
+        compilationCache: CompilationCache
+    ): GLSL<{
+        Distance: GLSL['float'];
+        Color: GLSL['vec4'];
+        Position: GLSL['vec3'];
+        W: GLSL['float'];
+        Radius: GLSL['float'];
+    }> {
+        const reference = camelCase(node.id);
+
+        addBlenderDependency(
+            gpu_shader_material_fractal_voronoi,
+            compilationCache
+        );
+
+        const metricMap = {
+            EUCLIDEAN: 0,
+            MANHATTAN: 1,
+            CHEBYCHEV: 2,
+            MINKOWSKI: 3,
+        };
+
+        // SHD_VORONOI_* feature indices matching gpu_shader_material_voronoi.glsl defines
+        const featureIndexMap = {
+            F1: 0,
+            F2: 1,
+            SMOOTH_F1: 2,
+            DISTANCE_TO_EDGE: 3,
+            N_SPHERE_RADIUS: 4,
+        };
+
+        const dim = voronoi_dimensions.toLowerCase();
+        const metric = metricMap[distance] ?? 0;
+        const isStructOutput =
+            feature === 'F1' || feature === 'F2' || feature === 'SMOOTH_F1';
+
+        let coordExpr: string;
+        switch (dim) {
+            case '1d':
+                coordExpr = `${W} * ${Scale}`;
+                break;
+            case '2d':
+                coordExpr = `${Vector}.xy * ${Scale}`;
+                break;
+            case '4d':
+                coordExpr = `vec4(${Vector}, ${W}) * ${Scale}`;
+                break;
+            case '3d':
+            default:
+                coordExpr = `${Vector} * ${Scale}`;
+                break;
+        }
+
+        const lines: string[] = [
+            `VoronoiParams ${reference}Params;`,
+            `${reference}Params.scale = ${Scale};`,
+            `${reference}Params.detail = clamp(${Detail}, 0.0, 15.0);`,
+            `${reference}Params.roughness = clamp(${Roughness}, 0.0, 1.0);`,
+            `${reference}Params.lacunarity = ${Lacunarity};`,
+            `${reference}Params.smoothness = clamp(${Smoothness} / 2.0, 0.0, 0.5);`,
+            `${reference}Params.exponent = ${Exponent};`,
+            `${reference}Params.randomness = clamp(${Randomness}, 0.0, 1.0);`,
+            `${reference}Params.normalize = ${normalize ? 'true' : 'false'};`,
+            `${reference}Params.feature = ${featureIndexMap[feature] ?? 0};`,
+            `${reference}Params.metric = ${metric};`,
+        ];
+
+        // Compute max_distance matching Blender's INITIALIZE_VORONOIPARAMS + per-feature setup
+        if (feature === 'N_SPHERE_RADIUS') {
+            lines.push(`${reference}Params.max_distance = 0.0;`);
+        } else if (feature === 'DISTANCE_TO_EDGE' || dim === '1d') {
+            const mult = feature === 'F2' ? ' * 2.0' : '';
+            lines.push(
+                `${reference}Params.max_distance = (0.5 + 0.5 * ${reference}Params.randomness)${mult};`
+            );
+        } else {
+            const vecType =
+                dim === '2d' ? 'vec2' : dim === '4d' ? 'vec4' : 'vec3';
+            const mult = feature === 'F2' ? ' * 2.0' : '';
+            lines.push(
+                `${reference}Params.max_distance = voronoi_distance(${vecType}(0.0), ${vecType}(0.5 + 0.5 * ${reference}Params.randomness), ${reference}Params)${mult};`
+            );
+        }
+
+        if (isStructOutput) {
+            lines.push(
+                `VoronoiOutput ${reference}Output = fractal_voronoi_x_fx(${reference}Params, ${coordExpr});`,
+                `float ${reference}Distance = ${reference}Output.Distance;`,
+                `vec4 ${reference}Color = vec4(${reference}Output.Color, 1.0);`,
+                `vec3 ${reference}Position = ${reference}Output.Position.xyz;`,
+                `float ${reference}W = ${reference}Output.Position.w;`,
+                `float ${reference}Radius = 0.0;`
+            );
+        } else if (feature === 'DISTANCE_TO_EDGE') {
+            lines.push(
+                `float ${reference}Distance = fractal_voronoi_distance_to_edge(${reference}Params, ${coordExpr});`,
+                `vec4 ${reference}Color = vec4(vec3(0.0), 1.0);`,
+                `vec3 ${reference}Position = vec3(0.0);`,
+                `float ${reference}W = 0.0;`,
+                `float ${reference}Radius = 0.0;`
+            );
+        } else {
+            // N_SPHERE_RADIUS - no fractal version, uses base function directly
+            lines.push(
+                `float ${reference}Radius = voronoi_n_sphere_radius(${reference}Params, ${coordExpr});`,
+                `float ${reference}Distance = 0.0;`,
+                `vec4 ${reference}Color = vec4(vec3(0.0), 1.0);`,
+                `vec3 ${reference}Position = vec3(0.0);`,
+                `float ${reference}W = 0.0;`
+            );
+        }
+
+        lines.push(
+            `${reference}Distance, ${reference}Color, ${reference}Position, ${reference}W, ${reference}Radius`
+        );
+
+        return lines as any;
     },
     VECTOR_ROTATE(
         Vector: GLSL['vec3'],

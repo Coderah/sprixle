@@ -212,6 +212,43 @@ vec2 hash_vec4_to_vec2(vec4 k)
   return vec2(hash_vec4_to_float(k.xyzw), hash_vec4_to_float(k.zxwy));
 }
 
+/* Hashing int[234] into vec[234] of components in the range [0, 1]. */
+
+vec2 hash_int2_to_vec2(ivec2 k)
+{
+  return vec2(hash_uint2_to_float(uint(k.x), uint(k.y)),
+              hash_uint3_to_float(uint(k.x), uint(k.y), 1u));
+}
+
+vec3 hash_int2_to_vec3(ivec2 k)
+{
+  return vec3(hash_uint2_to_float(uint(k.x), uint(k.y)),
+              hash_uint3_to_float(uint(k.x), uint(k.y), 1u),
+              hash_uint3_to_float(uint(k.x), uint(k.y), 2u));
+}
+
+vec3 hash_int3_to_vec3(ivec3 k)
+{
+  return vec3(hash_uint3_to_float(uint(k.x), uint(k.y), uint(k.z)),
+              hash_uint4_to_float(uint(k.x), uint(k.y), uint(k.z), 1u),
+              hash_uint4_to_float(uint(k.x), uint(k.y), uint(k.z), 2u));
+}
+
+vec4 hash_int4_to_vec4(ivec4 k)
+{
+  return vec4(hash_uint4_to_float(uint(k.x), uint(k.y), uint(k.z), uint(k.w)),
+              hash_uint4_to_float(uint(k.w), uint(k.x), uint(k.y), uint(k.z)),
+              hash_uint4_to_float(uint(k.z), uint(k.w), uint(k.x), uint(k.y)),
+              hash_uint4_to_float(uint(k.y), uint(k.z), uint(k.w), uint(k.x)));
+}
+
+vec3 hash_int4_to_vec3(ivec4 k)
+{
+  return vec3(hash_uint4_to_float(uint(k.x), uint(k.y), uint(k.z), uint(k.w)),
+              hash_uint4_to_float(uint(k.z), uint(k.x), uint(k.w), uint(k.y)),
+              hash_uint4_to_float(uint(k.w), uint(k.z), uint(k.y), uint(k.x)));
+}
+
 float integer_noise(int n)
 {
   /* Integer bit-shifts for these calculations can cause precision problems on macOS.

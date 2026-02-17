@@ -17,7 +17,10 @@ import {
     SMAAPass,
     UnrealBloomPass,
 } from 'three-stdlib';
-import { enableNodeTreeBlenderConnection } from '../blender/realtime';
+import {
+    blenderEvents,
+    enableNodeTreeBlenderConnection,
+} from '../blender/realtime';
 import { defaultComponentTypes, Manager } from '../ecs/manager';
 import { Pipeline } from '../ecs/system';
 import { applyEditorUIPlugin } from '../plugins/editorUIPlugin';
@@ -30,6 +33,7 @@ import shaderTreePlugin, {
     ShaderTreeComponentTypes,
 } from '../plugins/three/shaderTreePlugin';
 import { now } from '../util/now';
+import { convertViewLayerToTargets } from '../plugins/nodeTrees/shader/blender/viewLayer';
 
 type ComponentTypes = defaultComponentTypes &
     RendererPluginComponents &
@@ -58,6 +62,7 @@ const { renderer, glCanvas, rendererPipeline, configurationEntity } =
             // outputBufferType: HalfFloatType,
         },
         {
+            // rPixelRatio: 1.5,
             // rMSAASamples: 8,
             rToneMapping: NeutralToneMapping,
             rShadowMap: {
@@ -115,6 +120,7 @@ const compositorPass = em.quickEntity(
             new ShaderMaterial({ name: 'test-color-composer' }),
             'tDiffuse'
         ),
+        rOrder: 1,
     },
     'compositorPassTest'
 );
@@ -123,45 +129,81 @@ const compositorPass = em.quickEntity(
 //     isRenderPass: true,
 //     rPassPhase: RenderPassPhase.POST_PROCESS,
 //     rProgram: new UnrealBloomPass(new Vector2(1024, 1024), 0.2, 0.001, 0.2),
+//     rOrder: 15,
 // });
 
 // const fxaaPass = em.quickEntity({
 //     isRenderPass: true,
 //     rPassPhase: RenderPassPhase.POST_PROCESS,
-//     rProgram: new SMAAPass(1024, 1024),
+//     rProgram: new ShaderPass(FXAAShader),
 // });
 
-fetch('assets/shaders/test-color-composer.json')
-    .then((response) => {
-        return response.json();
-    })
-    .then((body) => {
-        em.quickEntity({
-            materialName: 'test-color-composer',
-            shaderTree: body,
-        });
-    });
+const smaaPass = em.quickEntity({
+    isRenderPass: true,
+    rPassPhase: RenderPassPhase.POST_PROCESS,
+    rProgram: new SMAAPass(256, 256),
+    rOrder: 10,
+});
+smaaPass.components.rProgram.needsSwap = true;
 
 const gltfLoader = new GLTFLoader();
+(async function () {
+    // TODO add into scene loader? direct loader fn definitely needed.
+    await fetch('assets/view-layers/ViewLayer.json')
+        .then((r) => r.json())
+        .then((body) => {
+            // console.log('viewLayer targets', );
 
-gltfLoader.loadAsync('assets/Scene.glb').then((gltf) => {
-    // gltf.scene.scale.setScalar(0.2);
-    const lights = [];
+            em.setSingletonEntityComponent(
+                'rPassTargets',
+                convertViewLayerToTargets(body)
+            );
+        });
 
-    gltf.scene.traverse((object) => {
-        if (object instanceof Mesh) {
+    // TODO add into loader
+    await fetch('assets/shaders/test-color-composer.json')
+        .then((response) => {
+            return response.json();
+        })
+        .then((body) => {
             em.quickEntity({
-                object3D: object,
+                materialName: 'test-color-composer',
+                shaderTree: body,
             });
-        }
+        });
+
+    await fetch('assets/shaders/Material.json')
+        .then((response) => {
+            return response.json();
+        })
+        .then((body) => {
+            em.quickEntity({
+                materialName: 'Material',
+                shaderTree: body,
+            });
+        });
+
+    await gltfLoader.loadAsync('assets/Scene.glb').then((gltf) => {
+        // gltf.scene.scale.setScalar(0.2);
+        const lights = [];
+
+        gltf.scene.traverse((object) => {
+            if (object instanceof Mesh) {
+                em.quickEntity({
+                    object3D: object,
+                });
+            }
+        });
+        em.setSingletonEntityComponent('rCamera', gltf.cameras[0]);
+        orbitControls.object = gltf.cameras[0];
+        scene.add(gltf.scene);
+        scene.add(new AmbientLight(0xffffff, 0.04 * 3.1));
+        scene.background = new Color(0xffffff).multiplyScalar(0.04);
+        console.log(gltf);
     });
-    em.setSingletonEntityComponent('rCamera', gltf.cameras[0]);
-    orbitControls.object = gltf.cameras[0];
-    scene.add(gltf.scene);
-    scene.add(new AmbientLight(0xffffff, 0.04 * 3.1));
-    scene.background = new Color(0xffffff).multiplyScalar(0.04);
-    console.log(gltf);
-});
+
+    requestAnimationFrame(tick);
+})();
 
 let time = now();
 let rotation = 0;
@@ -182,5 +224,3 @@ function tick() {
 
     requestAnimationFrame(tick);
 }
-
-requestAnimationFrame(tick);

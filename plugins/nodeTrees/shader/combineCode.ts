@@ -1,7 +1,8 @@
-import { UniformsLib } from 'three';
+import { RGBAFormat, UniformsLib } from 'three';
 import { glsl } from '../../../shader/util';
 import { CompilationCache, shaderTargetInputs } from '../createCompiler';
 import { diffuseBSDF } from './diffuseBSDF';
+import { DEFAULT_PASS_TARGETS } from './blender/viewLayer';
 
 function makeF(compilationCache: CompilationCache) {
     return function f(feature: string, code: string) {
@@ -254,9 +255,30 @@ export function combineFragmentShader(
 ) {
     const f = makeF(compilationCache);
     const nF = makeNF(compilationCache);
+    const validTargets = (
+        compilationCache.shader?.rPassTargets || DEFAULT_PASS_TARGETS
+    ).filter((t) => t.internalShaderLogic !== 'Depth');
+
+    const mainOutputReference = validTargets[0].name;
+
+    const defaultTargetOutputs = validTargets
+        .map((t) => {
+            let defaultValue = t.format === RGBAFormat ? 'vec4(0.)' : '0.';
+            if (t.internalShaderLogic === 'Normal') {
+                defaultValue = 'vec4(vNormal, 1.)';
+            }
+            return `${t.name} = ${defaultValue};`;
+        })
+        .join('\n');
+
     return glsl`
-    layout(location = 0) out vec4 pc_FragColor;
-    #define gl_FragColor pc_FragColor
+    ${validTargets
+        .map(
+            (t, index) =>
+                `layout(location = ${index}) out ${t.format === RGBAFormat ? 'vec4' : 'float'} ${t.name};`
+        )
+        .join('\n')}
+    #define gl_FragColor ${mainOutputReference}
     #include <common>
     #include <packing>
     #include <dithering_pars_fragment>
@@ -339,6 +361,7 @@ export function combineFragmentShader(
     
 
     void main() {
+        ${defaultTargetOutputs}
         #ifdef USE_POINTS
         vec3 vNormal = vec3(0.);
         vec2 vUv = vec2(gl_PointCoord.x, gl_PointCoord.y);
@@ -354,11 +377,23 @@ export function combineFragmentShader(
         ${transpiled.join('\n')}
 
         // #include <alphatest_fragment>
-        // TODO
-        if (pc_FragColor.a < .1) {
+        // #include <alphahash_fragment>
+        #ifdef USE_ALPHAHASH
+
+        if ( ${mainOutputReference}.a < getAlphaHashThreshold( vPosition ) ) {
+            // ${mainOutputReference}.a = 1.0;
             discard;
             return;
         }
+
+        #else
+
+        if (${mainOutputReference}.a < .1) {
+            discard;
+            return;
+        }
+
+        #endif
         
         // TODO
         // #include <envmap_fragment>

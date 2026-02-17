@@ -4,7 +4,6 @@ import {
     resolveReceiveType,
 } from '@deepkit/type';
 import { FrontSide, GLSL3, InstancedMesh, ShaderMaterial } from 'three';
-import { BatchedMesh } from 'three-stdlib';
 import { UnionOrIntersectionType } from 'typescript';
 import { blenderEvents } from '../../blender/realtime';
 import {
@@ -22,9 +21,15 @@ import materialManagerPlugin, {
     MaterialManagerComponentTypes,
 } from './materialManagerPlugin';
 import { sprixlePlugin } from '../../ecs/plugin';
+import { SingletonComponent, TrackPrevious } from '../../ecs/types';
+import {
+    DEFAULT_PASS_TARGETS,
+    PassTargets,
+} from '../nodeTrees/shader/blender/viewLayer';
 
 export type ShaderTreeComponentTypes = {
-    shaderTree: NodeTree;
+    shaderTree: NodeTree & TrackPrevious;
+    rPassTargets: PassTargets & SingletonComponent;
 } & MaterialManagerComponentTypes;
 
 const dependencies = { materialManagerPlugin };
@@ -33,7 +38,7 @@ const dependencies = { materialManagerPlugin };
 /** This plugin handles compiling and applying ShaderTree format (from blender addon) */
 export default sprixlePlugin(function shaderTreePlugin<
     C extends defaultComponentTypes & ShaderTreeComponentTypes,
-    M extends ShaderTreeMethods
+    M extends ShaderTreeMethods,
 >(em: Manager<C>, methods: M, methodsType?: ReceiveType<M>) {
     methodsType = resolveReceiveType(methodsType);
 
@@ -176,7 +181,13 @@ export default sprixlePlugin(function shaderTreePlugin<
                 shaderTree
             );
 
-            const compiledShaderTree = compileShaderTree(shaderTree);
+            const rPassTargets =
+                em.getSingletonEntityComponent('rPassTargets') ||
+                DEFAULT_PASS_TARGETS;
+
+            const compiledShaderTree = compileShaderTree(shaderTree, {
+                rPassTargets,
+            });
 
             logShader(materialName, compiledShaderTree);
             if (compiledShaderTree.depthTranspiled) {
@@ -244,5 +255,4 @@ export default sprixlePlugin(function shaderTreePlugin<
     }
 
     return shaderTreeSystem;
-},
-dependencies);
+}, dependencies);

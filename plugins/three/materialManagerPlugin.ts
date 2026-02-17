@@ -12,6 +12,7 @@ import {
     Object3D,
     Points,
     Texture,
+    UniformsUtils,
 } from 'three';
 import { ShaderPass } from 'three-stdlib';
 import uuid from 'uuid-random';
@@ -186,7 +187,10 @@ export default sprixlePlugin(function materialManagerPlugin<
                     if (object) {
                         reuseMaterial(object);
                         if (object instanceof ShaderPass) {
-                            object.uniforms = object.material.uniforms;
+                            object.uniforms = object.material.uniforms = {
+                                ...object.uniforms,
+                                ...object.material.uniforms,
+                            };
                         }
                     }
                     continue;
@@ -240,7 +244,13 @@ export default sprixlePlugin(function materialManagerPlugin<
                         ) {
                             object.material = material;
                             if (object instanceof ShaderPass) {
-                                object.uniforms = object.material.uniforms;
+                                if (object instanceof ShaderPass) {
+                                    object.uniforms = object.material.uniforms =
+                                        {
+                                            ...object.uniforms,
+                                            ...object.material.uniforms,
+                                        };
+                                }
                             }
                         }
                         continue;

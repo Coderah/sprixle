@@ -68,7 +68,7 @@ export class CompositeTexture {
         this.canvasTexture.wrapS = this.canvasTexture.wrapT =
             ClampToEdgeWrapping;
         this.canvasTexture.magFilter = this.canvasTexture.minFilter =
-            NearestFilter;
+            LinearFilter;
 
         this.canvas.style.imageRendering = 'pixelated';
         this.context.imageSmoothingEnabled = false;

@@ -9,8 +9,13 @@ import {
     WebGLRendererParameters,
     WebGLRenderTarget,
 } from 'three';
-import { EffectComposer, Pass, RenderPass, ShaderPass } from 'three-stdlib';
-import { OutputPass } from 'three/examples/jsm/postprocessing/OutputPass';
+import {
+    EffectComposer,
+    Pass,
+    RenderPass,
+    ShaderPass,
+    TexturePass,
+} from 'three-stdlib';
 import {
     defaultComponentTypes,
     EntityWithComponents,
@@ -25,6 +30,10 @@ import {
 } from '../nodeTrees/shader/uniforms';
 import { sprixlePlugin } from '../../ecs/plugin';
 import { DepthPass } from './pass/DepthPass';
+import { ShaderTreeComponentTypes } from './shaderTreePlugin';
+import { MaterialManagerComponentTypes } from './materialManagerPlugin';
+import { PassTargets } from '../nodeTrees/shader/blender/viewLayer';
+import { OutputPass } from 'three/examples/jsm/postprocessing/OutputPass';
 
 THREE.ColorManagement.enabled = true;
 
@@ -36,6 +45,11 @@ type ExtraRendererConfigurationKeys = Pick<
         WebGLRenderer['shadowMap'],
         'enabled' | 'autoUpdate' | 'type'
     >;
+};
+
+export type ViewLayerComponents = {
+    /** Like Blender's AOV outputs & Passes to separate, this handles which outputs will be available to POST_PROCESS programs */
+    rPassTargets: PassTargets & SingletonComponent;
 };
 
 // TODO add more control over primary renderTarget
@@ -59,7 +73,7 @@ export type RenderConfigurationComponents = {
 
 export enum RenderPassPhase {
     AOV,
-    DEPTH,
+    PREPASS,
     COLOR,
     POST_PROCESS,
     /** BASIC renders skip all compositing, can be useful to render a 3D UI layer. */
@@ -76,7 +90,11 @@ export type RenderPassComponents = {
     rPassTextureUniform: THREE.Uniform<THREE.DepthTexture | null>;
     // r;
     rProgram: Pass;
+    /** which objects are included based on three.js layers */
     rLayers: THREE.Layers;
+
+    /** Determines ordering within a rPassPhase */
+    rOrder: number;
 };
 
 export type SceneComponents = {
@@ -86,7 +104,10 @@ export type SceneComponents = {
 
 export type RendererPluginComponents = RenderPassComponents &
     RenderConfigurationComponents &
-    SceneComponents;
+    ViewLayerComponents &
+    SceneComponents &
+    ShaderTreeComponentTypes &
+    MaterialManagerComponentTypes;
 
 const renderConfigurationDefaults: RenderConfigurationComponents = {
     isRendererConfiguration: true,
@@ -117,8 +138,18 @@ const defaultRenderParameters: WebGLRendererParameters = {
     premultipliedAlpha: false,
     powerPreference: 'high-performance',
     preserveDrawingBuffer: false,
-    antialias: true,
+    antialias: false,
 };
+
+const overdrawMaterial = new THREE.MeshBasicMaterial({
+    color: 0x550000,
+    transparent: true,
+    alphaHash: false,
+    // side: THREE.DoubleSide,
+    opacity: 0.25, // Low opacity for accumulation
+    blending: THREE.AdditiveBlending,
+    depthWrite: true, // Ensure layers stack
+});
 
 // TODO support editorPlugin somehow? want debug passes
 export default sprixlePlugin(function RendererPlugin<
@@ -172,23 +203,26 @@ export default sprixlePlugin(function RendererPlugin<
         rendererContext.getExtension('OES_texture_float_linear');
     const maxAnisotropy = capabilities.getMaxAnisotropy();
 
+    let multipassTarget: WebGLRenderTarget;
+
     let composer = new EffectComposer(renderer);
 
     // TODO allow disabling the basic rendering passes setup
-    em.quickEntity({
-        isRenderPass: true,
-        rPassPhase: RenderPassPhase.COLOR,
-    });
+    // em.quickEntity({
+    //     isRenderPass: true,
+    //     rPassPhase: RenderPassPhase.COLOR,
+    // });
 
-    em.quickEntity({
-        isRenderPass: true,
-        rPassPhase: RenderPassPhase.DEPTH,
-    });
+    // em.quickEntity({
+    //     isRenderPass: true,
+    //     rPassPhase: RenderPassPhase.PREPASS,
+    // });
 
     const configurationQuery = em.createQuery({
         includes: Object.keys(renderConfigurationDefaults) as any,
     });
 
+    // TODO detect rTargetPass changes and recompile shaders if necessary
     const configureRenderSystem = em.createSystem(
         configurationQuery.createConsumer(),
         {
@@ -203,6 +237,29 @@ export default sprixlePlugin(function RendererPlugin<
         }
     );
 
+    const renderTargetsQuery = em.createQuery({
+        includes: ['rPassTargets'],
+    });
+
+    const configureTargetsSystem = em.createSystem(
+        renderTargetsQuery.createConsumer(),
+        {
+            newOrUpdated(targetsEntity) {
+                reconfigureComposer(configurationEntity);
+
+                // recompile shaders.
+                if (em.plugins.has('shaderTreePlugin')) {
+                    em.getEntities('material').forEach((e) => {
+                        if (e.previousComponents.shaderTree) {
+                            e.components.shaderTree =
+                                e.previousComponents.shaderTree;
+                        }
+                    });
+                }
+            },
+        }
+    );
+
     const renderPassQuery = em.createQuery({
         includes: ['isRenderPass', 'rPassPhase'],
         index: 'rPassPhase',
@@ -211,9 +268,21 @@ export default sprixlePlugin(function RendererPlugin<
     function setupRenderPass(entity: typeof renderPassQuery.Entity) {
         const { rPassPhase, rProgram } = entity.components;
 
-        if (rProgram) return;
+        if (rPassPhase === RenderPassPhase.POST_PROCESS) {
+            rProgram.renderToScreen = false;
+            if (rProgram instanceof ShaderPass) {
+                rProgram.uniforms = rProgram.material.uniforms;
 
-        if (rPassPhase === RenderPassPhase.DEPTH) {
+                for (let i = 0; i < multipassTarget.textures.length;  i++) {
+                    const texture = multipassTarget.textures[i];
+                    rProgram.uniforms['u' + texture.name] = {value: texture};
+                }
+            }
+        }
+
+        // if (rProgram) return;
+
+        if (rPassPhase === RenderPassPhase.PREPASS) {
             entity.components.isExportedRenderPass = true;
             entity.components.rPassTextureUniform = new THREE.Uniform(null);
             entity.components.rProgram = new DepthPass(null, null);
@@ -222,22 +291,27 @@ export default sprixlePlugin(function RendererPlugin<
 
         if (rPassPhase === RenderPassPhase.COLOR) {
             // TODO properly implement depth prepass culling when applicable.
-            entity.components.rProgram = new RenderPass(null, null);
+            entity.components.rProgram = new TexturePass(
+                multipassTarget.textures[0]
+            );
             entity.components.rProgram.renderToScreen = true;
-        }
-
-        if (
-            rPassPhase === RenderPassPhase.POST_PROCESS &&
-            rProgram instanceof ShaderPass
-        ) {
-            rProgram.uniforms = rProgram.material.uniforms;
         }
     }
 
     function reconfigureComposer(entity: ConfigurationEntity) {
+        const targets = em.getSingletonEntityComponent('rPassTargets');
         const { rPixelRatio, rSize, rMSAASamples } = entity.components;
 
-        const depthPass = renderPassQuery.get(RenderPassPhase.DEPTH)?.first();
+        const depthPrepass = renderPassQuery
+            .get(RenderPassPhase.PREPASS)
+            ?.first();
+
+        const depthTarget = targets?.find(
+            (t) => t.internalShaderLogic === 'Depth'
+        );
+        const validTargets = targets?.filter(
+            (t) => t.internalShaderLogic !== 'Depth'
+        );
 
         const parameters: RenderTargetOptions = {
             minFilter: THREE.LinearFilter,
@@ -246,60 +320,77 @@ export default sprixlePlugin(function RendererPlugin<
             type: canRenderToFloatType ? THREE.FloatType : THREE.HalfFloatType,
             anisotropy: maxAnisotropy,
             depthBuffer: true,
-            // depth: 2,
-            // TODO prepass count (Blender AOV)
-            // count: 1
+            count: validTargets?.length || 1,
+            samples: rMSAASamples,
         };
 
-        if (depthPass && depthPass.components.rPassTextureUniform) {
+        // TODO differentiate between a depth pre-pass and including depth in the color renderPass.
+        if (depthPrepass || depthTarget) {
             parameters.depthTexture = new THREE.DepthTexture(
                 rSize.width,
                 rSize.height
             );
-            depthPass.components.rPassTextureUniform.value =
-                parameters.depthTexture;
+            // TODO how do shaders access the depth uniform if not prepass?
+            if (depthPrepass?.components.rPassTextureUniform) {
+                depthPrepass.components.rPassTextureUniform.value =
+                    parameters.depthTexture;
+            }
         }
 
-        // TODO we should be able to re-use and simply resize?
-        const renderTarget = new WebGLRenderTarget(
+        if (multipassTarget) {
+            multipassTarget.dispose();
+        }
+        multipassTarget = new WebGLRenderTarget(
             // TODO is pixelRatio appropriate here?
             rSize.width * rPixelRatio,
             rSize.height * rPixelRatio,
             parameters
         );
 
-        resolutionUniform.value.set(renderTarget.width, renderTarget.height);
-        renderTarget.samples = rMSAASamples;
+        if (validTargets?.length) {
+            for (let i = 0; i < validTargets.length; i++) {
+                const target = validTargets[i];
+                const texture = multipassTarget.textures[i];
+                if (!texture) continue;
 
-        // TODO if renderTarget is not getting re-used the old one should be disposed.
-        renderer.initRenderTarget(renderTarget);
+                texture.name = target.name;
+                if (texture.format) {
+                    texture.format = target.format;
+                }
+                if (target.type) {
+                    texture.type = target.type;
+                }
+            }
+        }
+        console.log('multipassRenderer', multipassTarget);
+
+        // TODO move?
+        resolutionUniform.value.set(
+            multipassTarget.width,
+            multipassTarget.height
+        );
+
+        renderer.initRenderTarget(multipassTarget);
 
         composer.renderTarget1?.dispose();
         composer.renderTarget2?.dispose();
 
-        composer = new EffectComposer(renderer, renderTarget);
+        composer = new EffectComposer(renderer);
 
-        if (depthPass) {
-            setupRenderPass(depthPass);
-            composer.addPass(depthPass.components.rProgram);
-            // depthPass.components.rProgram
+        if (depthPrepass) {
+            setupRenderPass(depthPrepass);
+            composer.addPass(depthPrepass.components.rProgram);
         }
 
-        // TODO turn into a isRenderPass entity
         const colorPass = renderPassQuery.get(RenderPassPhase.COLOR)?.first();
         if (colorPass) {
             setupRenderPass(colorPass);
             composer.addPass(colorPass.components.rProgram);
         }
-        // renderPass = new RenderPass(null, null);
-        // renderPass.clearAlpha = 0;
-        // composer.addPass(renderPass);
 
-        // TODO utilize isRenderPass POST_PROCESS entities here.
-        const postProcessPasses = renderPassQuery.get(
-            RenderPassPhase.POST_PROCESS
-        );
-        // TODO enable sortOrder or some such component here when post process passes are order dependent
+        const postProcessPasses = Array.from(
+            renderPassQuery.get(RenderPassPhase.POST_PROCESS)
+        ).sort(sortPasses);
         for (let pass of postProcessPasses) {
             if (!pass.components.rProgram) continue;
             setupRenderPass(pass);
@@ -307,6 +398,8 @@ export default sprixlePlugin(function RendererPlugin<
         }
 
         composer.addPass(new OutputPass());
+
+        renderer.resetState();
     }
 
     // TODO make configurable?
@@ -331,27 +424,25 @@ export default sprixlePlugin(function RendererPlugin<
             renderer.setRenderTarget(null);
             activeCamera.layers.enableAll();
 
-            // TODO implement DEPTH and PREPASS isRenderPass entities here
-            // utilize rLayers
-            // depthComposer.render(delta);
+            // TODO implement visualization toggle, and support deferred/prepass stuff
+            // activeScene.overrideMaterial = overdrawMaterial;
+            // renderer.render(activeScene, activeCamera);
+            // return;
 
             if (renderPassQuery.size) {
                 // TODO move to an update() consumer system
                 for (let passEntity of renderPassQuery) {
                     const { rProgram } = passEntity.components;
                     if (!rProgram) continue;
-                    // if ('scene' in rProgram) {
 
                     rProgram.scene = activeScene;
                     rProgram.camera = activeCamera;
-                    // }
-                    // TODO move this to materialManagerPlugin?
-                    if (rProgram instanceof ShaderPass) {
-                        if (passEntity.components.material) {
-                            rProgram.material = passEntity.components.material;
-                        }
-                    }
                 }
+
+                renderer.setRenderTarget(multipassTarget);
+                renderer.render(activeScene, activeCamera);
+                renderer.setRenderTarget(null);
+
                 composer.render(delta);
             } else {
                 renderer.render(activeScene, activeCamera);
@@ -367,9 +458,14 @@ export default sprixlePlugin(function RendererPlugin<
         em,
         // renderPassSetupSystem,
         configureRenderSystem,
+        configureTargetsSystem,
         actualRenderSystem
     );
     rendererPipeline.tag = 'rendererPipeline';
+
+    function sortPasses(a: typeof em.Entity, b: typeof em.Entity) {
+        return (a.components.rOrder || 0) > (b.components.rOrder || 0) ? 1 : -1;
+    }
 
     return {
         renderer,

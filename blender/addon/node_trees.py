@@ -314,6 +314,8 @@ def serialize(target):
             node_data['inputs'][name] = value
             
         for output in node.outputs:
+            if output.is_unavailable: continue
+            
             name = output.name
             value = None
 

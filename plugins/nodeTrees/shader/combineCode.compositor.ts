@@ -1,7 +1,7 @@
 import { UniformsLib } from 'three';
 import { glsl } from '../../../shader/util';
 import { CompilationCache, shaderTargetInputs } from '../createCompiler';
-import { diffuseBSDF } from './diffuseBSDF';
+import { DEFAULT_PASS_TARGETS } from './blender/viewLayer';
 
 function makeF(compilationCache: CompilationCache) {
     return function f(feature: string, code: string) {
@@ -61,32 +61,36 @@ export function combineCompositorFragmentShader(
     transpiled: string[],
     compilationCache: CompilationCache
 ) {
+    const validTargets = (
+        compilationCache.shader?.rPassTargets || DEFAULT_PASS_TARGETS
+    ).filter((t) => t.internalShaderLogic !== 'Depth');
+
     return glsl`
-    layout(location = 0) out vec4 pc_FragColor;
-    uniform sampler2D tDiffuse;
-    uniform float opacity;
-    
-    varying vec2 vUv;  
+        layout(location = 0) out vec4 ${validTargets[0].name};
+        ${validTargets.map((t) => `uniform sampler2D u${t.name};`).join('\n')}
+        uniform float opacity;
+        
+        varying vec2 vUv;  
 
-    ${Array.from(compilationCache.shader.fragmentIncludes)
-        .filter((a) => a.trimStart().startsWith('struct'))
-        .join('\n')}
+        ${Array.from(compilationCache.shader.fragmentIncludes)
+            .filter((a) => a.trimStart().startsWith('struct'))
+            .join('\n')}
 
-    ${Array.from(compilationCache.shader.fragmentFunctionStubs).join('\n')}
+        ${Array.from(compilationCache.shader.fragmentFunctionStubs).join('\n')}
 
-    ${Array.from(compilationCache.shader.fragmentIncludes)
-        .filter((a) => !a.trimStart().startsWith('struct'))
-        .join('\n')}
+        ${Array.from(compilationCache.shader.fragmentIncludes)
+            .filter((a) => !a.trimStart().startsWith('struct'))
+            .join('\n')}
 
-    void main() {
+        void main() {
 
-        ${Object.values(
-            compilationCache.compiledInputs.compiled[
-                shaderTargetInputs.Fragment
-            ]
-        ).join('\n')}
-        ${transpiled.join('\n')}
+            ${Object.values(
+                compilationCache.compiledInputs.compiled[
+                    shaderTargetInputs.Fragment
+                ]
+            ).join('\n')}
+            ${transpiled.join('\n')}
 
-    }
+        }
     `;
 }

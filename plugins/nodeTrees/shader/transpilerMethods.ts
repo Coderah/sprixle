@@ -5,7 +5,7 @@ import {
     Node,
     shaderTargetInputs,
 } from '../createCompiler';
-import GLSL from './GLSL';
+import GLSL, { convertVecSize, getGLSLType } from './GLSL';
 import { ColorStop, createColorRampLUT, InterpolationType } from './colorRamp';
 import { addDiffuseBSDF } from './diffuseBSDF';
 import shaderIncludes from './includes';
@@ -14,7 +14,9 @@ import {
     LinearFilter,
     LinearMipMapLinearFilter,
     NearestFilter,
+    RedFormat,
     RepeatWrapping,
+    RGBAFormat,
     SRGBColorSpace,
     Texture,
     TextureLoader,
@@ -42,6 +44,7 @@ import {
 } from './uniforms';
 import { filterGLSL, KernelType } from './blender/kernelFilters';
 import gpu_shader_common_color_utils from './blender/gpu_shader_common_color_utils';
+import { typeOf } from '@deepkit/type';
 
 const mathOperationSymbols = {
     MULTIPLY: '*',
@@ -98,6 +101,7 @@ const mixFunctions = {
         VALUE: 'mix_val',
         COLOR_DODGE: 'mix_dodge',
         COLOR_BURN: 'mix_burn',
+        MULTIPLY: 'mix_mult',
     },
 };
 
@@ -213,7 +217,9 @@ export const transpilerMethods = {
 
         // TODO encode sampler into Image/Color types to be carried
         // and add GLSL['sampler2D'] as a type that can reach for sampler vs sampled image data
-        return [`${filterFnReference}(tDiffuse, ${Factor}, vUv)`];
+        const textureReference =
+            'u' + compilationCache.shader.rPassTargets[0].name;
+        return [`${filterFnReference}(${textureReference}, ${Factor}, vUv)`];
     },
     // TODO figure out how to respect passthrough type here
     SWITCH(
@@ -229,6 +235,10 @@ export const transpilerMethods = {
 
         return [`(${Switch}) ? ${On} : ${Off}`];
     },
+    // TODO
+    // MENU_SWITCH(Menu: string, data_type: 'FLOAT', '', ...args: string[]):  {
+
+    // }
     /* {
     "id": "White Noise Texture",
     "type": "TEX_WHITE_NOISE",
@@ -522,6 +532,7 @@ export const transpilerMethods = {
             InterpolationType[interpolation]
         );
 
+        // TODO make a nearestSample clone and use where necessary.
         const compositeTexture = getCompositeTexture(
             reference,
             257,
@@ -647,27 +658,94 @@ export const transpilerMethods = {
 
             return [];
         },
-        fragment: function (Surface: GLSL['vec4']) {
-            return [`pc_FragColor = ${Surface}`];
+        fragment: function (
+            Surface: GLSL['vec4'],
+            compilationCache: CompilationCache
+        ) {
+            return [
+                `${compilationCache.shader.rPassTargets[0].name} = ${Surface}`,
+            ];
         },
     },
     // Render Layers node for compositor input
-    R_LAYERS(
+    R_LAYERS: function (
         compilationCache: CompilationCache,
-        ...args: Array<GLSL['vec3'] | GLSL['vec4']>
-    ): GLSL<{
-        Image: GLSL['vec4'];
-        Alpha: GLSL['float'];
-    }> {
-        compilationCache.uniforms.tDiffuse = { value: null };
+        node: Node
+    ): GLSL<'infer'> {
+        const imageSampleReference =
+            compilationCache.shader.rPassTargets[0].name + 'Sample';
+        //`vec4 tDiffuseSample = texture2D(${textureReference}, vUv);`,
+        // convertVecSize()
+        // getGLSLType(output.type !== 'linked' ? output.type : output.intended_type)
+        const sampleCalls = compilationCache.shader.rPassTargets.map(
+            (target, index) => {
+                const output =
+                    node.outputs[index === 0 ? 'Image' : target.name];
+                if (!output) return '';
+
+                const type = getGLSLType(
+                    output.type !== 'linked'
+                        ? output.type
+                        : output.intended_type
+                );
+                //@ts-ignore
+                const typeLiteral = type.indexAccessOrigin.index.literal;
+                // const type = 'vec4';
+
+                const convertedReference =
+                    target.format === RedFormat
+                        ? `texture2D(u${target.name}, vUv).r`
+                        : convertVecSize(
+                              `texture2D(u${target.name}, vUv)`,
+                              typeOf<GLSL['vec4']>(),
+                              type
+                          );
+
+                return `${typeLiteral} ${target.name}Sample = ${convertedReference};`;
+            }
+        );
         return [
-            `vec4 tDiffuseSample = texture2D(tDiffuse, vUv);`,
-            `tDiffuseSample, tDiffuseSample.a`,
+            ...sampleCalls,
+            Object.entries(node.outputs)
+                .map(([name, output]) => {
+                    // if (output.)
+                    if (name === 'Image') {
+                        return imageSampleReference;
+                    } else if (name === 'Alpha') {
+                        return `${imageSampleReference}.a`;
+                    } else if (name === 'Depth') {
+                        return 'depthSample';
+                    }
+                    return name + 'Sample';
+                })
+                .join(','),
+            // `${imageSampleReference}, ${imageSampleReference}.a`,
         ] as any;
     },
 
+    OUTPUT_AOV: function (
+        Color: GLSL['vec4'],
+        Value: GLSL['float'],
+        aov_name: string,
+        compilationCache: CompilationCache
+    ) {
+        const target = compilationCache.shader.rPassTargets.find(
+            (t) => t.name === aov_name.replace(/\"/g, '')
+        );
+
+        // TODO handle Value based on target type
+        if (target) {
+            return [
+                `${target.name} = ${target.format === RGBAFormat ? Color : Value}`,
+            ];
+        }
+
+        return [``];
+    },
+
     CompositorNodeImageCoordinates(
-        Image: GLSL['vec4']
+        Image: GLSL['vec4'],
+        compilationCache: CompilationCache
     ): GLSL<{ Normalized: GLSL['vec2']; Uniform: GLSL['vec2'] }> {
         // const float2 centered_coordinates = (float2(texel) + 0.5f) - float2(size) / 2.0f;
 
@@ -675,8 +753,10 @@ export const transpilerMethods = {
         // const float2 normalized_coordinates = (centered_coordinates / max_size) * 2.0f;
 
         // TODO support picking up texture reference from Image input instead of hard coding Image
+        const textureReference =
+            'u' + compilationCache.shader.rPassTargets[0].name;
         return [
-            `vec2 size = vec2(textureSize(tDiffuse, 0));`,
+            `vec2 size = vec2(textureSize(${textureReference}, 0));`,
             `vec2 centered_coordinates = (vUv - .5) * size / 2.;`,
             `float aspectRatio = size.x / size.y;
             float max_size = max(size.x, size.y);
@@ -685,11 +765,16 @@ export const transpilerMethods = {
             `vUv, (centered_coordinates / max_size) * 2.0`,
         ] as any;
     },
-    CompositorNodeImageInfo(Image: GLSL['vec4']): GLSL<{
+    CompositorNodeImageInfo(
+        Image: GLSL['vec4'],
+        compilationCache: CompilationCache
+    ): GLSL<{
         Dimensions: GLSL['vec2'];
     }> {
         // TODO extract texture reference from Image
-        return [`vec2(textureSize(tDiffuse, 0))`] as any;
+        const textureReference =
+            'u' + compilationCache.shader.rPassTargets[0].name;
+        return [`vec2(textureSize(${textureReference}, 0))`] as any;
     },
     GROUP_OUTPUT(
         compilationCache: CompilationCache,
@@ -697,7 +782,9 @@ export const transpilerMethods = {
         ...args: any[]
     ) {
         if (compilationCache.treeType === 'composition') {
-            return [`pc_FragColor = ${Image}`];
+            return [
+                `${compilationCache.shader.rPassTargets[0].name} = ${Image}`,
+            ];
         }
         // if (Image) args.unshift(Image);
         return [`return $structReference(${args.join(', ')})`];
@@ -1025,6 +1112,18 @@ export const transpilerMethods = {
         if (use_clamp) result = `clamp(${result}, 0., 1.)`;
 
         return [result];
+    },
+    SETALPHA(
+        Image: GLSL['vec4'],
+        Alpha: GLSL['float'],
+        Type: '"Apply Mask"' | '"Replace Alpha"'
+    ): GLSL['vec4'] {
+        switch (Type) {
+            case '"Apply Mask"':
+                return [`${Image} * ${Alpha}`];
+            case '"Replace Alpha"':
+                return [`vec4(${Image}.rgb, ${Alpha})`];
+        }
     },
 
     DISPLACEMENT(

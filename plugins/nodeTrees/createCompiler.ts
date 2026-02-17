@@ -1,5 +1,4 @@
 import {
-    getAnnotationMeta,
     metaAnnotation,
     ReflectionClass,
     ReflectionKind,
@@ -28,11 +27,16 @@ import { BatchedMesh } from 'three-stdlib';
 import { TypeParameter, UnionOrIntersectionType } from 'typescript';
 import { uniformTime } from '../../render/const';
 import { glsl } from '../../shader/util';
+import { DEFAULT_PASS_TARGETS, PassTargets } from './shader/blender/viewLayer';
 import { ColorStop } from './shader/colorRamp';
 import {
     combineFragmentShader,
     combineVertexShader,
 } from './shader/combineCode';
+import {
+    combineCompositorFragmentShader,
+    combineCompositorVertexShader,
+} from './shader/combineCode.compositor';
 import {
     combineDepthFragmentShader,
     combineDepthVertexShader,
@@ -52,10 +56,6 @@ import {
     getReturnType,
     getStructReference,
 } from './util';
-import {
-    combineCompositorFragmentShader,
-    combineCompositorVertexShader,
-} from './shader/combineCode.compositor';
 
 export interface CompilationCache {
     treeType: NodeTree['$treeType'];
@@ -70,6 +70,7 @@ export interface CompilationCache {
     shader?: {
         vertex: string[];
         displace: string[];
+        rPassTargets: PassTargets;
         vertexIncludes: Set<string>;
         vertexFunctionStubs: Set<string>;
         fragmentIncludes: Set<string>;
@@ -1567,6 +1568,11 @@ export function createNodeTreeCompiler<M extends LogicTreeMethods>(
 
     function compileNodeTree(
         nodeTree: NodeTree,
+        options: {
+            rPassTargets: PassTargets;
+        } = {
+            rPassTargets: DEFAULT_PASS_TARGETS,
+        },
         internal: boolean | 'depth' = false,
         currentTarget = parameters.type === 'LogicTree'
             ? 0
@@ -1591,6 +1597,7 @@ export function createNodeTreeCompiler<M extends LogicTreeMethods>(
                 return (
                     n.type === 'OUTPUT_MATERIAL' ||
                     n.type === 'GROUP_OUTPUT' ||
+                    n.type === 'OUTPUT_AOV' ||
                     n.name === 'Set Depth'
                 );
             }
@@ -1646,6 +1653,8 @@ export function createNodeTreeCompiler<M extends LogicTreeMethods>(
                 currentVectorSpace:
                     parentCompilationCache?.shader.currentVectorSpace ||
                     'PRESERVE',
+
+                rPassTargets: options.rPassTargets,
 
                 vertex: [],
                 displace: [],
@@ -1754,6 +1763,7 @@ ${transpiled.join('\n')}`;
                 transparent: !!Object.values(nodeTree).find(
                     (n) => n.type === 'BSDF_TRANSPARENT'
                 ),
+                alphaHash: true,
             };
 
             if (configurationNode) {

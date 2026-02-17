@@ -1,4 +1,4 @@
-{"hash": "4817fef486de5c5c701dbd76988c3008",
+{"hash": "dfbff8fbe302ec9b74b6bc80d73d026c",
   "$treeType": "material",
   "$internalTrees": {},
   "Material Output": {
@@ -10,8 +10,8 @@
         "type": "linked",
         "links": [
           {
-            "node": "Mix",
-            "socket": "Output"
+            "node": "Diffuse BSDF",
+            "socket": "BSDF"
           }
         ],
         "intended_type": "SHADER",
@@ -51,14 +51,20 @@
     "name": "BSDF_DIFFUSE",
     "inputs": {
       "Color": {
-        "value": [
+        "type": "linked",
+        "links": [
+          {
+            "node": "Voronoi Texture",
+            "socket": "Color"
+          }
+        ],
+        "intended_type": "RGBA",
+        "default_value": [
           1.0,
           1.0,
           1.0,
           1.0
-        ],
-        "type": "RGBA",
-        "input_hidden": false
+        ]
       },
       "Roughness": {
         "value": 1.0,
@@ -83,6 +89,10 @@
           {
             "node": "Shader to RGB",
             "socket": "Shader"
+          },
+          {
+            "node": "Material Output",
+            "socket": "Surface"
           }
         ],
         "intended_type": "SHADER",
@@ -91,32 +101,6 @@
     },
     "properties": {
       "vector_space": "PRESERVE"
-    }
-  },
-  "AOV Output": {
-    "id": "AOV Output",
-    "type": "OUTPUT_AOV",
-    "name": "OUTPUT_AOV",
-    "inputs": {
-      "Color": {
-        "value": [
-          0.0,
-          0.0,
-          0.0,
-          1.0
-        ],
-        "type": "RGBA",
-        "input_hidden": false
-      },
-      "Value": {
-        "value": 0.0,
-        "type": "VALUE",
-        "input_hidden": false
-      }
-    },
-    "outputs": {},
-    "properties": {
-      "aov_name": "Test"
     }
   },
   "Shader to RGB": {
@@ -179,13 +163,27 @@
         "vector_space": "OBJECT_NORMAL"
       },
       "UV": {
-        "value": null,
-        "type": "VECTOR3",
+        "type": "linked",
+        "links": [
+          {
+            "node": "Vector Math.001",
+            "socket": "Vector"
+          }
+        ],
+        "intended_type": "VECTOR3",
+        "default_value": null,
         "vector_space": "UV"
       },
       "Object": {
-        "value": null,
-        "type": "VECTOR3",
+        "type": "linked",
+        "links": [
+          {
+            "node": "Voronoi Texture",
+            "socket": "Vector"
+          }
+        ],
+        "intended_type": "VECTOR3",
+        "default_value": null,
         "vector_space": "OBJECT"
       },
       "Camera": {
@@ -199,8 +197,15 @@
         "vector_space": "SCREEN"
       },
       "Reflection": {
-        "value": null,
-        "type": "VECTOR3",
+        "type": "linked",
+        "links": [
+          {
+            "node": "AOV Output",
+            "socket": "Color"
+          }
+        ],
+        "intended_type": "VECTOR3",
+        "default_value": null,
         "vector_space": "WORLD_REFLECTION"
       }
     },
@@ -275,6 +280,10 @@
           {
             "node": "Mix",
             "socket": "Input"
+          },
+          {
+            "node": "AOV Output.001",
+            "socket": "Value"
           }
         ],
         "intended_type": "VALUE",
@@ -374,23 +383,8 @@
     },
     "outputs": {
       "Result": {
-        "value": [
-          0.0,
-          0.0,
-          0.0
-        ],
-        "type": "ROTATION"
-      },
-      "Output": {
-        "type": "linked",
-        "links": [
-          {
-            "node": "Material Output",
-            "socket": "Surface"
-          }
-        ],
-        "intended_type": "RGBA",
-        "default_value": null
+        "value": null,
+        "type": "RGBA"
       }
     },
     "properties": {
@@ -398,8 +392,420 @@
       "factor_mode": "UNIFORM",
       "blend_type": "ADD",
       "clamp_factor": true,
-      "clamp_result": false,
+      "clamp_result": false
+    }
+  },
+  "Voronoi Texture": {
+    "id": "Voronoi Texture",
+    "type": "TEX_VORONOI",
+    "name": "TEX_VORONOI",
+    "inputs": {
+      "Vector": {
+        "type": "linked",
+        "links": [
+          {
+            "node": "Texture Coordinate",
+            "socket": "Object"
+          }
+        ],
+        "intended_type": "VECTOR3",
+        "default_value": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "incoming_vector_space": "OBJECT",
+        "vector_space": "PRESERVE"
+      },
+      "Scale": {
+        "value": 4.4,
+        "type": "VALUE",
+        "input_hidden": false
+      },
+      "Detail": {
+        "value": 0.0,
+        "type": "VALUE",
+        "input_hidden": false
+      },
+      "Roughness": {
+        "value": 0.822785,
+        "type": "VALUE",
+        "input_hidden": false
+      },
+      "Lacunarity": {
+        "value": 2.0,
+        "type": "VALUE",
+        "input_hidden": false
+      },
+      "Randomness": {
+        "value": 1.0,
+        "type": "VALUE",
+        "input_hidden": false
+      }
+    },
+    "outputs": {
+      "Distance": {
+        "value": 0.0,
+        "type": "VALUE"
+      },
+      "Color": {
+        "type": "linked",
+        "links": [
+          {
+            "node": "Diffuse BSDF",
+            "socket": "Color"
+          }
+        ],
+        "intended_type": "RGBA",
+        "default_value": null
+      },
+      "Position": {
+        "value": null,
+        "type": "VECTOR3",
+        "vector_space": "OBJECT"
+      }
+    },
+    "properties": {
+      "voronoi_dimensions": "3D",
+      "distance": "EUCLIDEAN",
+      "feature": "F1",
+      "normalize": false,
+      "vector_space": "OBJECT"
+    }
+  },
+  "Object Info": {
+    "id": "Object Info",
+    "type": "OBJECT_INFO",
+    "name": "OBJECT_INFO",
+    "inputs": {},
+    "outputs": {
+      "Location": {
+        "type": "linked",
+        "links": [
+          {
+            "node": "Vector Math.001",
+            "socket": "Vector"
+          }
+        ],
+        "intended_type": "VECTOR3",
+        "default_value": null,
+        "vector_space": "PRESERVE"
+      },
+      "Color": {
+        "value": null,
+        "type": "RGBA"
+      },
+      "Alpha": {
+        "value": 0.0,
+        "type": "VALUE"
+      },
+      "Object Index": {
+        "value": 0.0,
+        "type": "VALUE"
+      },
+      "Material Index": {
+        "value": 0.0,
+        "type": "VALUE"
+      },
+      "Random": {
+        "value": 0.0,
+        "type": "VALUE"
+      }
+    },
+    "properties": {
       "vector_space": "PRESERVE"
+    }
+  },
+  "Vector Math.001": {
+    "id": "Vector Math.001",
+    "type": "VECT_MATH",
+    "name": "VECT_MATH",
+    "inputs": {
+      "Vector": [
+        {
+          "type": "linked",
+          "links": [
+            {
+              "node": "Object Info",
+              "socket": "Location"
+            }
+          ],
+          "intended_type": "VECTOR3",
+          "default_value": [
+            0.0,
+            0.0,
+            0.0
+          ],
+          "incoming_vector_space": "PRESERVE",
+          "vector_space": "PRESERVE"
+        },
+        {
+          "type": "linked",
+          "links": [
+            {
+              "node": "Texture Coordinate",
+              "socket": "UV"
+            }
+          ],
+          "intended_type": "VECTOR3",
+          "default_value": [
+            0.0,
+            0.0,
+            0.0
+          ],
+          "incoming_vector_space": "UV",
+          "vector_space": "PRESERVE"
+        }
+      ]
+    },
+    "outputs": {
+      "Vector": {
+        "type": "linked",
+        "links": [
+          {
+            "node": "Reroute",
+            "socket": "Input"
+          }
+        ],
+        "intended_type": "VECTOR3",
+        "default_value": null,
+        "vector_space": "PRESERVE"
+      }
+    },
+    "properties": {
+      "operation": "ADD",
+      "vector_space": "PRESERVE"
+    }
+  },
+  "Voronoi Texture.001": {
+    "id": "Voronoi Texture.001",
+    "type": "TEX_VORONOI",
+    "name": "TEX_VORONOI",
+    "inputs": {
+      "Vector": {
+        "type": "linked",
+        "links": [
+          {
+            "node": "Reroute",
+            "socket": "Output"
+          }
+        ],
+        "intended_type": "VECTOR3",
+        "default_value": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "incoming_vector_space": "PRESERVE",
+        "vector_space": "PRESERVE"
+      },
+      "Scale": {
+        "value": 19.299999,
+        "type": "VALUE",
+        "input_hidden": false
+      },
+      "Detail": {
+        "value": 6.0,
+        "type": "VALUE",
+        "input_hidden": false
+      },
+      "Roughness": {
+        "value": 0.168776,
+        "type": "VALUE",
+        "input_hidden": false
+      },
+      "Lacunarity": {
+        "value": 2.0,
+        "type": "VALUE",
+        "input_hidden": false
+      },
+      "Randomness": {
+        "value": 1.0,
+        "type": "VALUE",
+        "input_hidden": false
+      }
+    },
+    "outputs": {
+      "Distance": {
+        "type": "linked",
+        "links": [
+          {
+            "node": "Diffuse BSDF.001",
+            "socket": "Color"
+          }
+        ],
+        "intended_type": "VALUE",
+        "default_value": 0.0
+      },
+      "Color": {
+        "value": null,
+        "type": "RGBA"
+      },
+      "Position": {
+        "value": null,
+        "type": "VECTOR3",
+        "vector_space": "OBJECT"
+      }
+    },
+    "properties": {
+      "voronoi_dimensions": "3D",
+      "distance": "EUCLIDEAN",
+      "feature": "F1",
+      "normalize": false,
+      "vector_space": "OBJECT"
+    }
+  },
+  "Diffuse BSDF.001": {
+    "id": "Diffuse BSDF.001",
+    "type": "BSDF_DIFFUSE",
+    "name": "BSDF_DIFFUSE",
+    "inputs": {
+      "Color": {
+        "type": "linked",
+        "links": [
+          {
+            "node": "Voronoi Texture.001",
+            "socket": "Distance"
+          }
+        ],
+        "intended_type": "RGBA",
+        "default_value": [
+          1.0,
+          1.0,
+          1.0,
+          1.0
+        ]
+      },
+      "Roughness": {
+        "value": 1.0,
+        "type": "VALUE",
+        "input_hidden": false
+      },
+      "Normal": {
+        "value": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "type": "VECTOR3",
+        "input_hidden": true,
+        "vector_space": "PRESERVE"
+      }
+    },
+    "outputs": {
+      "BSDF": {
+        "value": null,
+        "type": "SHADER"
+      }
+    },
+    "properties": {
+      "vector_space": "PRESERVE"
+    }
+  },
+  "Reroute": {
+    "id": "Reroute",
+    "type": "REROUTE",
+    "name": "REROUTE",
+    "inputs": {
+      "Input": {
+        "type": "linked",
+        "links": [
+          {
+            "node": "Vector Math.001",
+            "socket": "Vector"
+          }
+        ],
+        "intended_type": "VECTOR3",
+        "default_value": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "incoming_vector_space": "PRESERVE",
+        "vector_space": "PRESERVE"
+      }
+    },
+    "outputs": {
+      "Output": {
+        "type": "linked",
+        "links": [
+          {
+            "node": "Voronoi Texture.001",
+            "socket": "Vector"
+          }
+        ],
+        "intended_type": "VECTOR3",
+        "default_value": null,
+        "vector_space": "PRESERVE"
+      }
+    },
+    "properties": {
+      "socket_idname": "NodeSocketVector",
+      "vector_space": "PRESERVE"
+    }
+  },
+  "AOV Output": {
+    "id": "AOV Output",
+    "type": "OUTPUT_AOV",
+    "name": "OUTPUT_AOV",
+    "inputs": {
+      "Color": {
+        "type": "linked",
+        "links": [
+          {
+            "node": "Texture Coordinate",
+            "socket": "Reflection"
+          }
+        ],
+        "intended_type": "RGBA",
+        "default_value": [
+          0.0,
+          0.0,
+          0.0,
+          1.0
+        ]
+      },
+      "Value": {
+        "value": 0.0,
+        "type": "VALUE",
+        "input_hidden": false
+      }
+    },
+    "outputs": {},
+    "properties": {
+      "aov_name": "Test"
+    }
+  },
+  "AOV Output.001": {
+    "id": "AOV Output.001",
+    "type": "OUTPUT_AOV",
+    "name": "OUTPUT_AOV",
+    "inputs": {
+      "Color": {
+        "value": [
+          0.0,
+          0.0,
+          0.0,
+          1.0
+        ],
+        "type": "RGBA",
+        "input_hidden": false
+      },
+      "Value": {
+        "type": "linked",
+        "links": [
+          {
+            "node": "Layer Weight",
+            "socket": "Fresnel"
+          }
+        ],
+        "intended_type": "VALUE",
+        "default_value": 0.0
+      }
+    },
+    "outputs": {},
+    "properties": {
+      "aov_name": "testValue"
     }
   }
 }

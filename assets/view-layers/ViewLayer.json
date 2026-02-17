@@ -8,10 +8,15 @@
       "name": "Test",
       "is_valid": true,
       "type": "COLOR"
+    },
+    {
+      "name": "testValue",
+      "is_valid": true,
+      "type": "VALUE"
     }
   ],
-  "active_aov": "Test",
-  "active_aov_index": 0,
+  "active_aov": "testValue",
+  "active_aov_index": 1,
   "lightgroups": [],
   "active_lightgroup_index": -1,
   "use_pass_cryptomatte_object": false,
@@ -27,10 +32,10 @@
   "use_motion_blur": false,
   "use_grease_pencil": false,
   "use_pass_combined": true,
-  "use_pass_z": true,
+  "use_pass_z": false,
   "use_pass_vector": false,
   "use_pass_position": false,
-  "use_pass_normal": false,
+  "use_pass_normal": true,
   "use_pass_uv": false,
   "use_pass_mist": false,
   "use_pass_object_index": false,

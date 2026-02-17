@@ -4,9 +4,10 @@ import { defaultComponentTypes, Manager } from '../ecs/manager';
 import { Query } from '../ecs/query';
 import { AnySystem, Pipeline } from '../ecs/system';
 import { interval } from '../util/timing';
+import { now } from '../util/now';
 
 export function applyEditorUIPlugin<
-    ComponentTypes extends defaultComponentTypes
+    ComponentTypes extends defaultComponentTypes,
 >(manager: Manager<ComponentTypes>) {
     const primaryPane = new Pane({
         title: 'Sprixle',
@@ -36,6 +37,7 @@ export function applyEditorUIPlugin<
                     expanded: true,
                 }));
 
+            const frameTimes: number[] = [];
             const state = { delta: 0 };
 
             const rawBlade = folder.addBinding(state, 'delta', {
@@ -51,14 +53,29 @@ export function applyEditorUIPlugin<
                 view: 'graph',
                 label: displayFPS ? 'FPS' : 'delta',
                 rows: 2,
-                interval: 60,
+                interval: 30,
                 max: 360,
             });
 
             const binding = (bindings['delta'] = {
                 system: manager.createSystem({
                     tick(delta) {
-                        state.delta = displayFPS ? 1000 / delta : delta;
+                        frameTimes.push(now());
+
+                        // Remove old frames outside the window
+                        if (frameTimes.length > 30) {
+                            frameTimes.shift();
+                        }
+
+                        if (frameTimes.length < 2) return 0;
+
+                        // Average time between frames in milliseconds
+                        const elapsed =
+                            frameTimes[frameTimes.length - 1] - frameTimes[0];
+                        const avgFrameTime = elapsed / (frameTimes.length - 1);
+
+                        // Convert to FPS
+                        state.delta = Math.round(1000 / avgFrameTime);
                     },
                 }),
                 blades: { delta: blade },

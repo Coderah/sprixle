@@ -1654,7 +1654,9 @@ export function createNodeTreeCompiler<M extends LogicTreeMethods>(
                     parentCompilationCache?.shader.currentVectorSpace ||
                     'PRESERVE',
 
-                rPassTargets: options.rPassTargets,
+                rPassTargets:
+                    options?.rPassTargets ||
+                    parentCompilationCache.shader.rPassTargets,
 
                 vertex: [],
                 displace: [],

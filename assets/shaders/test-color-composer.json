@@ -1,3521 +1,6 @@
-{"hash": "0773a8035ea9e7e8a63086d59fb4a970",
+{"hash": "4ea78b94bbc931f5e5ddc87e4a38ffa8",
   "$treeType": "composition",
-  "$internalTrees": {
-    "Sensor Noise": {
-      "$treeType": "composition",
-      "Group Output": {
-        "id": "Group Output",
-        "type": "GROUP_OUTPUT",
-        "name": "GROUP_OUTPUT",
-        "inputs": {
-          "Image": {
-            "type": "linked",
-            "links": [
-              {
-                "node": "Combine Color",
-                "socket": "Image"
-              }
-            ],
-            "intended_type": "RGBA",
-            "default_value": [
-              0.800000011920929,
-              0.800000011920929,
-              0.800000011920929,
-              1.0
-            ]
-          },
-          "": {
-            "value": null,
-            "type": "CUSTOM",
-            "input_hidden": false
-          }
-        },
-        "outputs": {},
-        "properties": {
-          "is_active_output": true
-        }
-      },
-      "Group Input": {
-        "id": "Group Input",
-        "type": "GROUP_INPUT",
-        "name": "GROUP_INPUT",
-        "inputs": {},
-        "outputs": {
-          "Image": {
-            "type": "linked",
-            "links": [
-              {
-                "node": "Image Coordinates",
-                "socket": "Image"
-              },
-              {
-                "node": "Separate Color",
-                "socket": "Image"
-              }
-            ],
-            "intended_type": "RGBA",
-            "default_value": null
-          },
-          "Luminance Noise": {
-            "type": "linked",
-            "links": [
-              {
-                "node": "Mix",
-                "socket": "Factor"
-              }
-            ],
-            "intended_type": "VALUE",
-            "default_value": 0.5
-          },
-          "Chroma Noise": {
-            "type": "linked",
-            "links": [
-              {
-                "node": "Math.001",
-                "socket": "Value"
-              }
-            ],
-            "intended_type": "VALUE",
-            "default_value": 0.0
-          },
-          "Animated": {
-            "type": "linked",
-            "links": [
-              {
-                "node": "Switch",
-                "socket": "Switch"
-              }
-            ],
-            "intended_type": "BOOLEAN",
-            "default_value": false
-          },
-          "": {
-            "value": null,
-            "type": "CUSTOM"
-          }
-        },
-        "properties": {}
-      },
-      "Mix": {
-        "id": "Mix",
-        "type": "MIX",
-        "name": "MIX",
-        "inputs": {
-          "Factor": {
-            "type": "linked",
-            "links": [
-              {
-                "node": "Group Input",
-                "socket": "Luminance Noise"
-              }
-            ],
-            "intended_type": "VALUE",
-            "default_value": 0.2
-          },
-          "A": {
-            "type": "linked",
-            "links": [
-              {
-                "node": "Separate Color",
-                "socket": "Blue"
-              }
-            ],
-            "intended_type": "RGBA",
-            "default_value": [
-              0.5,
-              0.5,
-              0.5,
-              1.0
-            ]
-          },
-          "B": {
-            "type": "linked",
-            "links": [
-              {
-                "node": "White Noise Texture",
-                "socket": "Value"
-              }
-            ],
-            "intended_type": "RGBA",
-            "default_value": [
-              0.5,
-              0.5,
-              0.5,
-              1.0
-            ]
-          }
-        },
-        "outputs": {
-          "Result": {
-            "type": "linked",
-            "links": [
-              {
-                "node": "Combine Color",
-                "socket": "Blue"
-              }
-            ],
-            "intended_type": "RGBA",
-            "default_value": null
-          }
-        },
-        "properties": {
-          "data_type": "RGBA",
-          "factor_mode": "UNIFORM",
-          "blend_type": "OVERLAY",
-          "clamp_factor": true,
-          "clamp_result": false
-        }
-      },
-      "White Noise Texture": {
-        "id": "White Noise Texture",
-        "type": "TEX_WHITE_NOISE",
-        "name": "TEX_WHITE_NOISE",
-        "inputs": {
-          "Vector": {
-            "type": "linked",
-            "links": [
-              {
-                "node": "Vector Math",
-                "socket": "Vector"
-              }
-            ],
-            "intended_type": "VECTOR3",
-            "default_value": [
-              0.0,
-              0.0,
-              0.0
-            ],
-            "incoming_vector_space": "PRESERVE",
-            "vector_space": "PRESERVE"
-          }
-        },
-        "outputs": {
-          "Value": {
-            "type": "linked",
-            "links": [
-              {
-                "node": "Mix",
-                "socket": "B"
-              }
-            ],
-            "intended_type": "VALUE",
-            "default_value": 0.0
-          },
-          "Color": {
-            "type": "linked",
-            "links": [
-              {
-                "node": "Vector Math.001",
-                "socket": "Vector"
-              }
-            ],
-            "intended_type": "RGBA",
-            "default_value": null
-          }
-        },
-        "properties": {
-          "noise_dimensions": "2D",
-          "vector_space": "PRESERVE"
-        }
-      },
-      "Image Coordinates": {
-        "id": "Image Coordinates",
-        "type": "CompositorNodeImageCoordinates",
-        "name": "CompositorNodeImageCoordinates",
-        "inputs": {
-          "Image": {
-            "type": "linked",
-            "links": [
-              {
-                "node": "Group Input",
-                "socket": "Image"
-              }
-            ],
-            "intended_type": "RGBA",
-            "default_value": [
-              0.800000011920929,
-              0.800000011920929,
-              0.800000011920929,
-              1.0
-            ]
-          }
-        },
-        "outputs": {
-          "Uniform": {
-            "type": "linked",
-            "links": [
-              {
-                "node": "Vector Math",
-                "socket": "Vector"
-              }
-            ],
-            "intended_type": "VECTOR2",
-            "default_value": null,
-            "vector_space": "PRESERVE"
-          },
-          "Normalized": {
-            "value": null,
-            "type": "VECTOR2",
-            "vector_space": "PRESERVE"
-          },
-          "Pixel": {
-            "value": null,
-            "type": "VECTOR2",
-            "vector_space": "PRESERVE"
-          }
-        },
-        "properties": {
-          "vector_space": "PRESERVE"
-        }
-      },
-      "Vector Math": {
-        "id": "Vector Math",
-        "type": "VECT_MATH",
-        "name": "VECT_MATH",
-        "inputs": {
-          "Vector": [
-            {
-              "type": "linked",
-              "links": [
-                {
-                  "node": "Image Coordinates",
-                  "socket": "Uniform"
-                }
-              ],
-              "intended_type": "VECTOR3",
-              "default_value": [
-                0.0,
-                0.0,
-                0.0
-              ],
-              "incoming_vector_space": "PRESERVE",
-              "vector_space": "PRESERVE"
-            },
-            {
-              "type": "linked",
-              "links": [
-                {
-                  "node": "Combine XYZ",
-                  "socket": "Vector"
-                }
-              ],
-              "intended_type": "VECTOR3",
-              "default_value": [
-                0.0,
-                0.0,
-                0.0
-              ],
-              "incoming_vector_space": "PRESERVE",
-              "vector_space": "PRESERVE"
-            }
-          ]
-        },
-        "outputs": {
-          "Vector": {
-            "type": "linked",
-            "links": [
-              {
-                "node": "White Noise Texture",
-                "socket": "Vector"
-              }
-            ],
-            "intended_type": "VECTOR3",
-            "default_value": null,
-            "vector_space": "PRESERVE"
-          }
-        },
-        "properties": {
-          "operation": "ADD",
-          "vector_space": "PRESERVE"
-        }
-      },
-      "Combine XYZ": {
-        "id": "Combine XYZ",
-        "type": "COMBXYZ",
-        "name": "COMBXYZ",
-        "inputs": {
-          "X": {
-            "value": 0.0,
-            "type": "VALUE",
-            "input_hidden": false
-          },
-          "Y": {
-            "type": "linked",
-            "links": [
-              {
-                "node": "Switch",
-                "socket": "Image"
-              }
-            ],
-            "intended_type": "VALUE",
-            "default_value": 0.0
-          },
-          "Z": {
-            "value": 0.0,
-            "type": "VALUE",
-            "input_hidden": false
-          }
-        },
-        "outputs": {
-          "Vector": {
-            "type": "linked",
-            "links": [
-              {
-                "node": "Vector Math",
-                "socket": "Vector"
-              }
-            ],
-            "intended_type": "VECTOR3",
-            "default_value": null,
-            "vector_space": "PRESERVE"
-          }
-        },
-        "properties": {
-          "vector_space": "PRESERVE"
-        }
-      },
-      "Scene Time": {
-        "id": "Scene Time",
-        "type": "SCENE_TIME",
-        "name": "SCENE_TIME",
-        "inputs": {},
-        "outputs": {
-          "Seconds": {
-            "value": 0.0,
-            "type": "VALUE"
-          },
-          "Frame": {
-            "type": "linked",
-            "links": [
-              {
-                "node": "White Noise Texture.001",
-                "socket": "W"
-              }
-            ],
-            "intended_type": "VALUE",
-            "default_value": 0.0
-          }
-        },
-        "properties": {}
-      },
-      "Switch": {
-        "id": "Switch",
-        "type": "SWITCH",
-        "name": "SWITCH",
-        "inputs": {
-          "Switch": {
-            "type": "linked",
-            "links": [
-              {
-                "node": "Group Input",
-                "socket": "Animated"
-              }
-            ],
-            "intended_type": "BOOLEAN",
-            "default_value": false
-          },
-          "Off": {
-            "type": "linked",
-            "links": [
-              {
-                "node": "Value",
-                "socket": "Value"
-              }
-            ],
-            "intended_type": "RGBA",
-            "default_value": [
-              0.800000011920929,
-              0.800000011920929,
-              0.800000011920929,
-              1.0
-            ]
-          },
-          "On": {
-            "type": "linked",
-            "links": [
-              {
-                "node": "White Noise Texture.001",
-                "socket": "Value"
-              }
-            ],
-            "intended_type": "RGBA",
-            "default_value": [
-              0.800000011920929,
-              0.800000011920929,
-              0.800000011920929,
-              1.0
-            ]
-          }
-        },
-        "outputs": {
-          "Image": {
-            "type": "linked",
-            "links": [
-              {
-                "node": "Combine XYZ",
-                "socket": "Y"
-              }
-            ],
-            "intended_type": "RGBA",
-            "default_value": null
-          }
-        },
-        "properties": {}
-      },
-      "Value": {
-        "id": "Value",
-        "type": "VALUE",
-        "name": "VALUE",
-        "inputs": {},
-        "outputs": {
-          "Value": {
-            "type": "linked",
-            "links": [
-              {
-                "node": "Switch",
-                "socket": "Off"
-              }
-            ],
-            "intended_type": "VALUE",
-            "default_value": 0.0
-          }
-        },
-        "properties": {
-          "value": 0.0
-        }
-      },
-      "Separate Color": {
-        "id": "Separate Color",
-        "type": "SEPARATE_COLOR",
-        "name": "SEPARATE_COLOR",
-        "inputs": {
-          "Image": {
-            "type": "linked",
-            "links": [
-              {
-                "node": "Group Input",
-                "socket": "Image"
-              }
-            ],
-            "intended_type": "RGBA",
-            "default_value": [
-              1.0,
-              1.0,
-              1.0,
-              1.0
-            ]
-          }
-        },
-        "outputs": {
-          "Red": {
-            "type": "linked",
-            "links": [
-              {
-                "node": "Math",
-                "socket": "Value"
-              }
-            ],
-            "intended_type": "VALUE",
-            "default_value": 0.0
-          },
-          "Green": {
-            "type": "linked",
-            "links": [
-              {
-                "node": "Combine Color",
-                "socket": "Green"
-              }
-            ],
-            "intended_type": "VALUE",
-            "default_value": 0.0
-          },
-          "Blue": {
-            "type": "linked",
-            "links": [
-              {
-                "node": "Mix",
-                "socket": "A"
-              }
-            ],
-            "intended_type": "VALUE",
-            "default_value": 0.0
-          },
-          "Alpha": {
-            "type": "linked",
-            "links": [
-              {
-                "node": "Combine Color",
-                "socket": "Alpha"
-              }
-            ],
-            "intended_type": "VALUE",
-            "default_value": 0.0
-          }
-        },
-        "properties": {
-          "mode": "HSV",
-          "ycc_mode": "ITUBT709"
-        }
-      },
-      "Combine Color": {
-        "id": "Combine Color",
-        "type": "COMBINE_COLOR",
-        "name": "COMBINE_COLOR",
-        "inputs": {
-          "Red": {
-            "type": "linked",
-            "links": [
-              {
-                "node": "Math.002",
-                "socket": "Value"
-              }
-            ],
-            "intended_type": "VALUE",
-            "default_value": 0.0,
-            "label": "Hue"
-          },
-          "Green": {
-            "type": "linked",
-            "links": [
-              {
-                "node": "Separate Color",
-                "socket": "Green"
-              }
-            ],
-            "intended_type": "VALUE",
-            "default_value": 0.0,
-            "label": "Saturation"
-          },
-          "Blue": {
-            "type": "linked",
-            "links": [
-              {
-                "node": "Mix",
-                "socket": "Result"
-              }
-            ],
-            "intended_type": "VALUE",
-            "default_value": 0.0,
-            "label": "Value"
-          },
-          "Alpha": {
-            "type": "linked",
-            "links": [
-              {
-                "node": "Separate Color",
-                "socket": "Alpha"
-              }
-            ],
-            "intended_type": "VALUE",
-            "default_value": 1.0
-          }
-        },
-        "outputs": {
-          "Image": {
-            "type": "linked",
-            "links": [
-              {
-                "node": "Group Output",
-                "socket": "Image"
-              }
-            ],
-            "intended_type": "RGBA",
-            "default_value": null
-          }
-        },
-        "properties": {
-          "mode": "HSV",
-          "ycc_mode": "ITUBT709"
-        }
-      },
-      "Math.001": {
-        "id": "Math.001",
-        "type": "MATH",
-        "name": "MATH",
-        "inputs": {
-          "Value": [
-            {
-              "type": "linked",
-              "links": [
-                {
-                  "node": "Vector Math.001",
-                  "socket": "Vector"
-                }
-              ],
-              "intended_type": "VALUE",
-              "default_value": 0.5
-            },
-            {
-              "type": "linked",
-              "links": [
-                {
-                  "node": "Group Input",
-                  "socket": "Chroma Noise"
-                }
-              ],
-              "intended_type": "VALUE",
-              "default_value": 0.1
-            }
-          ]
-        },
-        "outputs": {
-          "Value": {
-            "type": "linked",
-            "links": [
-              {
-                "node": "Math",
-                "socket": "Value"
-              }
-            ],
-            "intended_type": "VALUE",
-            "default_value": 0.0
-          }
-        },
-        "properties": {
-          "operation": "MULTIPLY",
-          "use_clamp": false
-        }
-      },
-      "Math": {
-        "id": "Math",
-        "type": "MATH",
-        "name": "MATH",
-        "inputs": {
-          "Value": [
-            {
-              "type": "linked",
-              "links": [
-                {
-                  "node": "Separate Color",
-                  "socket": "Red"
-                }
-              ],
-              "intended_type": "VALUE",
-              "default_value": 0.5
-            },
-            {
-              "type": "linked",
-              "links": [
-                {
-                  "node": "Math.001",
-                  "socket": "Value"
-                }
-              ],
-              "intended_type": "VALUE",
-              "default_value": 0.5
-            }
-          ]
-        },
-        "outputs": {
-          "Value": {
-            "type": "linked",
-            "links": [
-              {
-                "node": "Math.002",
-                "socket": "Value"
-              }
-            ],
-            "intended_type": "VALUE",
-            "default_value": 0.0
-          }
-        },
-        "properties": {
-          "operation": "ADD",
-          "use_clamp": false
-        }
-      },
-      "Vector Math.001": {
-        "id": "Vector Math.001",
-        "type": "VECT_MATH",
-        "name": "VECT_MATH",
-        "inputs": {
-          "Vector": [
-            {
-              "type": "linked",
-              "links": [
-                {
-                  "node": "White Noise Texture",
-                  "socket": "Color"
-                }
-              ],
-              "intended_type": "VECTOR3",
-              "default_value": [
-                0.0,
-                0.0,
-                0.0
-              ],
-              "incoming_vector_space": "PRESERVE",
-              "vector_space": "PRESERVE"
-            },
-            {
-              "value": [
-                0.5,
-                0.5,
-                0.5
-              ],
-              "type": "VECTOR3",
-              "input_hidden": false,
-              "vector_space": "PRESERVE"
-            }
-          ]
-        },
-        "outputs": {
-          "Vector": {
-            "type": "linked",
-            "links": [
-              {
-                "node": "Math.001",
-                "socket": "Value"
-              }
-            ],
-            "intended_type": "VECTOR3",
-            "default_value": null,
-            "vector_space": "PRESERVE"
-          }
-        },
-        "properties": {
-          "operation": "SUBTRACT",
-          "vector_space": "PRESERVE"
-        }
-      },
-      "Math.002": {
-        "id": "Math.002",
-        "type": "MATH",
-        "name": "MATH",
-        "inputs": {
-          "Value": [
-            {
-              "type": "linked",
-              "links": [
-                {
-                  "node": "Math",
-                  "socket": "Value"
-                }
-              ],
-              "intended_type": "VALUE",
-              "default_value": 0.5
-            },
-            {
-              "value": 1.0,
-              "type": "VALUE",
-              "input_hidden": false
-            }
-          ]
-        },
-        "outputs": {
-          "Value": {
-            "type": "linked",
-            "links": [
-              {
-                "node": "Combine Color",
-                "socket": "Red"
-              }
-            ],
-            "intended_type": "VALUE",
-            "default_value": 0.0
-          }
-        },
-        "properties": {
-          "operation": "FLOORED_MODULO",
-          "use_clamp": false
-        }
-      },
-      "White Noise Texture.001": {
-        "id": "White Noise Texture.001",
-        "type": "TEX_WHITE_NOISE",
-        "name": "TEX_WHITE_NOISE",
-        "inputs": {
-          "W": {
-            "type": "linked",
-            "links": [
-              {
-                "node": "Scene Time",
-                "socket": "Frame"
-              }
-            ],
-            "intended_type": "VALUE",
-            "default_value": 0.0
-          }
-        },
-        "outputs": {
-          "Value": {
-            "type": "linked",
-            "links": [
-              {
-                "node": "Switch",
-                "socket": "On"
-              }
-            ],
-            "intended_type": "VALUE",
-            "default_value": 0.0
-          },
-          "Color": {
-            "value": null,
-            "type": "RGBA"
-          }
-        },
-        "properties": {
-          "noise_dimensions": "1D"
-        }
-      }
-    },
-    "Rounded Square Mask": {
-      "$treeType": "composition",
-      "Group Output": {
-        "id": "Group Output",
-        "type": "GROUP_OUTPUT",
-        "name": "GROUP_OUTPUT",
-        "inputs": {
-          "Mask": {
-            "type": "linked",
-            "links": [
-              {
-                "node": "Map Range.001",
-                "socket": "Result"
-              }
-            ],
-            "intended_type": "VALUE",
-            "default_value": 0.0
-          },
-          "": {
-            "value": null,
-            "type": "CUSTOM",
-            "input_hidden": false
-          }
-        },
-        "outputs": {},
-        "properties": {
-          "is_active_output": true
-        }
-      },
-      "Group Input": {
-        "id": "Group Input",
-        "type": "GROUP_INPUT",
-        "name": "GROUP_INPUT",
-        "inputs": {},
-        "outputs": {
-          "Image": {
-            "type": "linked",
-            "links": [
-              {
-                "node": "Image Coordinates",
-                "socket": "Image"
-              },
-              {
-                "node": "Image Info",
-                "socket": "Image"
-              }
-            ],
-            "intended_type": "RGBA",
-            "default_value": null
-          },
-          "Scale": {
-            "type": "linked",
-            "links": [
-              {
-                "node": "Vector Math.006",
-                "socket": "Vector"
-              }
-            ],
-            "intended_type": "VECTOR2",
-            "default_value": null,
-            "vector_space": "PRESERVE"
-          },
-          "Corner Roundness": {
-            "type": "linked",
-            "links": [
-              {
-                "node": "Reroute.001",
-                "socket": "Input"
-              }
-            ],
-            "intended_type": "VALUE",
-            "default_value": 0.0
-          },
-          "Feather": {
-            "type": "linked",
-            "links": [
-              {
-                "node": "Reroute.002",
-                "socket": "Input"
-              }
-            ],
-            "intended_type": "VALUE",
-            "default_value": 0.0
-          },
-          "Offset": {
-            "type": "linked",
-            "links": [
-              {
-                "node": "Vector Math",
-                "socket": "Vector"
-              }
-            ],
-            "intended_type": "VECTOR2",
-            "default_value": [
-              0.0,
-              0.0
-            ],
-            "vector_space": "PRESERVE"
-          },
-          "Angle": {
-            "type": "linked",
-            "links": [
-              {
-                "node": "Vector Rotate",
-                "socket": "Angle"
-              }
-            ],
-            "intended_type": "VALUE",
-            "default_value": 0.0
-          },
-          "": {
-            "value": null,
-            "type": "CUSTOM"
-          }
-        },
-        "properties": {
-          "vector_space": "PRESERVE"
-        }
-      },
-      "Image Coordinates": {
-        "id": "Image Coordinates",
-        "type": "CompositorNodeImageCoordinates",
-        "name": "CompositorNodeImageCoordinates",
-        "inputs": {
-          "Image": {
-            "type": "linked",
-            "links": [
-              {
-                "node": "Group Input",
-                "socket": "Image"
-              }
-            ],
-            "intended_type": "RGBA",
-            "default_value": [
-              0.800000011920929,
-              0.800000011920929,
-              0.800000011920929,
-              1.0
-            ]
-          }
-        },
-        "outputs": {
-          "Uniform": {
-            "type": "linked",
-            "links": [
-              {
-                "node": "Vector Math",
-                "socket": "Vector"
-              }
-            ],
-            "intended_type": "VECTOR2",
-            "default_value": null,
-            "vector_space": "PRESERVE"
-          },
-          "Normalized": {
-            "value": null,
-            "type": "VECTOR2",
-            "vector_space": "PRESERVE"
-          },
-          "Pixel": {
-            "value": null,
-            "type": "VECTOR2",
-            "vector_space": "PRESERVE"
-          }
-        },
-        "properties": {
-          "vector_space": "PRESERVE"
-        }
-      },
-      "Vector Math.001": {
-        "id": "Vector Math.001",
-        "type": "VECT_MATH",
-        "name": "VECT_MATH",
-        "inputs": {
-          "Vector": {
-            "type": "linked",
-            "links": [
-              {
-                "node": "Vector Rotate",
-                "socket": "Vector"
-              }
-            ],
-            "intended_type": "VECTOR3",
-            "default_value": [
-              0.0,
-              0.0,
-              0.0
-            ],
-            "incoming_vector_space": "PRESERVE",
-            "vector_space": "PRESERVE"
-          }
-        },
-        "outputs": {
-          "Vector": {
-            "type": "linked",
-            "links": [
-              {
-                "node": "Vector Math.002",
-                "socket": "Vector"
-              }
-            ],
-            "intended_type": "VECTOR3",
-            "default_value": null,
-            "vector_space": "PRESERVE"
-          }
-        },
-        "properties": {
-          "operation": "ABSOLUTE",
-          "vector_space": "PRESERVE"
-        }
-      },
-      "Vector Math.002": {
-        "id": "Vector Math.002",
-        "type": "VECT_MATH",
-        "name": "VECT_MATH",
-        "inputs": {
-          "Vector": [
-            {
-              "type": "linked",
-              "links": [
-                {
-                  "node": "Vector Math.001",
-                  "socket": "Vector"
-                }
-              ],
-              "intended_type": "VECTOR3",
-              "default_value": [
-                0.0,
-                0.0,
-                0.0
-              ],
-              "incoming_vector_space": "PRESERVE",
-              "vector_space": "PRESERVE"
-            },
-            {
-              "type": "linked",
-              "links": [
-                {
-                  "node": "Reroute.003",
-                  "socket": "Output"
-                }
-              ],
-              "intended_type": "VECTOR3",
-              "default_value": [
-                1.0,
-                1.0,
-                0.0
-              ],
-              "incoming_vector_space": "PRESERVE",
-              "vector_space": "PRESERVE"
-            }
-          ]
-        },
-        "outputs": {
-          "Vector": {
-            "type": "linked",
-            "links": [
-              {
-                "node": "Vector Math.003",
-                "socket": "Vector"
-              }
-            ],
-            "intended_type": "VECTOR3",
-            "default_value": null,
-            "vector_space": "PRESERVE"
-          }
-        },
-        "properties": {
-          "operation": "SUBTRACT",
-          "vector_space": "PRESERVE"
-        }
-      },
-      "Vector Math.003": {
-        "id": "Vector Math.003",
-        "type": "VECT_MATH",
-        "name": "VECT_MATH",
-        "inputs": {
-          "Vector": [
-            {
-              "type": "linked",
-              "links": [
-                {
-                  "node": "Vector Math.002",
-                  "socket": "Vector"
-                }
-              ],
-              "intended_type": "VECTOR3",
-              "default_value": [
-                0.0,
-                0.0,
-                0.0
-              ],
-              "incoming_vector_space": "PRESERVE",
-              "vector_space": "PRESERVE"
-            },
-            {
-              "type": "linked",
-              "links": [
-                {
-                  "node": "Vector Math.010",
-                  "socket": "Vector"
-                }
-              ],
-              "intended_type": "VECTOR3",
-              "default_value": [
-                0.7000000476837158,
-                0.8199999928474426,
-                0.0
-              ],
-              "incoming_vector_space": "PRESERVE",
-              "vector_space": "PRESERVE"
-            }
-          ]
-        },
-        "outputs": {
-          "Vector": {
-            "type": "linked",
-            "links": [
-              {
-                "node": "Separate XYZ.001",
-                "socket": "Vector"
-              },
-              {
-                "node": "Vector Math.004",
-                "socket": "Vector"
-              }
-            ],
-            "intended_type": "VECTOR3",
-            "default_value": null,
-            "vector_space": "PRESERVE"
-          }
-        },
-        "properties": {
-          "operation": "ADD",
-          "vector_space": "PRESERVE"
-        }
-      },
-      "Separate XYZ.001": {
-        "id": "Separate XYZ.001",
-        "type": "SEPXYZ",
-        "name": "SEPXYZ",
-        "inputs": {
-          "Vector": {
-            "type": "linked",
-            "links": [
-              {
-                "node": "Vector Math.003",
-                "socket": "Vector"
-              }
-            ],
-            "intended_type": "VECTOR3",
-            "default_value": [
-              0.0,
-              0.0,
-              0.0
-            ],
-            "incoming_vector_space": "PRESERVE",
-            "vector_space": "PRESERVE"
-          }
-        },
-        "outputs": {
-          "X": {
-            "type": "linked",
-            "links": [
-              {
-                "node": "Math.005",
-                "socket": "Value"
-              }
-            ],
-            "intended_type": "VALUE",
-            "default_value": 0.0
-          },
-          "Y": {
-            "type": "linked",
-            "links": [
-              {
-                "node": "Math.005",
-                "socket": "Value"
-              }
-            ],
-            "intended_type": "VALUE",
-            "default_value": 0.0
-          },
-          "Z": {
-            "value": 0.0,
-            "type": "VALUE"
-          }
-        },
-        "properties": {
-          "vector_space": "PRESERVE"
-        }
-      },
-      "Math.005": {
-        "id": "Math.005",
-        "type": "MATH",
-        "name": "MATH",
-        "inputs": {
-          "Value": [
-            {
-              "type": "linked",
-              "links": [
-                {
-                  "node": "Separate XYZ.001",
-                  "socket": "X"
-                }
-              ],
-              "intended_type": "VALUE",
-              "default_value": 0.5
-            },
-            {
-              "type": "linked",
-              "links": [
-                {
-                  "node": "Separate XYZ.001",
-                  "socket": "Y"
-                }
-              ],
-              "intended_type": "VALUE",
-              "default_value": 0.5
-            }
-          ]
-        },
-        "outputs": {
-          "Value": {
-            "type": "linked",
-            "links": [
-              {
-                "node": "Math.006",
-                "socket": "Value"
-              }
-            ],
-            "intended_type": "VALUE",
-            "default_value": 0.0
-          }
-        },
-        "properties": {
-          "operation": "MAXIMUM",
-          "use_clamp": false
-        }
-      },
-      "Math.006": {
-        "id": "Math.006",
-        "type": "MATH",
-        "name": "MATH",
-        "inputs": {
-          "Value": [
-            {
-              "type": "linked",
-              "links": [
-                {
-                  "node": "Math.005",
-                  "socket": "Value"
-                }
-              ],
-              "intended_type": "VALUE",
-              "default_value": 0.5
-            },
-            {
-              "value": 0.0,
-              "type": "VALUE",
-              "input_hidden": false
-            }
-          ]
-        },
-        "outputs": {
-          "Value": {
-            "type": "linked",
-            "links": [
-              {
-                "node": "Math.008",
-                "socket": "Value"
-              }
-            ],
-            "intended_type": "VALUE",
-            "default_value": 0.0
-          }
-        },
-        "properties": {
-          "operation": "MINIMUM",
-          "use_clamp": false
-        }
-      },
-      "Vector Math.004": {
-        "id": "Vector Math.004",
-        "type": "VECT_MATH",
-        "name": "VECT_MATH",
-        "inputs": {
-          "Vector": [
-            {
-              "type": "linked",
-              "links": [
-                {
-                  "node": "Vector Math.003",
-                  "socket": "Vector"
-                }
-              ],
-              "intended_type": "VECTOR3",
-              "default_value": [
-                0.0,
-                0.0,
-                0.0
-              ],
-              "incoming_vector_space": "PRESERVE",
-              "vector_space": "PRESERVE"
-            },
-            {
-              "value": [
-                0.0,
-                0.0,
-                0.0
-              ],
-              "type": "VECTOR3",
-              "input_hidden": false,
-              "vector_space": "PRESERVE"
-            }
-          ]
-        },
-        "outputs": {
-          "Vector": {
-            "type": "linked",
-            "links": [
-              {
-                "node": "Vector Math.005",
-                "socket": "Vector"
-              }
-            ],
-            "intended_type": "VECTOR3",
-            "default_value": null,
-            "vector_space": "PRESERVE"
-          }
-        },
-        "properties": {
-          "operation": "MAXIMUM",
-          "vector_space": "PRESERVE"
-        }
-      },
-      "Vector Math.005": {
-        "id": "Vector Math.005",
-        "type": "VECT_MATH",
-        "name": "VECT_MATH",
-        "inputs": {
-          "Vector": {
-            "type": "linked",
-            "links": [
-              {
-                "node": "Vector Math.004",
-                "socket": "Vector"
-              }
-            ],
-            "intended_type": "VECTOR3",
-            "default_value": [
-              0.0,
-              0.0,
-              0.0
-            ],
-            "incoming_vector_space": "PRESERVE",
-            "vector_space": "PRESERVE"
-          }
-        },
-        "outputs": {
-          "Value": {
-            "type": "linked",
-            "links": [
-              {
-                "node": "Math.007",
-                "socket": "Value"
-              }
-            ],
-            "intended_type": "VALUE",
-            "default_value": 0.0
-          }
-        },
-        "properties": {
-          "operation": "LENGTH",
-          "vector_space": "PRESERVE"
-        }
-      },
-      "Math.007": {
-        "id": "Math.007",
-        "type": "MATH",
-        "name": "MATH",
-        "inputs": {
-          "Value": [
-            {
-              "type": "linked",
-              "links": [
-                {
-                  "node": "Vector Math.005",
-                  "socket": "Value"
-                }
-              ],
-              "intended_type": "VALUE",
-              "default_value": 0.5
-            },
-            {
-              "type": "linked",
-              "links": [
-                {
-                  "node": "Switch",
-                  "socket": "Image"
-                }
-              ],
-              "intended_type": "VALUE",
-              "default_value": 0.5
-            }
-          ]
-        },
-        "outputs": {
-          "Value": {
-            "type": "linked",
-            "links": [
-              {
-                "node": "Math.008",
-                "socket": "Value"
-              }
-            ],
-            "intended_type": "VALUE",
-            "default_value": 0.0
-          }
-        },
-        "properties": {
-          "operation": "SUBTRACT",
-          "use_clamp": false
-        }
-      },
-      "Math.008": {
-        "id": "Math.008",
-        "type": "MATH",
-        "name": "MATH",
-        "inputs": {
-          "Value": [
-            {
-              "type": "linked",
-              "links": [
-                {
-                  "node": "Math.006",
-                  "socket": "Value"
-                }
-              ],
-              "intended_type": "VALUE",
-              "default_value": 0.5
-            },
-            {
-              "type": "linked",
-              "links": [
-                {
-                  "node": "Math.007",
-                  "socket": "Value"
-                }
-              ],
-              "intended_type": "VALUE",
-              "default_value": 0.5
-            }
-          ]
-        },
-        "outputs": {
-          "Value": {
-            "type": "linked",
-            "links": [
-              {
-                "node": "Map Range.001",
-                "socket": "Value"
-              }
-            ],
-            "intended_type": "VALUE",
-            "default_value": 0.0
-          }
-        },
-        "properties": {
-          "operation": "ADD",
-          "use_clamp": false
-        }
-      },
-      "Map Range.001": {
-        "id": "Map Range.001",
-        "type": "MAP_RANGE",
-        "name": "MAP_RANGE",
-        "inputs": {
-          "Value": {
-            "type": "linked",
-            "links": [
-              {
-                "node": "Math.008",
-                "socket": "Value"
-              }
-            ],
-            "intended_type": "VALUE",
-            "default_value": 1.0
-          },
-          "From Min": {
-            "type": "linked",
-            "links": [
-              {
-                "node": "Map Range.002",
-                "socket": "Result"
-              }
-            ],
-            "intended_type": "VALUE",
-            "default_value": -0.5
-          },
-          "From Max": {
-            "type": "linked",
-            "links": [
-              {
-                "node": "Map Range.003",
-                "socket": "Result"
-              }
-            ],
-            "intended_type": "VALUE",
-            "default_value": 1.0
-          },
-          "To Min": {
-            "value": 1.0,
-            "type": "VALUE",
-            "input_hidden": false
-          },
-          "To Max": {
-            "value": 0.0,
-            "type": "VALUE",
-            "input_hidden": false
-          }
-        },
-        "outputs": {
-          "Result": {
-            "type": "linked",
-            "links": [
-              {
-                "node": "Group Output",
-                "socket": "Mask"
-              }
-            ],
-            "intended_type": "VALUE",
-            "default_value": 0.0
-          }
-        },
-        "properties": {
-          "clamp": true,
-          "interpolation_type": "SMOOTHSTEP",
-          "data_type": "FLOAT"
-        }
-      },
-      "Map Range.002": {
-        "id": "Map Range.002",
-        "type": "MAP_RANGE",
-        "name": "MAP_RANGE",
-        "inputs": {
-          "Value": {
-            "type": "linked",
-            "links": [
-              {
-                "node": "Reroute",
-                "socket": "Output"
-              }
-            ],
-            "intended_type": "VALUE",
-            "default_value": 0.85
-          },
-          "From Min": {
-            "value": 1.0,
-            "type": "VALUE",
-            "input_hidden": false
-          },
-          "From Max": {
-            "value": 0.0,
-            "type": "VALUE",
-            "input_hidden": false
-          },
-          "To Min": {
-            "value": -0.5,
-            "type": "VALUE",
-            "input_hidden": false
-          },
-          "To Max": {
-            "value": 0.0,
-            "type": "VALUE",
-            "input_hidden": false
-          }
-        },
-        "outputs": {
-          "Result": {
-            "type": "linked",
-            "links": [
-              {
-                "node": "Map Range.001",
-                "socket": "From Min"
-              }
-            ],
-            "intended_type": "VALUE",
-            "default_value": 0.0
-          }
-        },
-        "properties": {
-          "clamp": true,
-          "interpolation_type": "LINEAR",
-          "data_type": "FLOAT"
-        }
-      },
-      "Map Range.003": {
-        "id": "Map Range.003",
-        "type": "MAP_RANGE",
-        "name": "MAP_RANGE",
-        "inputs": {
-          "Value": {
-            "type": "linked",
-            "links": [
-              {
-                "node": "Reroute",
-                "socket": "Output"
-              }
-            ],
-            "intended_type": "VALUE",
-            "default_value": 1.0
-          },
-          "From Min": {
-            "value": 1.0,
-            "type": "VALUE",
-            "input_hidden": false
-          },
-          "From Max": {
-            "type": "linked",
-            "links": [
-              {
-                "node": "Math.001",
-                "socket": "Value"
-              }
-            ],
-            "intended_type": "VALUE",
-            "default_value": 0.0
-          },
-          "To Min": {
-            "value": 1.0,
-            "type": "VALUE",
-            "input_hidden": false
-          },
-          "To Max": {
-            "value": 0.0,
-            "type": "VALUE",
-            "input_hidden": false
-          }
-        },
-        "outputs": {
-          "Result": {
-            "type": "linked",
-            "links": [
-              {
-                "node": "Map Range.001",
-                "socket": "From Max"
-              }
-            ],
-            "intended_type": "VALUE",
-            "default_value": 0.0
-          }
-        },
-        "properties": {
-          "clamp": true,
-          "interpolation_type": "LINEAR",
-          "data_type": "FLOAT"
-        }
-      },
-      "Reroute": {
-        "id": "Reroute",
-        "type": "REROUTE",
-        "name": "REROUTE",
-        "inputs": {
-          "Input": {
-            "type": "linked",
-            "links": [
-              {
-                "node": "Math",
-                "socket": "Value"
-              }
-            ],
-            "intended_type": "VALUE",
-            "default_value": 0.0
-          }
-        },
-        "outputs": {
-          "Output": {
-            "type": "linked",
-            "links": [
-              {
-                "node": "Map Range.003",
-                "socket": "Value"
-              },
-              {
-                "node": "Map Range.002",
-                "socket": "Value"
-              }
-            ],
-            "intended_type": "VALUE",
-            "default_value": 0.0
-          }
-        },
-        "properties": {
-          "socket_idname": "NodeSocketFloat"
-        }
-      },
-      "Reroute.002": {
-        "id": "Reroute.002",
-        "type": "REROUTE",
-        "name": "REROUTE",
-        "inputs": {
-          "Input": {
-            "type": "linked",
-            "links": [
-              {
-                "node": "Group Input",
-                "socket": "Feather"
-              }
-            ],
-            "intended_type": "VALUE",
-            "default_value": 0.0
-          }
-        },
-        "outputs": {
-          "Output": {
-            "type": "linked",
-            "links": [
-              {
-                "node": "Math",
-                "socket": "Value"
-              }
-            ],
-            "intended_type": "VALUE",
-            "default_value": 0.0
-          }
-        },
-        "properties": {
-          "socket_idname": "NodeSocketFloatFactor"
-        }
-      },
-      "Math": {
-        "id": "Math",
-        "type": "MATH",
-        "name": "MATH",
-        "inputs": {
-          "Value": [
-            {
-              "type": "linked",
-              "links": [
-                {
-                  "node": "Reroute.002",
-                  "socket": "Output"
-                }
-              ],
-              "intended_type": "VALUE",
-              "default_value": 0.5
-            },
-            {
-              "value": 0.0001,
-              "type": "VALUE",
-              "input_hidden": false
-            }
-          ]
-        },
-        "outputs": {
-          "Value": {
-            "type": "linked",
-            "links": [
-              {
-                "node": "Reroute",
-                "socket": "Input"
-              },
-              {
-                "node": "Math.001",
-                "socket": "Value"
-              }
-            ],
-            "intended_type": "VALUE",
-            "default_value": 0.0
-          }
-        },
-        "properties": {
-          "operation": "ADD",
-          "use_clamp": false
-        }
-      },
-      "Vector Rotate": {
-        "id": "Vector Rotate",
-        "type": "VECTOR_ROTATE",
-        "name": "VECTOR_ROTATE",
-        "inputs": {
-          "Vector": {
-            "type": "linked",
-            "links": [
-              {
-                "node": "Vector Math",
-                "socket": "Vector"
-              }
-            ],
-            "intended_type": "VECTOR3",
-            "default_value": [
-              0.0,
-              0.0,
-              0.0
-            ],
-            "incoming_vector_space": "PRESERVE",
-            "vector_space": "PRESERVE"
-          },
-          "Center": {
-            "value": [
-              0.0,
-              0.0,
-              0.0
-            ],
-            "type": "VECTOR3",
-            "input_hidden": false,
-            "vector_space": "PRESERVE"
-          },
-          "Angle": {
-            "type": "linked",
-            "links": [
-              {
-                "node": "Group Input",
-                "socket": "Angle"
-              }
-            ],
-            "intended_type": "VALUE",
-            "default_value": 0.0
-          }
-        },
-        "outputs": {
-          "Vector": {
-            "type": "linked",
-            "links": [
-              {
-                "node": "Vector Math.001",
-                "socket": "Vector"
-              }
-            ],
-            "intended_type": "VECTOR3",
-            "default_value": null,
-            "vector_space": "PRESERVE"
-          }
-        },
-        "properties": {
-          "rotation_type": "Z_AXIS",
-          "invert": false,
-          "vector_space": "PRESERVE"
-        }
-      },
-      "Vector Math": {
-        "id": "Vector Math",
-        "type": "VECT_MATH",
-        "name": "VECT_MATH",
-        "inputs": {
-          "Vector": [
-            {
-              "type": "linked",
-              "links": [
-                {
-                  "node": "Image Coordinates",
-                  "socket": "Uniform"
-                }
-              ],
-              "intended_type": "VECTOR3",
-              "default_value": [
-                0.0,
-                0.0,
-                0.0
-              ],
-              "incoming_vector_space": "PRESERVE",
-              "vector_space": "PRESERVE"
-            },
-            {
-              "type": "linked",
-              "links": [
-                {
-                  "node": "Group Input",
-                  "socket": "Offset"
-                }
-              ],
-              "intended_type": "VECTOR3",
-              "default_value": [
-                0.0,
-                0.0,
-                0.0
-              ],
-              "incoming_vector_space": "PRESERVE",
-              "vector_space": "PRESERVE"
-            }
-          ]
-        },
-        "outputs": {
-          "Vector": {
-            "type": "linked",
-            "links": [
-              {
-                "node": "Vector Rotate",
-                "socket": "Vector"
-              }
-            ],
-            "intended_type": "VECTOR3",
-            "default_value": null,
-            "vector_space": "PRESERVE"
-          }
-        },
-        "properties": {
-          "operation": "SUBTRACT",
-          "vector_space": "PRESERVE"
-        }
-      },
-      "Vector Math.010": {
-        "id": "Vector Math.010",
-        "type": "VECT_MATH",
-        "name": "VECT_MATH",
-        "inputs": {
-          "Vector": {
-            "value": [
-              1.0,
-              1.0,
-              0.0
-            ],
-            "type": "VECTOR3",
-            "input_hidden": false,
-            "vector_space": "PRESERVE"
-          },
-          "Scale": {
-            "type": "linked",
-            "links": [
-              {
-                "node": "Switch",
-                "socket": "Image"
-              }
-            ],
-            "intended_type": "VALUE",
-            "default_value": 1.0,
-            "label": "Scale"
-          }
-        },
-        "outputs": {
-          "Vector": {
-            "type": "linked",
-            "links": [
-              {
-                "node": "Vector Math.003",
-                "socket": "Vector"
-              }
-            ],
-            "intended_type": "VECTOR3",
-            "default_value": null,
-            "vector_space": "PRESERVE"
-          }
-        },
-        "properties": {
-          "operation": "SCALE",
-          "vector_space": "PRESERVE"
-        }
-      },
-      "Separate XYZ": {
-        "id": "Separate XYZ",
-        "type": "SEPXYZ",
-        "name": "SEPXYZ",
-        "inputs": {
-          "Vector": {
-            "type": "linked",
-            "links": [
-              {
-                "node": "Reroute.003",
-                "socket": "Output"
-              }
-            ],
-            "intended_type": "VECTOR3",
-            "default_value": [
-              0.0,
-              0.0,
-              0.0
-            ],
-            "incoming_vector_space": "PRESERVE",
-            "vector_space": "PRESERVE"
-          }
-        },
-        "outputs": {
-          "X": {
-            "type": "linked",
-            "links": [
-              {
-                "node": "Math.003",
-                "socket": "Value"
-              }
-            ],
-            "intended_type": "VALUE",
-            "default_value": 0.0
-          },
-          "Y": {
-            "type": "linked",
-            "links": [
-              {
-                "node": "Math.003",
-                "socket": "Value"
-              }
-            ],
-            "intended_type": "VALUE",
-            "default_value": 0.0
-          },
-          "Z": {
-            "value": 0.0,
-            "type": "VALUE"
-          }
-        },
-        "properties": {
-          "vector_space": "PRESERVE"
-        }
-      },
-      "Math.003": {
-        "id": "Math.003",
-        "type": "MATH",
-        "name": "MATH",
-        "inputs": {
-          "Value": [
-            {
-              "type": "linked",
-              "links": [
-                {
-                  "node": "Separate XYZ",
-                  "socket": "X"
-                }
-              ],
-              "intended_type": "VALUE",
-              "default_value": 0.5
-            },
-            {
-              "type": "linked",
-              "links": [
-                {
-                  "node": "Separate XYZ",
-                  "socket": "Y"
-                }
-              ],
-              "intended_type": "VALUE",
-              "default_value": 0.5
-            }
-          ]
-        },
-        "outputs": {
-          "Value": {
-            "type": "linked",
-            "links": [
-              {
-                "node": "Clamp",
-                "socket": "Max"
-              }
-            ],
-            "intended_type": "VALUE",
-            "default_value": 0.0
-          }
-        },
-        "properties": {
-          "operation": "MINIMUM",
-          "use_clamp": false
-        }
-      },
-      "Clamp": {
-        "id": "Clamp",
-        "type": "CLAMP",
-        "name": "CLAMP",
-        "inputs": {
-          "Value": {
-            "type": "linked",
-            "links": [
-              {
-                "node": "Reroute.001",
-                "socket": "Output"
-              }
-            ],
-            "intended_type": "VALUE",
-            "default_value": 1.0
-          },
-          "Min": {
-            "value": 0.0,
-            "type": "VALUE",
-            "input_hidden": false
-          },
-          "Max": {
-            "type": "linked",
-            "links": [
-              {
-                "node": "Math.003",
-                "socket": "Value"
-              }
-            ],
-            "intended_type": "VALUE",
-            "default_value": 1.0
-          }
-        },
-        "outputs": {
-          "Result": {
-            "type": "linked",
-            "links": [
-              {
-                "node": "Switch",
-                "socket": "On"
-              }
-            ],
-            "intended_type": "VALUE",
-            "default_value": 0.0
-          }
-        },
-        "properties": {
-          "clamp_type": "MINMAX"
-        }
-      },
-      "Reroute.001": {
-        "id": "Reroute.001",
-        "type": "REROUTE",
-        "name": "REROUTE",
-        "inputs": {
-          "Input": {
-            "type": "linked",
-            "links": [
-              {
-                "node": "Group Input",
-                "socket": "Corner Roundness"
-              }
-            ],
-            "intended_type": "VALUE",
-            "default_value": 0.0
-          }
-        },
-        "outputs": {
-          "Output": {
-            "type": "linked",
-            "links": [
-              {
-                "node": "Clamp",
-                "socket": "Value"
-              },
-              {
-                "node": "Switch",
-                "socket": "Off"
-              }
-            ],
-            "intended_type": "VALUE",
-            "default_value": 0.0
-          }
-        },
-        "properties": {
-          "socket_idname": "NodeSocketFloatFactor"
-        }
-      },
-      "Switch": {
-        "id": "Switch",
-        "type": "SWITCH",
-        "name": "SWITCH",
-        "inputs": {
-          "Switch": {
-            "value": true,
-            "type": "BOOLEAN",
-            "input_hidden": false
-          },
-          "Off": {
-            "type": "linked",
-            "links": [
-              {
-                "node": "Reroute.001",
-                "socket": "Output"
-              }
-            ],
-            "intended_type": "RGBA",
-            "default_value": [
-              0.800000011920929,
-              0.800000011920929,
-              0.800000011920929,
-              1.0
-            ]
-          },
-          "On": {
-            "type": "linked",
-            "links": [
-              {
-                "node": "Clamp",
-                "socket": "Result"
-              }
-            ],
-            "intended_type": "RGBA",
-            "default_value": [
-              0.800000011920929,
-              0.800000011920929,
-              0.800000011920929,
-              1.0
-            ]
-          }
-        },
-        "outputs": {
-          "Image": {
-            "type": "linked",
-            "links": [
-              {
-                "node": "Vector Math.010",
-                "socket": "Scale"
-              },
-              {
-                "node": "Math.007",
-                "socket": "Value"
-              }
-            ],
-            "intended_type": "RGBA",
-            "default_value": null
-          }
-        },
-        "properties": {}
-      },
-      "Math.001": {
-        "id": "Math.001",
-        "type": "MATH",
-        "name": "MATH",
-        "inputs": {
-          "Value": [
-            {
-              "type": "linked",
-              "links": [
-                {
-                  "node": "Math",
-                  "socket": "Value"
-                }
-              ],
-              "intended_type": "VALUE",
-              "default_value": 0.5
-            },
-            {
-              "value": 0.5,
-              "type": "VALUE",
-              "input_hidden": false
-            }
-          ]
-        },
-        "outputs": {
-          "Value": {
-            "type": "linked",
-            "links": [
-              {
-                "node": "Map Range.003",
-                "socket": "From Max"
-              }
-            ],
-            "intended_type": "VALUE",
-            "default_value": 0.0
-          }
-        },
-        "properties": {
-          "operation": "MULTIPLY",
-          "use_clamp": false
-        }
-      },
-      "Image Info": {
-        "id": "Image Info",
-        "type": "CompositorNodeImageInfo",
-        "name": "CompositorNodeImageInfo",
-        "inputs": {
-          "Image": {
-            "type": "linked",
-            "links": [
-              {
-                "node": "Group Input",
-                "socket": "Image"
-              }
-            ],
-            "intended_type": "RGBA",
-            "default_value": [
-              0.800000011920929,
-              0.800000011920929,
-              0.800000011920929,
-              1.0
-            ]
-          }
-        },
-        "outputs": {
-          "Dimensions": {
-            "type": "linked",
-            "links": [
-              {
-                "node": "Separate XYZ.002",
-                "socket": "Vector"
-              }
-            ],
-            "intended_type": "VECTOR2",
-            "default_value": null,
-            "vector_space": "PRESERVE"
-          },
-          "Resolution": {
-            "value": null,
-            "type": "VECTOR2",
-            "vector_space": "PRESERVE"
-          },
-          "Location": {
-            "value": null,
-            "type": "VECTOR2",
-            "vector_space": "PRESERVE"
-          },
-          "Rotation": {
-            "value": 0.0,
-            "type": "VALUE"
-          },
-          "Scale": {
-            "value": null,
-            "type": "VECTOR2",
-            "vector_space": "PRESERVE"
-          }
-        },
-        "properties": {
-          "vector_space": "PRESERVE"
-        }
-      },
-      "Separate XYZ.002": {
-        "id": "Separate XYZ.002",
-        "type": "SEPXYZ",
-        "name": "SEPXYZ",
-        "inputs": {
-          "Vector": {
-            "type": "linked",
-            "links": [
-              {
-                "node": "Image Info",
-                "socket": "Dimensions"
-              }
-            ],
-            "intended_type": "VECTOR3",
-            "default_value": [
-              0.0,
-              0.0,
-              0.0
-            ],
-            "incoming_vector_space": "PRESERVE",
-            "vector_space": "PRESERVE"
-          }
-        },
-        "outputs": {
-          "X": {
-            "type": "linked",
-            "links": [
-              {
-                "node": "Math.002",
-                "socket": "Value"
-              },
-              {
-                "node": "Math.010",
-                "socket": "Value"
-              },
-              {
-                "node": "Math.011",
-                "socket": "Value"
-              }
-            ],
-            "intended_type": "VALUE",
-            "default_value": 0.0
-          },
-          "Y": {
-            "type": "linked",
-            "links": [
-              {
-                "node": "Math.004",
-                "socket": "Value"
-              },
-              {
-                "node": "Math.009",
-                "socket": "Value"
-              },
-              {
-                "node": "Math.011",
-                "socket": "Value"
-              }
-            ],
-            "intended_type": "VALUE",
-            "default_value": 0.0
-          },
-          "Z": {
-            "value": 0.0,
-            "type": "VALUE"
-          }
-        },
-        "properties": {
-          "vector_space": "PRESERVE"
-        }
-      },
-      "Reroute.003": {
-        "id": "Reroute.003",
-        "type": "REROUTE",
-        "name": "REROUTE",
-        "inputs": {
-          "Input": {
-            "type": "linked",
-            "links": [
-              {
-                "node": "Vector Math.006",
-                "socket": "Vector"
-              }
-            ],
-            "intended_type": "VECTOR3",
-            "default_value": [
-              0.0,
-              0.0,
-              0.0
-            ],
-            "incoming_vector_space": "PRESERVE",
-            "vector_space": "PRESERVE"
-          }
-        },
-        "outputs": {
-          "Output": {
-            "type": "linked",
-            "links": [
-              {
-                "node": "Vector Math.002",
-                "socket": "Vector"
-              },
-              {
-                "node": "Separate XYZ",
-                "socket": "Vector"
-              }
-            ],
-            "intended_type": "VECTOR3",
-            "default_value": null,
-            "vector_space": "PRESERVE"
-          }
-        },
-        "properties": {
-          "socket_idname": "NodeSocketVector",
-          "vector_space": "PRESERVE"
-        }
-      },
-      "Vector Math.006": {
-        "id": "Vector Math.006",
-        "type": "VECT_MATH",
-        "name": "VECT_MATH",
-        "inputs": {
-          "Vector": [
-            {
-              "type": "linked",
-              "links": [
-                {
-                  "node": "Switch.001",
-                  "socket": "Image"
-                }
-              ],
-              "intended_type": "VECTOR3",
-              "default_value": [
-                1.0,
-                1.0,
-                1.0
-              ],
-              "incoming_vector_space": "PRESERVE",
-              "vector_space": "PRESERVE"
-            },
-            {
-              "type": "linked",
-              "links": [
-                {
-                  "node": "Group Input",
-                  "socket": "Scale"
-                }
-              ],
-              "intended_type": "VECTOR3",
-              "default_value": [
-                0.0,
-                0.0,
-                0.0
-              ],
-              "incoming_vector_space": "PRESERVE",
-              "vector_space": "PRESERVE"
-            }
-          ]
-        },
-        "outputs": {
-          "Vector": {
-            "type": "linked",
-            "links": [
-              {
-                "node": "Reroute.003",
-                "socket": "Input"
-              }
-            ],
-            "intended_type": "VECTOR3",
-            "default_value": null,
-            "vector_space": "PRESERVE"
-          }
-        },
-        "properties": {
-          "operation": "MULTIPLY",
-          "vector_space": "PRESERVE"
-        }
-      },
-      "Combine XYZ": {
-        "id": "Combine XYZ",
-        "type": "COMBXYZ",
-        "name": "COMBXYZ",
-        "inputs": {
-          "X": {
-            "value": 1.0,
-            "type": "VALUE",
-            "input_hidden": false
-          },
-          "Y": {
-            "type": "linked",
-            "links": [
-              {
-                "node": "Math.009",
-                "socket": "Value"
-              }
-            ],
-            "intended_type": "VALUE",
-            "default_value": 0.0
-          },
-          "Z": {
-            "value": 0.0,
-            "type": "VALUE",
-            "input_hidden": false
-          }
-        },
-        "outputs": {
-          "Vector": {
-            "type": "linked",
-            "links": [
-              {
-                "node": "Switch.001",
-                "socket": "Off"
-              }
-            ],
-            "intended_type": "VECTOR3",
-            "default_value": null,
-            "vector_space": "PRESERVE"
-          }
-        },
-        "properties": {
-          "vector_space": "PRESERVE"
-        }
-      },
-      "Math.002": {
-        "id": "Math.002",
-        "type": "MATH",
-        "name": "MATH",
-        "inputs": {
-          "Value": [
-            {
-              "value": 1.0,
-              "type": "VALUE",
-              "input_hidden": false
-            },
-            {
-              "type": "linked",
-              "links": [
-                {
-                  "node": "Separate XYZ.002",
-                  "socket": "X"
-                }
-              ],
-              "intended_type": "VALUE",
-              "default_value": 0.5
-            }
-          ]
-        },
-        "outputs": {
-          "Value": {
-            "type": "linked",
-            "links": [
-              {
-                "node": "Math.009",
-                "socket": "Value"
-              }
-            ],
-            "intended_type": "VALUE",
-            "default_value": 0.0
-          }
-        },
-        "properties": {
-          "operation": "DIVIDE",
-          "use_clamp": false
-        }
-      },
-      "Math.004": {
-        "id": "Math.004",
-        "type": "MATH",
-        "name": "MATH",
-        "inputs": {
-          "Value": [
-            {
-              "value": 1.0,
-              "type": "VALUE",
-              "input_hidden": false
-            },
-            {
-              "type": "linked",
-              "links": [
-                {
-                  "node": "Separate XYZ.002",
-                  "socket": "Y"
-                }
-              ],
-              "intended_type": "VALUE",
-              "default_value": 0.5
-            }
-          ]
-        },
-        "outputs": {
-          "Value": {
-            "type": "linked",
-            "links": [
-              {
-                "node": "Math.010",
-                "socket": "Value"
-              }
-            ],
-            "intended_type": "VALUE",
-            "default_value": 0.0
-          }
-        },
-        "properties": {
-          "operation": "DIVIDE",
-          "use_clamp": false
-        }
-      },
-      "Math.009": {
-        "id": "Math.009",
-        "type": "MATH",
-        "name": "MATH",
-        "inputs": {
-          "Value": [
-            {
-              "type": "linked",
-              "links": [
-                {
-                  "node": "Math.002",
-                  "socket": "Value"
-                }
-              ],
-              "intended_type": "VALUE",
-              "default_value": 0.5
-            },
-            {
-              "type": "linked",
-              "links": [
-                {
-                  "node": "Separate XYZ.002",
-                  "socket": "Y"
-                }
-              ],
-              "intended_type": "VALUE",
-              "default_value": 0.5
-            }
-          ]
-        },
-        "outputs": {
-          "Value": {
-            "type": "linked",
-            "links": [
-              {
-                "node": "Combine XYZ",
-                "socket": "Y"
-              }
-            ],
-            "intended_type": "VALUE",
-            "default_value": 0.0
-          }
-        },
-        "properties": {
-          "operation": "MULTIPLY",
-          "use_clamp": false
-        }
-      },
-      "Math.010": {
-        "id": "Math.010",
-        "type": "MATH",
-        "name": "MATH",
-        "inputs": {
-          "Value": [
-            {
-              "type": "linked",
-              "links": [
-                {
-                  "node": "Math.004",
-                  "socket": "Value"
-                }
-              ],
-              "intended_type": "VALUE",
-              "default_value": 0.5
-            },
-            {
-              "type": "linked",
-              "links": [
-                {
-                  "node": "Separate XYZ.002",
-                  "socket": "X"
-                }
-              ],
-              "intended_type": "VALUE",
-              "default_value": 0.5
-            }
-          ]
-        },
-        "outputs": {
-          "Value": {
-            "type": "linked",
-            "links": [
-              {
-                "node": "Combine XYZ.001",
-                "socket": "X"
-              }
-            ],
-            "intended_type": "VALUE",
-            "default_value": 0.0
-          }
-        },
-        "properties": {
-          "operation": "MULTIPLY",
-          "use_clamp": false
-        }
-      },
-      "Combine XYZ.001": {
-        "id": "Combine XYZ.001",
-        "type": "COMBXYZ",
-        "name": "COMBXYZ",
-        "inputs": {
-          "X": {
-            "type": "linked",
-            "links": [
-              {
-                "node": "Math.010",
-                "socket": "Value"
-              }
-            ],
-            "intended_type": "VALUE",
-            "default_value": 1.0
-          },
-          "Y": {
-            "value": 1.0,
-            "type": "VALUE",
-            "input_hidden": false
-          },
-          "Z": {
-            "value": 0.0,
-            "type": "VALUE",
-            "input_hidden": false
-          }
-        },
-        "outputs": {
-          "Vector": {
-            "type": "linked",
-            "links": [
-              {
-                "node": "Switch.001",
-                "socket": "On"
-              }
-            ],
-            "intended_type": "VECTOR3",
-            "default_value": null,
-            "vector_space": "PRESERVE"
-          }
-        },
-        "properties": {
-          "vector_space": "PRESERVE"
-        }
-      },
-      "Switch.001": {
-        "id": "Switch.001",
-        "type": "SWITCH",
-        "name": "SWITCH",
-        "inputs": {
-          "Switch": {
-            "type": "linked",
-            "links": [
-              {
-                "node": "Math.011",
-                "socket": "Value"
-              }
-            ],
-            "intended_type": "BOOLEAN",
-            "default_value": false
-          },
-          "Off": {
-            "type": "linked",
-            "links": [
-              {
-                "node": "Combine XYZ",
-                "socket": "Vector"
-              }
-            ],
-            "intended_type": "RGBA",
-            "default_value": [
-              0.800000011920929,
-              0.800000011920929,
-              0.800000011920929,
-              1.0
-            ]
-          },
-          "On": {
-            "type": "linked",
-            "links": [
-              {
-                "node": "Combine XYZ.001",
-                "socket": "Vector"
-              }
-            ],
-            "intended_type": "RGBA",
-            "default_value": [
-              0.800000011920929,
-              0.800000011920929,
-              0.800000011920929,
-              1.0
-            ]
-          }
-        },
-        "outputs": {
-          "Image": {
-            "type": "linked",
-            "links": [
-              {
-                "node": "Vector Math.006",
-                "socket": "Vector"
-              }
-            ],
-            "intended_type": "RGBA",
-            "default_value": null
-          }
-        },
-        "properties": {}
-      },
-      "Math.011": {
-        "id": "Math.011",
-        "type": "MATH",
-        "name": "MATH",
-        "inputs": {
-          "Value": [
-            {
-              "type": "linked",
-              "links": [
-                {
-                  "node": "Separate XYZ.002",
-                  "socket": "Y"
-                }
-              ],
-              "intended_type": "VALUE",
-              "default_value": 0.5
-            },
-            {
-              "type": "linked",
-              "links": [
-                {
-                  "node": "Separate XYZ.002",
-                  "socket": "X"
-                }
-              ],
-              "intended_type": "VALUE",
-              "default_value": 0.5,
-              "label": "Threshold"
-            }
-          ]
-        },
-        "outputs": {
-          "Value": {
-            "type": "linked",
-            "links": [
-              {
-                "node": "Switch.001",
-                "socket": "Switch"
-              }
-            ],
-            "intended_type": "VALUE",
-            "default_value": 0.0
-          }
-        },
-        "properties": {
-          "operation": "GREATER_THAN",
-          "use_clamp": false
-        }
-      }
-    },
-    "Vignette": {
-      "$treeType": "composition",
-      "Group Output": {
-        "id": "Group Output",
-        "type": "GROUP_OUTPUT",
-        "name": "GROUP_OUTPUT",
-        "inputs": {
-          "Image": {
-            "type": "linked",
-            "links": [
-              {
-                "node": "Combine Color",
-                "socket": "Image"
-              }
-            ],
-            "intended_type": "RGBA",
-            "default_value": [
-              0.800000011920929,
-              0.800000011920929,
-              0.800000011920929,
-              1.0
-            ]
-          },
-          "Mask": {
-            "type": "linked",
-            "links": [
-              {
-                "node": "Math",
-                "socket": "Value"
-              }
-            ],
-            "intended_type": "VALUE",
-            "default_value": 0.0
-          },
-          "": {
-            "value": null,
-            "type": "CUSTOM",
-            "input_hidden": false
-          }
-        },
-        "outputs": {},
-        "properties": {
-          "is_active_output": true
-        }
-      },
-      "Group Input": {
-        "id": "Group Input",
-        "type": "GROUP_INPUT",
-        "name": "GROUP_INPUT",
-        "inputs": {},
-        "outputs": {
-          "Image": {
-            "type": "linked",
-            "links": [
-              {
-                "node": "Reroute",
-                "socket": "Input"
-              }
-            ],
-            "intended_type": "RGBA",
-            "default_value": null
-          },
-          "Factor": {
-            "type": "linked",
-            "links": [
-              {
-                "node": "Mix",
-                "socket": "Factor"
-              }
-            ],
-            "intended_type": "VALUE",
-            "default_value": 0.0
-          },
-          "Feather": {
-            "type": "linked",
-            "links": [
-              {
-                "node": "Group.004",
-                "socket": "Feather"
-              }
-            ],
-            "intended_type": "VALUE",
-            "default_value": 0.097792
-          },
-          "Corner Roundness": {
-            "type": "linked",
-            "links": [
-              {
-                "node": "Group.004",
-                "socket": "Corner Roundness"
-              }
-            ],
-            "intended_type": "VALUE",
-            "default_value": 0.417508
-          },
-          "Scale": {
-            "type": "linked",
-            "links": [
-              {
-                "node": "Group.004",
-                "socket": "Scale"
-              }
-            ],
-            "intended_type": "VECTOR2",
-            "default_value": null,
-            "vector_space": "PRESERVE"
-          },
-          "Offset": {
-            "type": "linked",
-            "links": [
-              {
-                "node": "Group.004",
-                "socket": "Offset"
-              }
-            ],
-            "intended_type": "VECTOR2",
-            "default_value": [
-              0.0,
-              0.0
-            ],
-            "vector_space": "PRESERVE"
-          },
-          "Angle": {
-            "type": "linked",
-            "links": [
-              {
-                "node": "Group.004",
-                "socket": "Angle"
-              }
-            ],
-            "intended_type": "VALUE",
-            "default_value": 0.0
-          },
-          "": {
-            "value": null,
-            "type": "CUSTOM"
-          }
-        },
-        "properties": {
-          "vector_space": "PRESERVE"
-        }
-      },
-      "Group.004": {
-        "id": "Group.004",
-        "type": "GROUP",
-        "name": "Rounded Square Mask",
-        "inputs": {
-          "Image": {
-            "type": "linked",
-            "links": [
-              {
-                "node": "Reroute",
-                "socket": "Output"
-              }
-            ],
-            "intended_type": "RGBA",
-            "default_value": [
-              0.800000011920929,
-              0.800000011920929,
-              0.800000011920929,
-              1.0
-            ]
-          },
-          "Scale": {
-            "type": "linked",
-            "links": [
-              {
-                "node": "Group Input",
-                "socket": "Scale"
-              }
-            ],
-            "intended_type": "VECTOR2",
-            "default_value": [
-              1.0,
-              1.0
-            ],
-            "incoming_vector_space": "PRESERVE",
-            "vector_space": "PRESERVE"
-          },
-          "Corner Roundness": {
-            "type": "linked",
-            "links": [
-              {
-                "node": "Group Input",
-                "socket": "Corner Roundness"
-              }
-            ],
-            "intended_type": "VALUE",
-            "default_value": 0.417508
-          },
-          "Feather": {
-            "type": "linked",
-            "links": [
-              {
-                "node": "Group Input",
-                "socket": "Feather"
-              }
-            ],
-            "intended_type": "VALUE",
-            "default_value": 0.097792
-          },
-          "Offset": {
-            "type": "linked",
-            "links": [
-              {
-                "node": "Group Input",
-                "socket": "Offset"
-              }
-            ],
-            "intended_type": "VECTOR2",
-            "default_value": [
-              0.0,
-              0.0
-            ],
-            "incoming_vector_space": "PRESERVE",
-            "vector_space": "PRESERVE"
-          },
-          "Angle": {
-            "type": "linked",
-            "links": [
-              {
-                "node": "Group Input",
-                "socket": "Angle"
-              }
-            ],
-            "intended_type": "VALUE",
-            "default_value": 0.0
-          }
-        },
-        "outputs": {
-          "Mask": {
-            "type": "linked",
-            "links": [
-              {
-                "node": "Mix",
-                "socket": "B"
-              },
-              {
-                "node": "Math",
-                "socket": "Value"
-              }
-            ],
-            "intended_type": "VALUE",
-            "default_value": 0.0
-          }
-        },
-        "properties": {
-          "vector_space": "PRESERVE",
-          "containsNodeTree": true
-        },
-        "internalNodeTree": "Rounded Square Mask"
-      },
-      "Mix": {
-        "id": "Mix",
-        "type": "MIX",
-        "name": "MIX",
-        "inputs": {
-          "Factor": {
-            "type": "linked",
-            "links": [
-              {
-                "node": "Group Input",
-                "socket": "Factor"
-              }
-            ],
-            "intended_type": "VALUE",
-            "default_value": 1.0
-          },
-          "A": {
-            "type": "linked",
-            "links": [
-              {
-                "node": "Separate Color",
-                "socket": "Blue"
-              }
-            ],
-            "intended_type": "RGBA",
-            "default_value": [
-              0.5,
-              0.5,
-              0.5,
-              1.0
-            ]
-          },
-          "B": {
-            "type": "linked",
-            "links": [
-              {
-                "node": "Group.004",
-                "socket": "Mask"
-              }
-            ],
-            "intended_type": "RGBA",
-            "default_value": [
-              0.0,
-              0.0,
-              0.0,
-              1.0
-            ]
-          }
-        },
-        "outputs": {
-          "Result": {
-            "type": "linked",
-            "links": [
-              {
-                "node": "Combine Color",
-                "socket": "Blue"
-              }
-            ],
-            "intended_type": "RGBA",
-            "default_value": null
-          }
-        },
-        "properties": {
-          "data_type": "RGBA",
-          "factor_mode": "UNIFORM",
-          "blend_type": "MULTIPLY",
-          "clamp_factor": true,
-          "clamp_result": false
-        }
-      },
-      "Reroute": {
-        "id": "Reroute",
-        "type": "REROUTE",
-        "name": "REROUTE",
-        "inputs": {
-          "Input": {
-            "type": "linked",
-            "links": [
-              {
-                "node": "Group Input",
-                "socket": "Image"
-              }
-            ],
-            "intended_type": "RGBA",
-            "default_value": [
-              0.0,
-              0.0,
-              0.0,
-              1.0
-            ]
-          }
-        },
-        "outputs": {
-          "Output": {
-            "type": "linked",
-            "links": [
-              {
-                "node": "Group.004",
-                "socket": "Image"
-              },
-              {
-                "node": "Reroute.001",
-                "socket": "Input"
-              }
-            ],
-            "intended_type": "RGBA",
-            "default_value": null
-          }
-        },
-        "properties": {
-          "socket_idname": "NodeSocketColor"
-        }
-      },
-      "Reroute.001": {
-        "id": "Reroute.001",
-        "type": "REROUTE",
-        "name": "REROUTE",
-        "inputs": {
-          "Input": {
-            "type": "linked",
-            "links": [
-              {
-                "node": "Reroute",
-                "socket": "Output"
-              }
-            ],
-            "intended_type": "RGBA",
-            "default_value": [
-              0.0,
-              0.0,
-              0.0,
-              1.0
-            ]
-          }
-        },
-        "outputs": {
-          "Output": {
-            "type": "linked",
-            "links": [
-              {
-                "node": "Separate Color",
-                "socket": "Image"
-              }
-            ],
-            "intended_type": "RGBA",
-            "default_value": null
-          }
-        },
-        "properties": {
-          "socket_idname": "NodeSocketColor"
-        }
-      },
-      "Separate Color": {
-        "id": "Separate Color",
-        "type": "SEPARATE_COLOR",
-        "name": "SEPARATE_COLOR",
-        "inputs": {
-          "Image": {
-            "type": "linked",
-            "links": [
-              {
-                "node": "Reroute.001",
-                "socket": "Output"
-              }
-            ],
-            "intended_type": "RGBA",
-            "default_value": [
-              1.0,
-              1.0,
-              1.0,
-              1.0
-            ]
-          }
-        },
-        "outputs": {
-          "Red": {
-            "type": "linked",
-            "links": [
-              {
-                "node": "Combine Color",
-                "socket": "Red"
-              }
-            ],
-            "intended_type": "VALUE",
-            "default_value": 0.0
-          },
-          "Green": {
-            "type": "linked",
-            "links": [
-              {
-                "node": "Combine Color",
-                "socket": "Green"
-              }
-            ],
-            "intended_type": "VALUE",
-            "default_value": 0.0
-          },
-          "Blue": {
-            "type": "linked",
-            "links": [
-              {
-                "node": "Mix",
-                "socket": "A"
-              }
-            ],
-            "intended_type": "VALUE",
-            "default_value": 0.0
-          },
-          "Alpha": {
-            "type": "linked",
-            "links": [
-              {
-                "node": "Combine Color",
-                "socket": "Alpha"
-              }
-            ],
-            "intended_type": "VALUE",
-            "default_value": 0.0
-          }
-        },
-        "properties": {
-          "mode": "HSV",
-          "ycc_mode": "ITUBT709"
-        }
-      },
-      "Combine Color": {
-        "id": "Combine Color",
-        "type": "COMBINE_COLOR",
-        "name": "COMBINE_COLOR",
-        "inputs": {
-          "Red": {
-            "type": "linked",
-            "links": [
-              {
-                "node": "Separate Color",
-                "socket": "Red"
-              }
-            ],
-            "intended_type": "VALUE",
-            "default_value": 0.0,
-            "label": "Hue"
-          },
-          "Green": {
-            "type": "linked",
-            "links": [
-              {
-                "node": "Separate Color",
-                "socket": "Green"
-              }
-            ],
-            "intended_type": "VALUE",
-            "default_value": 0.0,
-            "label": "Saturation"
-          },
-          "Blue": {
-            "type": "linked",
-            "links": [
-              {
-                "node": "Mix",
-                "socket": "Result"
-              }
-            ],
-            "intended_type": "VALUE",
-            "default_value": 0.0,
-            "label": "Value"
-          },
-          "Alpha": {
-            "type": "linked",
-            "links": [
-              {
-                "node": "Separate Color",
-                "socket": "Alpha"
-              }
-            ],
-            "intended_type": "VALUE",
-            "default_value": 1.0
-          }
-        },
-        "outputs": {
-          "Image": {
-            "type": "linked",
-            "links": [
-              {
-                "node": "Group Output",
-                "socket": "Image"
-              }
-            ],
-            "intended_type": "RGBA",
-            "default_value": null
-          }
-        },
-        "properties": {
-          "mode": "HSV",
-          "ycc_mode": "ITUBT709"
-        }
-      },
-      "Math": {
-        "id": "Math",
-        "type": "MATH",
-        "name": "MATH",
-        "inputs": {
-          "Value": [
-            {
-              "value": 1.0,
-              "type": "VALUE",
-              "input_hidden": false
-            },
-            {
-              "type": "linked",
-              "links": [
-                {
-                  "node": "Group.004",
-                  "socket": "Mask"
-                }
-              ],
-              "intended_type": "VALUE",
-              "default_value": 0.5
-            }
-          ]
-        },
-        "outputs": {
-          "Value": {
-            "type": "linked",
-            "links": [
-              {
-                "node": "Group Output",
-                "socket": "Mask"
-              }
-            ],
-            "intended_type": "VALUE",
-            "default_value": 0.0
-          }
-        },
-        "properties": {
-          "operation": "SUBTRACT",
-          "use_clamp": true
-        }
-      }
-    }
-  },
+  "$internalTrees": {},
   "Group Output": {
     "id": "Group Output",
     "type": "GROUP_OUTPUT",
@@ -3562,10 +47,6 @@
             "socket": "Factor"
           },
           {
-            "node": "Filter",
-            "socket": "Image"
-          },
-          {
             "node": "Voronoi Texture.001",
             "socket": "Vector"
           },
@@ -3602,6 +83,10 @@
           {
             "node": "Mix.004",
             "socket": "B"
+          },
+          {
+            "node": "Filter",
+            "socket": "Image"
           }
         ],
         "intended_type": "VECTOR3",
@@ -3639,7 +124,7 @@
         "links": [
           {
             "node": "Group",
-            "socket": "Image"
+            "socket": "Output"
           }
         ],
         "intended_type": "RGBA",
@@ -3876,7 +361,7 @@
             "socket": "Vector"
           },
           {
-            "node": "Separate XYZ",
+            "node": "Vector Math",
             "socket": "Vector"
           }
         ],
@@ -3968,7 +453,7 @@
         "links": [
           {
             "node": "Render Layers",
-            "socket": "Image"
+            "socket": "Normal"
           }
         ],
         "intended_type": "RGBA",
@@ -4179,15 +664,15 @@
   },
   "Group": {
     "id": "Group",
-    "type": "GROUP",
-    "name": "Sensor Noise",
+    "type": "REROUTE",
+    "name": "GROUP",
     "inputs": {
-      "Image": {
+      "Input": {
         "type": "linked",
         "links": [
           {
             "node": "Group.001",
-            "socket": "Image"
+            "socket": "Output"
           }
         ],
         "intended_type": "RGBA",
@@ -4199,12 +684,12 @@
         ]
       },
       "Luminance Noise": {
-        "value": 0.126943,
+        "value": 0.01,
         "type": "VALUE",
         "input_hidden": false
       },
       "Chroma Noise": {
-        "value": 0.103627,
+        "value": 0.05,
         "type": "VALUE",
         "input_hidden": false
       },
@@ -4215,7 +700,7 @@
       }
     },
     "outputs": {
-      "Image": {
+      "Output": {
         "type": "linked",
         "links": [
           {
@@ -4227,21 +712,18 @@
         "default_value": null
       }
     },
-    "properties": {
-      "containsNodeTree": true
-    },
-    "internalNodeTree": "Sensor Noise"
+    "properties": {}
   },
   "Group.001": {
     "id": "Group.001",
-    "type": "GROUP",
-    "name": "Vignette",
+    "type": "REROUTE",
+    "name": "GROUP",
     "inputs": {
-      "Image": {
+      "Input": {
         "type": "linked",
         "links": [
           {
-            "node": "Mix.005",
+            "node": "Mix.006",
             "socket": "Result"
           }
         ],
@@ -4299,12 +781,12 @@
       }
     },
     "outputs": {
-      "Image": {
+      "Output": {
         "type": "linked",
         "links": [
           {
             "node": "Group",
-            "socket": "Image"
+            "socket": "Input"
           }
         ],
         "intended_type": "RGBA",
@@ -4316,10 +798,8 @@
       }
     },
     "properties": {
-      "vector_space": "PRESERVE",
-      "containsNodeTree": true
-    },
-    "internalNodeTree": "Vignette"
+      "vector_space": "PRESERVE"
+    }
   },
   "Voronoi Texture.001": {
     "id": "Voronoi Texture.001",
@@ -4446,7 +926,7 @@
         "links": [
           {
             "node": "Group.001",
-            "socket": "Angle"
+            "socket": "Input"
           }
         ],
         "intended_type": "VALUE",
@@ -4467,8 +947,8 @@
         "type": "linked",
         "links": [
           {
-            "node": "Image Coordinates",
-            "socket": "Normalized"
+            "node": "Vector Rotate",
+            "socket": "Vector"
           }
         ],
         "intended_type": "VECTOR3",
@@ -4486,15 +966,11 @@
         "type": "linked",
         "links": [
           {
-            "node": "Color Ramp.002",
-            "socket": "Factor"
+            "node": "Reroute.001",
+            "socket": "Input"
           },
           {
-            "node": "Color Ramp.003",
-            "socket": "Factor"
-          },
-          {
-            "node": "Color Ramp.004",
+            "node": "Color Ramp.005",
             "socket": "Factor"
           }
         ],
@@ -4663,8 +1139,8 @@
         "type": "linked",
         "links": [
           {
-            "node": "Separate XYZ",
-            "socket": "X"
+            "node": "Reroute.001",
+            "socket": "Output"
           }
         ],
         "intended_type": "VALUE",
@@ -4723,8 +1199,8 @@
         "type": "linked",
         "links": [
           {
-            "node": "Separate XYZ",
-            "socket": "X"
+            "node": "Reroute.001",
+            "socket": "Output"
           }
         ],
         "intended_type": "VALUE",
@@ -4791,7 +1267,7 @@
         "default_value": 1.0
       },
       "From Min": {
-        "value": 0.0,
+        "value": 7.5,
         "type": "VALUE",
         "input_hidden": false
       },
@@ -4825,7 +1301,7 @@
       }
     },
     "properties": {
-      "clamp": true,
+      "clamp": false,
       "interpolation_type": "SMOOTHSTEP",
       "data_type": "FLOAT"
     }
@@ -4839,8 +1315,8 @@
         "type": "linked",
         "links": [
           {
-            "node": "Separate XYZ",
-            "socket": "X"
+            "node": "Reroute.001",
+            "socket": "Output"
           }
         ],
         "intended_type": "VALUE",
@@ -4944,8 +1420,8 @@
         "type": "linked",
         "links": [
           {
-            "node": "Group.001",
-            "socket": "Image"
+            "node": "Mix.006",
+            "socket": "A"
           }
         ],
         "intended_type": "RGBA",
@@ -4958,6 +1434,484 @@
       "blend_type": "MIX",
       "clamp_factor": true,
       "clamp_result": false
+    }
+  },
+  "Reroute.001": {
+    "id": "Reroute.001",
+    "type": "REROUTE",
+    "name": "REROUTE",
+    "inputs": {
+      "Input": {
+        "type": "linked",
+        "links": [
+          {
+            "node": "Separate XYZ",
+            "socket": "X"
+          }
+        ],
+        "intended_type": "VALUE",
+        "default_value": 0.0
+      }
+    },
+    "outputs": {
+      "Output": {
+        "type": "linked",
+        "links": [
+          {
+            "node": "Color Ramp.002",
+            "socket": "Factor"
+          },
+          {
+            "node": "Color Ramp.003",
+            "socket": "Factor"
+          },
+          {
+            "node": "Color Ramp.004",
+            "socket": "Factor"
+          }
+        ],
+        "intended_type": "VALUE",
+        "default_value": 0.0
+      }
+    },
+    "properties": {
+      "socket_idname": "NodeSocketFloat"
+    }
+  },
+  "Vector Rotate": {
+    "id": "Vector Rotate",
+    "type": "VECTOR_ROTATE",
+    "name": "VECTOR_ROTATE",
+    "inputs": {
+      "Vector": {
+        "type": "linked",
+        "links": [
+          {
+            "node": "Vector Math",
+            "socket": "Vector"
+          }
+        ],
+        "intended_type": "VECTOR3",
+        "default_value": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "incoming_vector_space": "PRESERVE",
+        "vector_space": "PRESERVE"
+      },
+      "Center": {
+        "value": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "type": "VECTOR3",
+        "input_hidden": false,
+        "vector_space": "PRESERVE"
+      },
+      "Angle": {
+        "value": 0.249582,
+        "type": "VALUE",
+        "input_hidden": false
+      }
+    },
+    "outputs": {
+      "Vector": {
+        "type": "linked",
+        "links": [
+          {
+            "node": "Separate XYZ",
+            "socket": "Vector"
+          }
+        ],
+        "intended_type": "VECTOR3",
+        "default_value": null,
+        "vector_space": "PRESERVE"
+      }
+    },
+    "properties": {
+      "rotation_type": "Z_AXIS",
+      "invert": false,
+      "vector_space": "PRESERVE"
+    }
+  },
+  "Vector Math": {
+    "id": "Vector Math",
+    "type": "VECT_MATH",
+    "name": "VECT_MATH",
+    "inputs": {
+      "Vector": [
+        {
+          "type": "linked",
+          "links": [
+            {
+              "node": "Image Coordinates",
+              "socket": "Normalized"
+            }
+          ],
+          "intended_type": "VECTOR3",
+          "default_value": [
+            0.0,
+            0.0,
+            0.0
+          ],
+          "incoming_vector_space": "PRESERVE",
+          "vector_space": "PRESERVE"
+        },
+        {
+          "value": [
+            0.19999998807907104,
+            0.0,
+            0.0
+          ],
+          "type": "VECTOR3",
+          "input_hidden": false,
+          "vector_space": "PRESERVE"
+        }
+      ]
+    },
+    "outputs": {
+      "Vector": {
+        "type": "linked",
+        "links": [
+          {
+            "node": "Vector Rotate",
+            "socket": "Vector"
+          }
+        ],
+        "intended_type": "VECTOR3",
+        "default_value": null,
+        "vector_space": "PRESERVE"
+      }
+    },
+    "properties": {
+      "operation": "ADD",
+      "vector_space": "PRESERVE"
+    }
+  },
+  "Color Ramp.005": {
+    "id": "Color Ramp.005",
+    "type": "VALTORGB",
+    "name": "VALTORGB",
+    "inputs": {
+      "Factor": {
+        "type": "linked",
+        "links": [
+          {
+            "node": "Separate XYZ",
+            "socket": "X"
+          }
+        ],
+        "intended_type": "VALUE",
+        "default_value": 0.5
+      }
+    },
+    "outputs": {
+      "Color": {
+        "type": "linked",
+        "links": [
+          {
+            "node": "Mix.006",
+            "socket": "Factor"
+          }
+        ],
+        "intended_type": "RGBA",
+        "default_value": null
+      },
+      "Alpha": {
+        "value": 0.0,
+        "type": "VALUE"
+      }
+    },
+    "properties": {
+      "elements": [
+        {
+          "position": 0.0,
+          "color": [
+            0.0,
+            0.0,
+            0.0,
+            1.0
+          ]
+        },
+        {
+          "position": 0.24899999797344208,
+          "color": [
+            1.0,
+            1.0,
+            1.0,
+            1.0
+          ]
+        },
+        {
+          "position": 0.25099998712539673,
+          "color": [
+            0.0,
+            0.0,
+            0.0,
+            1.0
+          ]
+        },
+        {
+          "position": 0.49900001287460327,
+          "color": [
+            1.0,
+            1.0,
+            1.0,
+            1.0
+          ]
+        },
+        {
+          "position": 0.5009999871253967,
+          "color": [
+            0.0,
+            0.0,
+            0.0,
+            1.0
+          ]
+        },
+        {
+          "position": 0.7490000128746033,
+          "color": [
+            1.0,
+            1.0,
+            1.0,
+            1.0
+          ]
+        },
+        {
+          "position": 0.7509999871253967,
+          "color": [
+            0.0,
+            0.0,
+            0.0,
+            1.0
+          ]
+        }
+      ],
+      "color_mode": "RGB",
+      "interpolation": "CONSTANT",
+      "hue_interpolation": "NEAR"
+    }
+  },
+  "Mix.006": {
+    "id": "Mix.006",
+    "type": "MIX",
+    "name": "MIX",
+    "inputs": {
+      "Factor": {
+        "type": "linked",
+        "links": [
+          {
+            "node": "Color Ramp.005",
+            "socket": "Color"
+          }
+        ],
+        "intended_type": "VALUE",
+        "default_value": 1.0
+      },
+      "A": {
+        "type": "linked",
+        "links": [
+          {
+            "node": "Mix.005",
+            "socket": "Result"
+          }
+        ],
+        "intended_type": "RGBA",
+        "default_value": [
+          0.5,
+          0.5,
+          0.5,
+          1.0
+        ]
+      },
+      "B": {
+        "value": [
+          1.0,
+          1.0,
+          1.0,
+          1.0
+        ],
+        "type": "RGBA",
+        "input_hidden": false
+      }
+    },
+    "outputs": {
+      "Result": {
+        "type": "linked",
+        "links": [
+          {
+            "node": "Group.001",
+            "socket": "Input"
+          }
+        ],
+        "intended_type": "RGBA",
+        "default_value": null
+      }
+    },
+    "properties": {
+      "data_type": "RGBA",
+      "factor_mode": "UNIFORM",
+      "blend_type": "MIX",
+      "clamp_factor": true,
+      "clamp_result": false
+    }
+  },
+  "Glare": {
+    "id": "Glare",
+    "type": "GLARE",
+    "name": "GLARE",
+    "inputs": {
+      "Image": {
+        "value": [
+          1.0,
+          1.0,
+          1.0,
+          1.0
+        ],
+        "type": "RGBA",
+        "input_hidden": true
+      },
+      "Type": {
+        "value": "Bloom",
+        "type": "MENU",
+        "input_hidden": false
+      },
+      "Quality": {
+        "value": "Medium",
+        "type": "MENU",
+        "input_hidden": false
+      },
+      "Threshold": {
+        "value": 1.0,
+        "type": "VALUE",
+        "input_hidden": false
+      },
+      "Smoothness": {
+        "value": 0.1,
+        "type": "VALUE",
+        "input_hidden": false
+      },
+      "Clamp": {
+        "value": false,
+        "type": "BOOLEAN",
+        "input_hidden": false
+      },
+      "Maximum": {
+        "value": 10.0,
+        "type": "VALUE",
+        "input_hidden": false
+      },
+      "Strength": {
+        "value": 1.0,
+        "type": "VALUE",
+        "input_hidden": false
+      },
+      "Saturation": {
+        "value": 1.0,
+        "type": "VALUE",
+        "input_hidden": false
+      },
+      "Tint": {
+        "value": [
+          1.0,
+          1.0,
+          1.0,
+          1.0
+        ],
+        "type": "RGBA",
+        "input_hidden": false
+      },
+      "Size": {
+        "value": 0.5,
+        "type": "VALUE",
+        "input_hidden": false
+      },
+      "Streaks": {
+        "value": 4,
+        "type": "INT",
+        "input_hidden": false
+      },
+      "Streaks Angle": {
+        "value": 0.0,
+        "type": "VALUE",
+        "input_hidden": false
+      },
+      "Iterations": {
+        "value": 3,
+        "type": "INT",
+        "input_hidden": false
+      },
+      "Fade": {
+        "value": 0.9,
+        "type": "VALUE",
+        "input_hidden": false
+      },
+      "Color Modulation": {
+        "value": 0.25,
+        "type": "VALUE",
+        "input_hidden": false
+      },
+      "Diagonal": {
+        "value": true,
+        "type": "BOOLEAN",
+        "input_hidden": false
+      },
+      "Sun Position": {
+        "value": [
+          0.5,
+          0.5
+        ],
+        "type": "VECTOR2",
+        "input_hidden": false,
+        "vector_space": "PRESERVE"
+      },
+      "Jitter": {
+        "value": 0.0,
+        "type": "VALUE",
+        "input_hidden": false
+      },
+      "Kernel Data Type": {
+        "value": "Float",
+        "type": "MENU",
+        "input_hidden": false
+      },
+      "Kernel": [
+        {
+          "value": 0.0,
+          "type": "VALUE",
+          "input_hidden": true
+        },
+        {
+          "value": [
+            0.800000011920929,
+            0.800000011920929,
+            0.800000011920929,
+            1.0
+          ],
+          "type": "RGBA",
+          "input_hidden": true
+        }
+      ]
+    },
+    "outputs": {
+      "Image": {
+        "value": null,
+        "type": "RGBA"
+      },
+      "Glare": {
+        "value": null,
+        "type": "RGBA"
+      },
+      "Highlights": {
+        "value": null,
+        "type": "RGBA"
+      }
+    },
+    "properties": {
+      "vector_space": "PRESERVE"
     }
   }
 }

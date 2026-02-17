@@ -1,4 +1,4 @@
-{"hash": "dfbff8fbe302ec9b74b6bc80d73d026c",
+{"hash": "d5d393bf4a003a3a8533096de43f74d4",
   "$treeType": "material",
   "$internalTrees": {},
   "Material Output": {
@@ -87,10 +87,6 @@
         "type": "linked",
         "links": [
           {
-            "node": "Shader to RGB",
-            "socket": "Shader"
-          },
-          {
             "node": "Material Output",
             "socket": "Surface"
           }
@@ -102,42 +98,6 @@
     "properties": {
       "vector_space": "PRESERVE"
     }
-  },
-  "Shader to RGB": {
-    "id": "Shader to RGB",
-    "type": "SHADERTORGB",
-    "name": "SHADERTORGB",
-    "inputs": {
-      "Shader": {
-        "type": "linked",
-        "links": [
-          {
-            "node": "Diffuse BSDF",
-            "socket": "BSDF"
-          }
-        ],
-        "intended_type": "SHADER",
-        "default_value": null
-      }
-    },
-    "outputs": {
-      "Color": {
-        "type": "linked",
-        "links": [
-          {
-            "node": "Math",
-            "socket": "Input"
-          }
-        ],
-        "intended_type": "RGBA",
-        "default_value": null
-      },
-      "Alpha": {
-        "value": 0.0,
-        "type": "VALUE"
-      }
-    },
-    "properties": {}
   },
   "Texture Coordinate": {
     "id": "Texture Coordinate",
@@ -278,10 +238,6 @@
         "type": "linked",
         "links": [
           {
-            "node": "Mix",
-            "socket": "Input"
-          },
-          {
             "node": "AOV Output.001",
             "socket": "Value"
           }
@@ -296,103 +252,6 @@
     },
     "properties": {
       "vector_space": "OBJECT_NORMAL"
-    }
-  },
-  "Math": {
-    "id": "Math",
-    "type": "REROUTE",
-    "name": "MATH",
-    "inputs": {
-      "Value": {
-        "value": 1.0,
-        "type": "VALUE",
-        "input_hidden": false
-      },
-      "Input": {
-        "type": "linked",
-        "links": [
-          {
-            "node": "Shader to RGB",
-            "socket": "Color"
-          }
-        ],
-        "intended_type": "VALUE",
-        "default_value": 0.5
-      }
-    },
-    "outputs": {
-      "Output": {
-        "type": "linked",
-        "links": [
-          {
-            "node": "Mix",
-            "socket": "Input"
-          }
-        ],
-        "intended_type": "VALUE",
-        "default_value": 0.0
-      }
-    },
-    "properties": {
-      "operation": "SUBTRACT",
-      "use_clamp": false
-    }
-  },
-  "Mix": {
-    "id": "Mix",
-    "type": "REROUTE",
-    "name": "MIX",
-    "inputs": {
-      "Factor": {
-        "value": 1.0,
-        "type": "VALUE",
-        "input_hidden": false
-      },
-      "Input": {
-        "type": "linked",
-        "links": [
-          {
-            "node": "Math",
-            "socket": "Output"
-          }
-        ],
-        "intended_type": "RGBA",
-        "default_value": [
-          0.5,
-          0.5,
-          0.5,
-          1.0
-        ]
-      },
-      "B": {
-        "type": "linked",
-        "links": [
-          {
-            "node": "Layer Weight",
-            "socket": "Fresnel"
-          }
-        ],
-        "intended_type": "RGBA",
-        "default_value": [
-          0.5,
-          0.5,
-          0.5,
-          1.0
-        ]
-      }
-    },
-    "outputs": {
-      "Result": {
-        "value": null,
-        "type": "RGBA"
-      }
-    },
-    "properties": {
-      "data_type": "RGBA",
-      "factor_mode": "UNIFORM",
-      "blend_type": "ADD",
-      "clamp_factor": true,
-      "clamp_result": false
     }
   },
   "Voronoi Texture": {

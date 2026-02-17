@@ -405,6 +405,12 @@ export function combineFragmentShader(
         // TODO
         #include <premultiplied_alpha_fragment>
         // TODO
-        #include <dithering_fragment>
+        // #include <dithering_fragment>
+        #ifdef DITHERING
+
+            // gl_FragColor.rgb = dithering( gl_FragColor.rgb );
+            ${validTargets.map((t) => (t.format === RGBAFormat ? `${t.name}.rgb = dithering(${t.name}.rgb);` : '')).join('\n')}
+
+        #endif
     }`;
 }

@@ -1765,7 +1765,9 @@ ${transpiled.join('\n')}`;
                 transparent: !!Object.values(nodeTree).find(
                     (n) => n.type === 'BSDF_TRANSPARENT'
                 ),
-                alphaHash: true,
+                alphaHash: !Object.values(nodeTree).find(
+                    (n) => n.type === 'BSDF_TRANSPARENT'
+                ),
             };
 
             if (configurationNode) {

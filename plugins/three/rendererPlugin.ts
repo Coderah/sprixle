@@ -122,7 +122,7 @@ const renderConfigurationDefaults: RenderConfigurationComponents = {
     rMSAASamples: 0,
 
     rOutputColorSpace: SRGBColorSpace,
-    rToneMapping: NeutralToneMapping,
+    rToneMapping: THREE.NoToneMapping,
     rToneMappingExposure: 1,
 
     rShadowMap: {
@@ -333,7 +333,9 @@ export default sprixlePlugin(function RendererPlugin<
                 rSize.width,
                 rSize.height
             );
-            parameters.depthTexture.type = THREE.UnsignedInt248Type;
+            // parameters.depthTexture.type = canRenderToFloatType
+            //     ? THREE.FloatType
+            //     : THREE.HalfFloatType;
             // TODO how do shaders access the depth uniform if not prepass?
             if (depthPrepass?.components.rPassTextureUniform) {
                 depthPrepass.components.rPassTextureUniform.value =

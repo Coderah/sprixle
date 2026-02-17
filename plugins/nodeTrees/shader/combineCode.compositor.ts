@@ -66,6 +66,7 @@ export function combineCompositorFragmentShader(
 
     return glsl`
         layout(location = 0) out vec4 ${targets[0].name};
+        #define gl_FragColor ${targets[0].name}
         ${targets.map((t) => `uniform sampler2D u${t.name};`).join('\n')}
         uniform float opacity;
         

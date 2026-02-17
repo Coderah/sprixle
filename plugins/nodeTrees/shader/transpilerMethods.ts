@@ -525,16 +525,17 @@ export const transpilerMethods = {
         node: Node,
         compilationCache: CompilationCache
     ): GLSL['vec4'] {
-        const reference = 'colorRampCompositeLUT';
+        const reference = `colorRampCompositeLUT_${interpolation === 'CONSTANT' ? 'nearest' : 'linear'}`;
 
         const colorRampData = createColorRampLUT(
             elements,
             InterpolationType[interpolation]
         );
 
-        // TODO make a nearestSample clone and use where necessary.
+        // TODO nearest / linear could use the same compositeTexture (and therefore less image memory)
         const compositeTexture = getCompositeTexture(
             reference,
+            interpolation === 'CONSTANT' ? NearestFilter : LinearFilter,
             257,
             1,
             compilationCache
@@ -692,11 +693,12 @@ export const transpilerMethods = {
                 const typeLiteral = type.indexAccessOrigin.index.literal;
                 // const type = 'vec4';
 
+                // TODO introduce cameraNear and far uniforms
                 const convertedReference =
                     target.format === RedFormat
                         ? `texture2D(u${target.name}, vUv).r`
                         : target.internalShaderLogic === 'Depth'
-                          ? `1. - perspectiveDepthToViewZ(unpackRGBAToDepth(texture2D(u${target.name}, vUv)), .1, 100.)`
+                          ? `1. - perspectiveDepthToViewZ(texture2D(u${target.name}, vUv).x, .1, 100.)`
                           : convertVecSize(
                                 `texture2D(u${target.name}, vUv)`,
                                 typeOf<GLSL['vec4']>(),

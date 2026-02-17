@@ -12,6 +12,7 @@ import { CompilationCache } from '../createCompiler';
 
 export function getCompositeTexture(
     reference: string,
+    interpolation: typeof LinearFilter | typeof NearestFilter,
     itemWidth: number,
     itemHeight: number,
     compilationCache: CompilationCache
@@ -22,7 +23,8 @@ export function getCompositeTexture(
 
     compilationCache.shader.compositeTextures[reference] = new CompositeTexture(
         itemWidth,
-        itemHeight
+        itemHeight,
+        interpolation
     );
 
     compilationCache.shader.compositeTextures[
@@ -54,6 +56,9 @@ export class CompositeTexture {
     constructor(
         itemWidth: number,
         itemHeight: number,
+        interpolation:
+            | typeof LinearFilter
+            | typeof NearestFilter = LinearFilter,
         textureWidth: number = 257,
         textureHeight: number = 1024
     ) {
@@ -68,7 +73,7 @@ export class CompositeTexture {
         this.canvasTexture.wrapS = this.canvasTexture.wrapT =
             ClampToEdgeWrapping;
         this.canvasTexture.magFilter = this.canvasTexture.minFilter =
-            LinearFilter;
+            interpolation;
 
         this.canvas.style.imageRendering = 'pixelated';
         this.context.imageSmoothingEnabled = false;

@@ -131,14 +131,16 @@ const compositorPass = em.quickEntity(
 //     isRenderPass: true,
 //     rPassPhase: RenderPassPhase.POST_PROCESS,
 //     rProgram: new UnrealBloomPass(new Vector2(1024, 1024), 0.2, 0.001, 0.2),
-//     rOrder: 15,
+//     rOrder: 5,
 // });
 
 // const fxaaPass = em.quickEntity({
 //     isRenderPass: true,
 //     rPassPhase: RenderPassPhase.POST_PROCESS,
 //     rProgram: new ShaderPass(FXAAShader),
+//     rOrder: 10,
 // });
+// fxaaPass.components.rProgram.needsSwap = true;
 
 const smaaPass = em.quickEntity({
     isRenderPass: true,

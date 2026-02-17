@@ -3,7 +3,14 @@ import {
     ReflectionClass,
     resolveReceiveType,
 } from '@deepkit/type';
-import { FrontSide, GLSL3, InstancedMesh, ShaderMaterial } from 'three';
+import {
+    BasicDepthPacking,
+    FrontSide,
+    GLSL3,
+    InstancedMesh,
+    MeshDepthMaterial,
+    ShaderMaterial,
+} from 'three';
 import { UnionOrIntersectionType } from 'typescript';
 import { blenderEvents } from '../../blender/realtime';
 import {
@@ -33,6 +40,10 @@ export type ShaderTreeComponentTypes = {
 } & MaterialManagerComponentTypes;
 
 const dependencies = { materialManagerPlugin };
+
+const basicDepthPackMaterial = new MeshDepthMaterial({
+    depthPacking: BasicDepthPacking,
+});
 
 // TODO allow passing in custom transpiler methods
 /** This plugin handles compiling and applying ShaderTree format (from blender addon) */
@@ -162,6 +173,8 @@ export default sprixlePlugin(function shaderTreePlugin<
             depthMaterial.name = entity.components.materialName + ' Depth';
 
             entity.components.depthMaterial = depthMaterial;
+        } else {
+            // entity.components.depthMaterial = basicDepthPackMaterial;
         }
 
         entity.components.material = material;

@@ -61,16 +61,16 @@ export function combineCompositorFragmentShader(
     transpiled: string[],
     compilationCache: CompilationCache
 ) {
-    const validTargets = (
-        compilationCache.shader?.rPassTargets || DEFAULT_PASS_TARGETS
-    ).filter((t) => t.internalShaderLogic !== 'Depth');
+    const targets =
+        compilationCache.shader?.rPassTargets || DEFAULT_PASS_TARGETS;
 
     return glsl`
-        layout(location = 0) out vec4 ${validTargets[0].name};
-        ${validTargets.map((t) => `uniform sampler2D u${t.name};`).join('\n')}
+        layout(location = 0) out vec4 ${targets[0].name};
+        ${targets.map((t) => `uniform sampler2D u${t.name};`).join('\n')}
         uniform float opacity;
         
-        varying vec2 vUv;  
+        varying vec2 vUv;
+        #include <packing>
 
         ${Array.from(compilationCache.shader.fragmentIncludes)
             .filter((a) => a.trimStart().startsWith('struct'))

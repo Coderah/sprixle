@@ -3,11 +3,13 @@ import {
     Color,
     Mesh,
     NeutralToneMapping,
+    NoToneMapping,
     PCFShadowMap,
     PerspectiveCamera,
     Scene,
     ShaderMaterial,
     Vector2,
+    Vector3,
 } from 'three';
 import {
     FXAAShader,
@@ -64,7 +66,7 @@ const { renderer, glCanvas, rendererPipeline, configurationEntity } =
         {
             // rPixelRatio: 1.5,
             // rMSAASamples: 8,
-            rToneMapping: NeutralToneMapping,
+            rToneMapping: NoToneMapping,
             rShadowMap: {
                 enabled: false,
                 type: PCFShadowMap,

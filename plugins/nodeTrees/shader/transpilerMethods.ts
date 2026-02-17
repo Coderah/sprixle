@@ -695,11 +695,13 @@ export const transpilerMethods = {
                 const convertedReference =
                     target.format === RedFormat
                         ? `texture2D(u${target.name}, vUv).r`
-                        : convertVecSize(
-                              `texture2D(u${target.name}, vUv)`,
-                              typeOf<GLSL['vec4']>(),
-                              type
-                          );
+                        : target.internalShaderLogic === 'Depth'
+                          ? `1. - perspectiveDepthToViewZ(unpackRGBAToDepth(texture2D(u${target.name}, vUv)), .1, 100.)`
+                          : convertVecSize(
+                                `texture2D(u${target.name}, vUv)`,
+                                typeOf<GLSL['vec4']>(),
+                                type
+                            );
 
                 return `${typeLiteral} ${target.name}Sample = ${convertedReference};`;
             }
@@ -714,7 +716,7 @@ export const transpilerMethods = {
                     } else if (name === 'Alpha') {
                         return `${imageSampleReference}.a`;
                     } else if (name === 'Depth') {
-                        return 'depthSample';
+                        return 'DepthSample';
                     }
                     return name + 'Sample';
                 })

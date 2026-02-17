@@ -273,9 +273,15 @@ export default sprixlePlugin(function RendererPlugin<
             if (rProgram instanceof ShaderPass) {
                 rProgram.uniforms = rProgram.material.uniforms;
 
-                for (let i = 0; i < multipassTarget.textures.length;  i++) {
+                for (let i = 0; i < multipassTarget.textures.length; i++) {
                     const texture = multipassTarget.textures[i];
-                    rProgram.uniforms['u' + texture.name] = {value: texture};
+                    rProgram.uniforms['u' + texture.name] = { value: texture };
+                }
+
+                if (multipassTarget.depthTexture) {
+                    rProgram.uniforms.uDepth = {
+                        value: multipassTarget.depthTexture,
+                    };
                 }
             }
         }
@@ -319,9 +325,6 @@ export default sprixlePlugin(function RendererPlugin<
             format: THREE.RGBAFormat,
             type: canRenderToFloatType ? THREE.FloatType : THREE.HalfFloatType,
             anisotropy: maxAnisotropy,
-            depthBuffer: true,
-            count: validTargets?.length || 1,
-            samples: rMSAASamples,
         };
 
         // TODO differentiate between a depth pre-pass and including depth in the color renderPass.
@@ -330,6 +333,7 @@ export default sprixlePlugin(function RendererPlugin<
                 rSize.width,
                 rSize.height
             );
+            parameters.depthTexture.type = THREE.UnsignedInt248Type;
             // TODO how do shaders access the depth uniform if not prepass?
             if (depthPrepass?.components.rPassTextureUniform) {
                 depthPrepass.components.rPassTextureUniform.value =
@@ -344,7 +348,12 @@ export default sprixlePlugin(function RendererPlugin<
             // TODO is pixelRatio appropriate here?
             rSize.width * rPixelRatio,
             rSize.height * rPixelRatio,
-            parameters
+            {
+                ...parameters,
+                depthBuffer: true,
+                count: validTargets?.length || 1,
+                samples: rMSAASamples,
+            }
         );
 
         if (validTargets?.length) {
@@ -372,10 +381,25 @@ export default sprixlePlugin(function RendererPlugin<
 
         renderer.initRenderTarget(multipassTarget);
 
+        const composerTarget = new WebGLRenderTarget(
+            rSize.width * rPixelRatio,
+            rSize.height * rPixelRatio,
+            {
+                ...parameters,
+                depthBuffer: false,
+                // depthBuffer: true,
+                count: 1,
+                // count: validTargets?.length || 1,
+                samples: rMSAASamples,
+            }
+        );
+
+        renderer.initRenderTarget(composerTarget);
+
         composer.renderTarget1?.dispose();
         composer.renderTarget2?.dispose();
 
-        composer = new EffectComposer(renderer);
+        composer = new EffectComposer(renderer, composerTarget);
 
         if (depthPrepass) {
             setupRenderPass(depthPrepass);
@@ -397,9 +421,11 @@ export default sprixlePlugin(function RendererPlugin<
             composer.addPass(pass.components.rProgram);
         }
 
-        composer.addPass(new OutputPass());
+        const outputPass = new OutputPass();
+        outputPass.renderToScreen = true;
+        composer.addPass(outputPass);
 
-        renderer.resetState();
+        // renderer.resetState();
     }
 
     // TODO make configurable?

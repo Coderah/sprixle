@@ -32,7 +32,7 @@
   "use_motion_blur": false,
   "use_grease_pencil": false,
   "use_pass_combined": true,
-  "use_pass_z": false,
+  "use_pass_z": true,
   "use_pass_vector": false,
   "use_pass_position": false,
   "use_pass_normal": true,

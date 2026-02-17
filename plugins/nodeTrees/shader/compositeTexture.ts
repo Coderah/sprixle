@@ -28,9 +28,9 @@ export function getCompositeTexture(
     compilationCache.shader.compositeTextures[
         reference
     ].canvas.dataset.reference = reference;
-    document.body.append(
-        compilationCache.shader.compositeTextures[reference].canvas
-    );
+    // document.body.append(
+    //     compilationCache.shader.compositeTextures[reference].canvas
+    // );
 
     return compilationCache.shader.compositeTextures[reference];
 }

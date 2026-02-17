@@ -510,14 +510,14 @@ export const transpilerMethods = {
     VALTORGB(
         Factor: GLSL['float'],
         elements: ColorStop[],
-        color_mode: InterpolationType,
+        color_mode: string,
         interpolation: string,
         node: Node,
         compilationCache: CompilationCache
     ): GLSL['vec4'] {
         const reference = 'colorRampCompositeLUT';
 
-        const colorRampCanvas = createColorRampLUT(
+        const colorRampData = createColorRampLUT(
             elements,
             InterpolationType[interpolation]
         );
@@ -529,7 +529,10 @@ export const transpilerMethods = {
             compilationCache
         );
 
-        const compositeReference = compositeTexture.add(colorRampCanvas);
+        const compositeReference = compositeTexture.add(
+            colorRampData,
+            getReference(node)
+        );
 
         compilationCache.uniforms[reference] = {
             value: compositeReference.texture,

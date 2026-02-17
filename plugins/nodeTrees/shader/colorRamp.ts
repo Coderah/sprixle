@@ -21,16 +21,18 @@ export enum InterpolationType {
 
 // TODO add memoization through data hashing
 const LUT_SIZE = 257;
+
+const canvas = document.createElement('canvas');
+canvas.width = LUT_SIZE;
+canvas.height = 1;
+const context = canvas.getContext('2d')!;
+
 export function createColorRampLUT(
     colorRampData: ColorStop[],
     interpolationType: InterpolationType = InterpolationType.LINEAR
 ) {
     // TODO remove hack for test code
     // if (typeof document === 'undefined') return new Texture();
-    const canvas = document.createElement('canvas');
-    canvas.width = LUT_SIZE;
-    canvas.height = 1;
-    const context = canvas.getContext('2d')!;
 
     const imageData = context.createImageData(LUT_SIZE, 1);
     const data = imageData.data;
@@ -109,9 +111,8 @@ export function createColorRampLUT(
     }
 
     imageData.data.set(data);
-    context.putImageData(imageData, 0, 0);
 
-    return canvas;
+    return imageData;
 }
 
 //     const texture = new CanvasTexture(canvas);

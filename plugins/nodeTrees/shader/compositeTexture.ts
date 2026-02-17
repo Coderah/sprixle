@@ -28,9 +28,9 @@ export function getCompositeTexture(
     compilationCache.shader.compositeTextures[
         reference
     ].canvas.dataset.reference = reference;
-    // document.body.append(
-    //     compilationCache.shader.compositeTextures[reference].canvas
-    // );
+    document.body.append(
+        compilationCache.shader.compositeTextures[reference].canvas
+    );
 
     return compilationCache.shader.compositeTextures[reference];
 }
@@ -48,7 +48,7 @@ export class CompositeTexture {
     protected y = 0;
 
     protected canvas = document.createElement('canvas') as HTMLCanvasElement;
-    protected context = this.canvas.getContext('2d');
+    protected context = this.canvas.getContext('2d', { alpha: false });
     canvasTexture = new CanvasTexture(this.canvas);
 
     constructor(
@@ -68,34 +68,44 @@ export class CompositeTexture {
         this.canvasTexture.wrapS = this.canvasTexture.wrapT =
             ClampToEdgeWrapping;
         this.canvasTexture.magFilter = this.canvasTexture.minFilter =
-            LinearFilter;
+            NearestFilter;
+
+        this.canvas.style.imageRendering = 'pixelated';
+        this.context.imageSmoothingEnabled = false;
     }
 
-    // TODO might need to memoize on imageData instead?
-    add = memoize(function add(canvas: HTMLCanvasElement) {
-        this.count++;
-        this.canvas.dataset.count = this.count;
-        const imageData = canvas
-            .getContext('2d')
-            .getImageData(0, 0, this.width, this.height);
+    add = memoize(
+        function add(
+            this: CompositeTexture,
+            imageData: ImageData,
+            reference: string
+        ) {
+            this.count++;
+            this.canvas.dataset.count = this.count.toString();
 
-        this.context.putImageData(imageData, this.x, this.y);
-        this.canvasTexture.needsUpdate = true;
+            this.context.putImageData(imageData, this.x, this.y);
+            this.canvasTexture.needsUpdate = true;
 
-        const result = {
-            x: this.x,
-            y: this.y,
-            uv: new Vector2(
-                this.x / this.textureWidth,
-                1 - this.y / this.textureHeight
-            ),
-            texture: this.canvasTexture,
-        };
+            const sampler_offset = 0.5 / this.textureHeight;
+            const sampler_scale = 1.0 / this.textureHeight;
 
-        this.moveToNext();
+            const result = {
+                x: this.x,
+                y: this.y,
+                uv: new Vector2(
+                    this.x / this.textureWidth,
+                    1 - (this.y * sampler_scale + sampler_offset)
+                    // 1 - this.y + (0.5 / this.textureHeight)
+                ),
+                texture: this.canvasTexture,
+            };
 
-        return result;
-    });
+            this.moveToNext();
+
+            return result;
+        },
+        (imageData, reference) => reference
+    );
 
     protected moveToNext() {
         this.x += this.width;

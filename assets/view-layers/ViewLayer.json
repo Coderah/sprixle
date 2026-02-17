@@ -34,7 +34,7 @@
   "use_pass_combined": true,
   "use_pass_z": true,
   "use_pass_vector": false,
-  "use_pass_position": false,
+  "use_pass_position": true,
   "use_pass_normal": true,
   "use_pass_uv": false,
   "use_pass_mist": false,

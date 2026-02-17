@@ -265,7 +265,9 @@ export function combineFragmentShader(
         .map((t) => {
             let defaultValue = t.format === RGBAFormat ? 'vec4(0.)' : '0.';
             if (t.internalShaderLogic === 'Normal') {
-                defaultValue = 'vec4(vNormal, 1.)';
+                defaultValue = 'vec4(vObjectNormal, 1.)';
+            } else if (t.internalShaderLogic) {
+                defaultValue = 'vec4(vPosition, 1.)';
             }
             return `${t.name} = ${defaultValue};`;
         })

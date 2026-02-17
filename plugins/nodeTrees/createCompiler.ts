@@ -948,6 +948,7 @@ export function createNodeTreeCompiler<M extends LogicTreeMethods>(
                     // TODO implement prefix or nesting for cache stuff
                     const compiledInternalNodeTree = compileNodeTree(
                         internalNodeTree,
+                        null,
                         true,
                         compilationTarget,
                         compilationCache
@@ -1406,7 +1407,8 @@ export function createNodeTreeCompiler<M extends LogicTreeMethods>(
 
                 const returnType = getReturnType(
                     methodReflection,
-                    compiledParameters
+                    compiledParameters,
+                    n
                 );
                 compilationCache.inputTypes[getReference(n.id)] = returnType;
 

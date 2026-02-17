@@ -6,6 +6,7 @@ import {
     Type,
     TypeMethod,
 } from '@deepkit/type';
+import { dynamicNodeToType } from './shader/GLSL';
 
 const reservedWords = new Set([
     'mix',
@@ -75,10 +76,26 @@ export function getConditionalType(
     return returnType || type;
 }
 
-export function getReturnType(type: TypeMethod, parameters: any[]) {
+export function getReturnType(
+    type: TypeMethod,
+    parameters: any[],
+    node?: Node
+) {
     const baseReturn = type.return;
 
     if (!baseReturn) return baseReturn;
+
+    const typeArgument = baseReturn.typeArguments?.[0];
+    if (
+        baseReturn.typeName === 'GLSL' &&
+        typeArgument.kind === ReflectionKind.literal
+    ) {
+        if (typeArgument.literal === 'infer') {
+            const dynamic = dynamicNodeToType(node);
+
+            return getReturnType(dynamic, parameters);
+        }
+    }
 
     return getConditionalType(type, baseReturn, parameters);
 }

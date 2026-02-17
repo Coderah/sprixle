@@ -6,9 +6,19 @@ import {
     TypePropertySignature,
 } from '@deepkit/type';
 import { InputType, Node } from '../createCompiler';
-import { getParameterReference, getReference } from '../util';
+import { getParameterReference } from '../util';
 
-export default interface GLSL<V = any> {
+export default interface GLSL<
+    V =
+        | 'vec2'
+        | 'vec3'
+        | 'vec4'
+        | 'imageTex'
+        | 'int'
+        | 'uint'
+        | 'bool'
+        | 'float',
+> {
     vec2: any;
     vec3: any;
     vec4: any;
@@ -21,6 +31,9 @@ export default interface GLSL<V = any> {
     bool: any;
 
     float: any;
+
+    // allows inferrence based on node info (useful for entirely dynamic output)
+    infer: any;
 }
 
 // export interface GLSL<V = any> {

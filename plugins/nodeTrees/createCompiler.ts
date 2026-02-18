@@ -1130,8 +1130,9 @@ export function createNodeTreeCompiler<M extends LogicTreeMethods>(
                 // console.log(
                 //     n.name,
                 //     'target type',
+                //     vertexShaderTargetInfo,
                 //     vertexShaderTargetInfo
-                //         ? `VertexShader<${vertexShaderTargetInfo[0].literal}>`
+                //         ? `VertexShader<${vertexShaderTargetInfo}>`
                 //         : 'FragmentShader<default>'
                 // );
 
@@ -1139,7 +1140,7 @@ export function createNodeTreeCompiler<M extends LogicTreeMethods>(
                     if (vertexShaderTargetInfo) {
                         console.log('entering vertex context');
                         compilationCache.compiledInputs.current =
-                            vertexShaderTargetInfo[0].literal === 'displacement'
+                            vertexShaderTargetInfo === 'displacement'
                                 ? shaderTargetInputs.Displacement
                                 : shaderTargetInputs.Vertex;
                     } else {
@@ -1502,8 +1503,7 @@ export function createNodeTreeCompiler<M extends LogicTreeMethods>(
                     : result;
 
                 if (vertexShaderTargetInfo) {
-                    const target =
-                        vertexShaderTargetInfo[0].literal || 'default';
+                    const target = vertexShaderTargetInfo || 'default';
 
                     let shaderDestination: string[] | null = null;
 

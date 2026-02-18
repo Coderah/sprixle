@@ -89,7 +89,9 @@ export class CompositeTexture {
             this.canvas.dataset.count = this.count.toString();
 
             this.context.putImageData(imageData, this.x, this.y);
-            this.canvasTexture.needsUpdate = true;
+            const startIndex = (this.y * this.textureWidth + this.x) * 4;
+            const updateLength = imageData.data.length; //this.width * this.height * 4;
+            this.canvasTexture.addUpdateRange(startIndex, updateLength);
 
             const sampler_offset = 0.5 / this.textureHeight;
             const sampler_scale = 1.0 / this.textureHeight;

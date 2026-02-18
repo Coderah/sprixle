@@ -65,6 +65,7 @@ const { renderer, glCanvas, rendererPipeline, configurationEntity } =
         },
         {
             // rPixelRatio: 1.5,
+            rPixelRatio: 1,
             // rMSAASamples: 8,
             rToneMapping: NoToneMapping,
             rShadowMap: {
@@ -134,21 +135,21 @@ const compositorPass = em.quickEntity(
 //     rOrder: 5,
 // });
 
-// const fxaaPass = em.quickEntity({
-//     isRenderPass: true,
-//     rPassPhase: RenderPassPhase.POST_PROCESS,
-//     rProgram: new ShaderPass(FXAAShader),
-//     rOrder: 10,
-// });
-// fxaaPass.components.rProgram.needsSwap = true;
-
-const smaaPass = em.quickEntity({
+const fxaaPass = em.quickEntity({
     isRenderPass: true,
     rPassPhase: RenderPassPhase.POST_PROCESS,
-    rProgram: new SMAAPass(256, 256),
+    rProgram: new ShaderPass(FXAAShader),
     rOrder: 10,
 });
-smaaPass.components.rProgram.needsSwap = true;
+fxaaPass.components.rProgram.needsSwap = true;
+
+// const smaaPass = em.quickEntity({
+//     isRenderPass: true,
+//     rPassPhase: RenderPassPhase.POST_PROCESS,
+//     rProgram: new SMAAPass(256, 256),
+//     rOrder: 10,
+// });
+// smaaPass.components.rProgram.needsSwap = true;
 
 const gltfLoader = new GLTFLoader();
 (async function () {

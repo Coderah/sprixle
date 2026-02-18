@@ -1,4 +1,4 @@
-{"hash": "4132a9a8b915bea1b6a75c5493f4802a",
+{"hash": "c5f9145685ba37543c60d06e7d48e4f2",
   "$treeType": "composition",
   "$internalTrees": {},
   "Group Output": {
@@ -56,7 +56,7 @@
           },
           {
             "node": "Mix.003",
-            "socket": "A"
+            "socket": "B"
           }
         ],
         "intended_type": "RGBA",
@@ -86,7 +86,7 @@
           },
           {
             "node": "Mix.003",
-            "socket": "B"
+            "socket": "A"
           }
         ],
         "intended_type": "VECTOR3",
@@ -106,6 +106,10 @@
         "vector_space": "PRESERVE"
       },
       "Test": {
+        "value": null,
+        "type": "RGBA"
+      },
+      "testValue": {
         "type": "linked",
         "links": [
           {
@@ -113,12 +117,8 @@
             "socket": "B"
           }
         ],
-        "intended_type": "RGBA",
-        "default_value": null
-      },
-      "testValue": {
-        "value": 0.0,
-        "type": "VALUE"
+        "intended_type": "VALUE",
+        "default_value": 0.0
       }
     },
     "properties": {
@@ -1034,7 +1034,7 @@
         "links": [
           {
             "node": "Render Layers",
-            "socket": "Image"
+            "socket": "Normal"
           }
         ],
         "intended_type": "RGBA",
@@ -1050,7 +1050,7 @@
         "links": [
           {
             "node": "Render Layers",
-            "socket": "Normal"
+            "socket": "Image"
           }
         ],
         "intended_type": "RGBA",
@@ -1426,7 +1426,7 @@
         "links": [
           {
             "node": "Render Layers",
-            "socket": "Test"
+            "socket": "testValue"
           }
         ],
         "intended_type": "RGBA",
@@ -1983,7 +1983,7 @@
           ]
         },
         {
-          "position": 0.6839378476142883,
+          "position": 0.6499999761581421,
           "color": [
             0.0,
             0.0,
@@ -2177,7 +2177,7 @@
           ]
         },
         {
-          "position": 0.6830000281333923,
+          "position": 0.6489999890327454,
           "color": [
             1.0,
             1.0,
@@ -2186,7 +2186,7 @@
           ]
         },
         {
-          "position": 0.6850000023841858,
+          "position": 0.652999997138977,
           "color": [
             0.0,
             0.0,

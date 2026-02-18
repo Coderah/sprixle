@@ -56,6 +56,6 @@ export function addBlenderDependency(
 
     addContextualShaderInclude(
         compilationCache,
-        prepBlenderGLSL(shader.replace(includesRegex, '// $0'))
+        prepBlenderGLSL(shader.replace(includesRegex, ''))
     );
 }

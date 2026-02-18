@@ -1,4 +1,4 @@
-{"hash": "d5d393bf4a003a3a8533096de43f74d4",
+{"hash": "ce176dbc80860c7519218e6d8c153b17",
   "$treeType": "material",
   "$internalTrees": {},
   "Material Output": {
@@ -111,15 +111,8 @@
         "vector_space": "OBJECT_GENERATED"
       },
       "Normal": {
-        "type": "linked",
-        "links": [
-          {
-            "node": "Layer Weight",
-            "socket": "Normal"
-          }
-        ],
-        "intended_type": "VECTOR3",
-        "default_value": null,
+        "value": null,
+        "type": "VECTOR3",
         "vector_space": "OBJECT_NORMAL"
       },
       "UV": {
@@ -127,6 +120,10 @@
         "links": [
           {
             "node": "Vector Math.001",
+            "socket": "Vector"
+          },
+          {
+            "node": "Noise Texture",
             "socket": "Vector"
           }
         ],
@@ -162,6 +159,10 @@
           {
             "node": "AOV Output",
             "socket": "Color"
+          },
+          {
+            "node": "Layer Weight",
+            "socket": "Normal"
           }
         ],
         "intended_type": "VECTOR3",
@@ -220,7 +221,7 @@
         "links": [
           {
             "node": "Texture Coordinate",
-            "socket": "Normal"
+            "socket": "Reflection"
           }
         ],
         "intended_type": "VECTOR3",
@@ -229,7 +230,7 @@
           0.0,
           0.0
         ],
-        "incoming_vector_space": "OBJECT_NORMAL",
+        "incoming_vector_space": "WORLD_REFLECTION",
         "vector_space": "OBJECT_NORMAL"
       }
     },
@@ -304,8 +305,15 @@
     },
     "outputs": {
       "Distance": {
-        "value": 0.0,
-        "type": "VALUE"
+        "type": "linked",
+        "links": [
+          {
+            "node": "Displacement",
+            "socket": "Input"
+          }
+        ],
+        "intended_type": "VALUE",
+        "default_value": 0.0
       },
       "Color": {
         "type": "linked",
@@ -665,6 +673,120 @@
     "outputs": {},
     "properties": {
       "aov_name": "testValue"
+    }
+  },
+  "Displacement": {
+    "id": "Displacement",
+    "type": "REROUTE",
+    "name": "DISPLACEMENT",
+    "inputs": {
+      "Input": {
+        "type": "linked",
+        "links": [
+          {
+            "node": "Voronoi Texture",
+            "socket": "Distance"
+          }
+        ],
+        "intended_type": "VALUE",
+        "default_value": 1.0
+      },
+      "Midlevel": {
+        "value": 0.5,
+        "type": "VALUE",
+        "input_hidden": false
+      },
+      "Scale": {
+        "value": 0.5,
+        "type": "VALUE",
+        "input_hidden": false
+      },
+      "Normal": {
+        "value": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "type": "VECTOR3",
+        "input_hidden": true,
+        "vector_space": "OBJECT_NORMAL"
+      }
+    },
+    "outputs": {
+      "Displacement": {
+        "value": null,
+        "type": "VECTOR3",
+        "vector_space": "OBJECT"
+      }
+    },
+    "properties": {
+      "space": "OBJECT",
+      "vector_space": "OBJECT_NORMAL"
+    }
+  },
+  "Noise Texture": {
+    "id": "Noise Texture",
+    "type": "TEX_NOISE",
+    "name": "TEX_NOISE",
+    "inputs": {
+      "Vector": {
+        "type": "linked",
+        "links": [
+          {
+            "node": "Texture Coordinate",
+            "socket": "UV"
+          }
+        ],
+        "intended_type": "VECTOR3",
+        "default_value": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "incoming_vector_space": "UV",
+        "vector_space": "PRESERVE"
+      },
+      "Scale": {
+        "value": 6.8,
+        "type": "VALUE",
+        "input_hidden": false
+      },
+      "Detail": {
+        "value": 2.0,
+        "type": "VALUE",
+        "input_hidden": false
+      },
+      "Roughness": {
+        "value": 0.5,
+        "type": "VALUE",
+        "input_hidden": false
+      },
+      "Lacunarity": {
+        "value": 2.0,
+        "type": "VALUE",
+        "input_hidden": false
+      },
+      "Distortion": {
+        "value": 0.0,
+        "type": "VALUE",
+        "input_hidden": false
+      }
+    },
+    "outputs": {
+      "Factor": {
+        "value": 0.0,
+        "type": "VALUE"
+      },
+      "Color": {
+        "value": null,
+        "type": "RGBA"
+      }
+    },
+    "properties": {
+      "noise_dimensions": "3D",
+      "noise_type": "FBM",
+      "normalize": true,
+      "vector_space": "PRESERVE"
     }
   }
 }

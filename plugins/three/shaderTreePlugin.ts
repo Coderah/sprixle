@@ -33,6 +33,7 @@ import {
     DEFAULT_PASS_TARGETS,
     PassTargets,
 } from '../nodeTrees/shader/blender/viewLayer';
+import prepBlenderGLSL from '../nodeTrees/shader/blender/prepBlenderGLSL';
 
 export type ShaderTreeComponentTypes = {
     shaderTree: NodeTree & TrackPrevious;
@@ -238,9 +239,8 @@ export default sprixlePlugin(function shaderTreePlugin<
     ) {
         let fragmentLog = compiledShaderTree.fragmentShader;
         for (let shaderName in blenderShaders) {
-            const replaceableShaderCode = blenderShaders[shaderName].replace(
-                includesRegex,
-                ''
+            const replaceableShaderCode = prepBlenderGLSL(
+                blenderShaders[shaderName].replace(includesRegex, '')
             );
             fragmentLog = fragmentLog.replace(
                 replaceableShaderCode,
@@ -250,9 +250,8 @@ export default sprixlePlugin(function shaderTreePlugin<
 
         let vertexLog = compiledShaderTree.vertexShader;
         for (let shaderName in blenderShaders) {
-            const replaceableShaderCode = blenderShaders[shaderName].replace(
-                includesRegex,
-                ''
+            const replaceableShaderCode = prepBlenderGLSL(
+                blenderShaders[shaderName].replace(includesRegex, '')
             );
             vertexLog = vertexLog.replace(
                 replaceableShaderCode,

@@ -10,6 +10,10 @@ def is_struct(val):
 
 vector_space_rules = {
     'output_spaces': {
+        'R_LAYERS': {'__ALL__': 'OBJECT'},
+        'CompositorNodeImageCoordinates': {'__ALL__': 'UV'},
+        'CompositorNodeImageInfo': {'__ALL__': 'UV'},
+
         # Texture Coordinate Node
         'TEX_COORD': {
             'UV': 'UV',
@@ -39,6 +43,7 @@ vector_space_rules = {
         'DISPLACEMENT': {'Displacement': 'OBJECT'},
         'VECTOR_TRANSFORM': {'Vector': 'OBJECT'},  # Default output space
         'VECTOR_CURVES': {'Vector': 'PRESERVE'},  # Inherits input space
+        'VECTOR_ROTATE': {'Vector': 'PRESERVE'},  # Inherits input space
         'VECT_MATH': {'Vector': 'PRESERVE'},  # Inherits dominant input space
         
         # Geometry Nodes

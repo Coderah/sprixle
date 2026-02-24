@@ -26,6 +26,35 @@ auto_load.init()
 
 last_serialized_trees = {}
 active_scene = None
+pending_updates = {}  # key -> {'cancelled': bool}
+
+DEBOUNCE_MS = 300  # ms to wait before sending after last update for a given id
+
+
+def debounced_send(key, message_data):
+    """Schedule a throttled send. Cancels any pending send for the same key."""
+    global pending_updates, server
+
+    # Cancel previous pending send for this key
+    if key in pending_updates:
+        pending_updates[key]['data'] = message_data
+        return
+        # debounce approach over throttle
+        # pending_updates[key]['cancelled'] = True
+
+    pending_info = {'cancelled': False, 'data': message_data}
+    pending_updates[key] = pending_info
+
+    def delayed_send():
+        if not pending_info['cancelled'] and server:
+            server.send_message_to_all(json.dumps(pending_info['data'], indent=0))
+        # Only clean up if we're still the active entry — a cancelled timer
+        # must not remove the newer pending_info that replaced us.
+        if pending_updates.get(key) is pending_info:
+            pending_updates.pop(key, None)
+        return None  # Don't repeat
+
+    bpy.app.timers.register(delayed_send, first_interval=DEBOUNCE_MS / 1000.0)
 
 @persistent
 def checkScene():
@@ -66,11 +95,11 @@ def handleDepsGraphUpdate(scene, graph):
             if data and server:
                 print('sending world shader', update.id.name)
                 # graphs_serialized.append(material)
-                server.send_message_to_all(json.dumps({
+                debounced_send(('world', update.id.name), {
                     "name": name.replace('.',''),
                     "type": 'shaderTree',
                     "data": data
-                }, indent=0))
+                })
 
         if isinstance(update.id, bpy.types.CompositorNodeTree):
             # scene = bpy.data.scenes[update.id.name]
@@ -80,11 +109,11 @@ def handleDepsGraphUpdate(scene, graph):
 
             if data and server:
                 print('sending compositor shader', name)
-                server.send_message_to_all(json.dumps({
-                        "name": name.replace('.',''),
-                        "type": 'shaderTree',
-                        "data": data
-                    }, indent=0))
+                debounced_send(('compositor', update.id.name), {
+                    "name": name.replace('.',''),
+                    "type": 'shaderTree',
+                    "data": data
+                })
         
         elif isinstance(update.id, bpy.types.Scene):
             serializers.view_layer(bpy.context.view_layer)
@@ -96,11 +125,11 @@ def handleDepsGraphUpdate(scene, graph):
             if data and server:
                 print('sending shaderTree', update.id.name)
                 graphs_serialized.append(material)
-                server.send_message_to_all(json.dumps({
+                debounced_send(('material', update.id.name), {
                     "name": name.replace('.',''),
                     "type": 'shaderTree',
                     "data": data
-                }, indent=0))
+                })
 
             # TODO define and send update types?
             # if update.id.name in last_serialized_trees:
@@ -128,11 +157,11 @@ def handleDepsGraphUpdate(scene, graph):
 
         if data and server:
             graphs_serialized.append(modifier)
-            server.send_message_to_all(json.dumps({
-                 "name": name.replace('.', ''),
-                 "type": 'logicTree',
-                 "data": data
-            }, indent=0))
+            debounced_send(('logic', object.name), {
+                "name": name.replace('.', ''),
+                "type": 'logicTree',
+                "data": data
+            })
 
 def prepAllNodeTrees():
     logicObjects = {}

@@ -97,7 +97,11 @@ function texelOffset(
     return `uv + texelSize * vec2(${formatFloat(offsetX)}, ${formatFloat(offsetY)})`;
 }
 
-export function filterGLSL(kernelType: KernelType) {
+export function filterGLSL(
+    kernelType: KernelType,
+    sampleFunction = 'texture2D(tDiffuse, ',
+    textureSizeCall = 'textureSize(tDiffuse, 0)'
+) {
     const fnReference = camelCase('filter' + kernelType);
     const kernel = getKernel(kernelType);
     const isEdge = isEdgeFilter(kernelType);
@@ -113,7 +117,7 @@ export function filterGLSL(kernelType: KernelType) {
                 if (kx === 0 && ky === 0) continue;
 
                 const coord = texelOffset('uv', i - 1, j - 1);
-                samples.push(`{ vec3 s = texture(image_tx, ${coord}).rgb;`);
+                samples.push(`{ vec3 s = ${sampleFunction}${coord}).rgb;`);
                 if (kx !== 0)
                     samples.push(`  color_x += s * ${formatFloat(kx)};`);
                 if (ky !== 0)
@@ -125,13 +129,13 @@ export function filterGLSL(kernelType: KernelType) {
         const mixLine = glsl`vec4 filteredColor = vec4(mix(centerColor.rgb, magnitude, fac), centerColor.a);`;
 
         return [
-            glsl`vec4 ${fnReference}(sampler2D image_tx, float fac, vec2 uv) {
-            vec2 texelSize = 1.0 / vec2(textureSize(image_tx, 0));
+            glsl`vec4 ${fnReference}(float fac, vec2 uv) {
+            vec2 texelSize = 1.0 / vec2(${textureSizeCall});
             vec3 color_x = vec3(0.0);
             vec3 color_y = vec3(0.0);
             ${samples.join('\n')}
             vec3 magnitude = sqrt(color_x * color_x + color_y * color_y);
-            vec4 centerColor = texture2D(image_tx, uv);
+            vec4 centerColor = ${sampleFunction} uv);
             ${mixLine}
             return filteredColor;
         }`,
@@ -148,16 +152,16 @@ export function filterGLSL(kernelType: KernelType) {
 
             const coord = texelOffset('uv', i - 1, j - 1);
             samples.push(
-                glsl`filteredColor += texture2D(image_tx, ${coord}) * ${formatFloat(k)};`
+                glsl`filteredColor += ${sampleFunction}${coord}) * ${formatFloat(k)};`
             );
         }
     }
 
-    const factorMix = glsl`filteredColor = mix(texture2D(image_tx, uv), filteredColor, fac);`;
+    const factorMix = glsl`filteredColor = mix(${sampleFunction} uv), filteredColor, fac);`;
 
     return [
-        glsl`vec4 ${fnReference}(sampler2D image_tx, float fac, vec2 uv) {
-        vec2 texelSize = 1.0 / vec2(textureSize(image_tx, 0));
+        glsl`vec4 ${fnReference}(float fac, vec2 uv) {
+        vec2 texelSize = 1.0 / vec2(${textureSizeCall});
         vec4 filteredColor = vec4(0.0);
         ${samples.join('\n')}
         ${factorMix}

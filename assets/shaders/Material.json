@@ -1,4 +1,4 @@
-{"hash": "ce176dbc80860c7519218e6d8c153b17",
+{"hash": "bcad50985e41b90fb9c7d7f4cda580c5",
   "$treeType": "material",
   "$internalTrees": {},
   "Material Output": {
@@ -10,7 +10,7 @@
         "type": "linked",
         "links": [
           {
-            "node": "Diffuse BSDF",
+            "node": "Specular BSDF",
             "socket": "BSDF"
           }
         ],
@@ -84,15 +84,8 @@
     },
     "outputs": {
       "BSDF": {
-        "type": "linked",
-        "links": [
-          {
-            "node": "Material Output",
-            "socket": "Surface"
-          }
-        ],
-        "intended_type": "SHADER",
-        "default_value": null
+        "value": null,
+        "type": "SHADER"
       }
     },
     "properties": {
@@ -111,8 +104,15 @@
         "vector_space": "OBJECT_GENERATED"
       },
       "Normal": {
-        "value": null,
-        "type": "VECTOR3",
+        "type": "linked",
+        "links": [
+          {
+            "node": "Layer Weight",
+            "socket": "Normal"
+          }
+        ],
+        "intended_type": "VECTOR3",
+        "default_value": null,
         "vector_space": "OBJECT_NORMAL"
       },
       "UV": {
@@ -159,10 +159,6 @@
           {
             "node": "AOV Output",
             "socket": "Color"
-          },
-          {
-            "node": "Layer Weight",
-            "socket": "Normal"
           }
         ],
         "intended_type": "VECTOR3",
@@ -221,7 +217,7 @@
         "links": [
           {
             "node": "Texture Coordinate",
-            "socket": "Reflection"
+            "socket": "Normal"
           }
         ],
         "intended_type": "VECTOR3",
@@ -230,7 +226,7 @@
           0.0,
           0.0
         ],
-        "incoming_vector_space": "WORLD_REFLECTION",
+        "incoming_vector_space": "OBJECT_NORMAL",
         "vector_space": "OBJECT_NORMAL"
       }
     },
@@ -309,7 +305,7 @@
         "links": [
           {
             "node": "Displacement",
-            "socket": "Input"
+            "socket": "Height"
           }
         ],
         "intended_type": "VALUE",
@@ -321,6 +317,10 @@
           {
             "node": "Diffuse BSDF",
             "socket": "Color"
+          },
+          {
+            "node": "Specular BSDF",
+            "socket": "Base Color"
           }
         ],
         "intended_type": "RGBA",
@@ -677,10 +677,10 @@
   },
   "Displacement": {
     "id": "Displacement",
-    "type": "REROUTE",
+    "type": "DISPLACEMENT",
     "name": "DISPLACEMENT",
     "inputs": {
-      "Input": {
+      "Height": {
         "type": "linked",
         "links": [
           {
@@ -786,6 +786,105 @@
       "noise_dimensions": "3D",
       "noise_type": "FBM",
       "normalize": true,
+      "vector_space": "PRESERVE"
+    }
+  },
+  "Specular BSDF": {
+    "id": "Specular BSDF",
+    "type": "EEVEE_SPECULAR",
+    "name": "EEVEE_SPECULAR",
+    "inputs": {
+      "Base Color": {
+        "type": "linked",
+        "links": [
+          {
+            "node": "Voronoi Texture",
+            "socket": "Color"
+          }
+        ],
+        "intended_type": "RGBA",
+        "default_value": [
+          0.800000011920929,
+          0.800000011920929,
+          0.800000011920929,
+          1.0
+        ]
+      },
+      "Specular": {
+        "value": [
+          0.028493499383330345,
+          0.028493499383330345,
+          0.028493499383330345,
+          1.0
+        ],
+        "type": "RGBA",
+        "input_hidden": false
+      },
+      "Roughness": {
+        "value": 0.450237,
+        "type": "VALUE",
+        "input_hidden": false
+      },
+      "Emissive Color": {
+        "value": [
+          0.0,
+          0.0,
+          0.0,
+          1.0
+        ],
+        "type": "RGBA",
+        "input_hidden": false
+      },
+      "Transparency": {
+        "value": 0.0,
+        "type": "VALUE",
+        "input_hidden": false
+      },
+      "Normal": {
+        "value": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "type": "VECTOR3",
+        "input_hidden": true,
+        "vector_space": "PRESERVE"
+      },
+      "Clear Coat": {
+        "value": 0.0,
+        "type": "VALUE",
+        "input_hidden": false
+      },
+      "Clear Coat Roughness": {
+        "value": 0.0,
+        "type": "VALUE",
+        "input_hidden": false
+      },
+      "Clear Coat Normal": {
+        "value": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "type": "VECTOR3",
+        "input_hidden": true,
+        "vector_space": "PRESERVE"
+      }
+    },
+    "outputs": {
+      "BSDF": {
+        "type": "linked",
+        "links": [
+          {
+            "node": "Material Output",
+            "socket": "Surface"
+          }
+        ],
+        "intended_type": "SHADER",
+        "default_value": null
+      }
+    },
+    "properties": {
       "vector_space": "PRESERVE"
     }
   }

@@ -5,7 +5,7 @@ import {
     Node,
     shaderTargetInputs,
 } from '../createCompiler';
-import GLSL, { convertVecSize, getGLSLType } from './GLSL';
+import GLSL, { convertVecSize, getGLSLType, MultiSample } from './GLSL';
 import { ColorStop, createColorRampLUT, InterpolationType } from './colorRamp';
 import { addDiffuseBSDF } from './diffuseBSDF';
 import shaderIncludes from './includes';
@@ -207,19 +207,23 @@ export const transpilerMethods = {
         ];
     },
     FILTER(
-        Image: GLSL['vec4'],
+        Image: GLSL['vec4'] & MultiSample,
         Factor: GLSL['float'],
         Type: string & KernelType,
         compilationCache: CompilationCache
     ): GLSL['vec4'] {
-        const [include, filterFnReference] = filterGLSL(Type);
+        const textureReference =
+            'u' + compilationCache.shader.rPassTargets[0].name;
+        const [include, filterFnReference] = filterGLSL(
+            Type,
+            `${Image}(`,
+            `textureSize(${textureReference}, 0)`
+        );
         addContextualShaderInclude(compilationCache, include);
 
         // TODO encode sampler into Image/Color types to be carried
         // and add GLSL['sampler2D'] as a type that can reach for sampler vs sampled image data
-        const textureReference =
-            'u' + compilationCache.shader.rPassTargets[0].name;
-        return [`${filterFnReference}(${textureReference}, ${Factor}, vUv)`];
+        return [`${filterFnReference}(${Factor}, vUv)`];
     },
     // TODO figure out how to respect passthrough type here
     SWITCH(
@@ -932,6 +936,9 @@ export const transpilerMethods = {
                     : '0.0'
             }`,
         ] as any;
+    },
+    BLUR(Size: GLSL['vec2']): GLSL['vec4'] {
+        return [`texture(uVolume, vUv, 3.)`];
     },
     VECT_MATH(
         operation: string,

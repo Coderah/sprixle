@@ -83,6 +83,7 @@ vec3 DiffuseBSDF(vec3 diffuse, vec3 normal, float roughness, float metalness, ve
 	// 	normal *= faceDirection;
 	
 	// #endif
+	// TODO remove unnecessary map support
 	#include <roughnessmap_fragment>
 	#include <metalnessmap_fragment>
 	// #include <normal_fragment_begin>

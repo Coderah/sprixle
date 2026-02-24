@@ -1,4 +1,5 @@
 import {
+    Group,
     ReflectionKind,
     Type,
     TypeMethod,
@@ -35,6 +36,8 @@ export default interface GLSL<
     // allows inferrence based on node info (useful for entirely dynamic output)
     infer: any;
 }
+
+export type MultiSample = Group<'MultiSample'>;
 
 // export interface GLSL<V = any> {
 //     struct: any

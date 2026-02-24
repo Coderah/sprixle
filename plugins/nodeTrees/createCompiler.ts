@@ -1,4 +1,5 @@
 import {
+    groupAnnotation,
     metaAnnotation,
     ReflectionClass,
     ReflectionKind,
@@ -7,12 +8,13 @@ import {
     typeOf,
     TypePropertySignature,
 } from '@deepkit/type';
-import { camelCase, find } from 'lodash';
+import { camelCase, find, last } from 'lodash';
 import {
     BufferGeometry,
     Camera,
     Group,
     InstancedMesh,
+    MaterialProperties,
     Mesh,
     Object3D,
     Scene,
@@ -585,12 +587,26 @@ export function createNodeTreeCompiler<M extends LogicTreeMethods>(
                 }
 
                 if (inputNode && !getNext(tree, inputNode).length) {
+                    const multiSampledInput = groupAnnotation
+                        .getAnnotations(parameterType)
+                        .find((p) => p === 'MultiSample');
+
+                    const { compiledInputs } = compilationCache;
+                    const originalCompiledInputs =
+                        compiledInputs.compiled[compiledInputs.current];
+                    const resultingCompiledInputs = multiSampledInput
+                        ? (compiledInputs.compiled[compiledInputs.current] = {})
+                        : originalCompiledInputs;
+
                     const intermediateCompiled = compileNode(
                         tree,
                         inputNode,
                         compilationCache,
-                        false
+                        !!multiSampledInput
                     );
+
+                    compiledInputs[compiledInputs.current] =
+                        originalCompiledInputs;
 
                     let inputType = compilationCache.inputTypes[reference];
                     // console.log('input', reference, socketReference, inputType);
@@ -652,10 +668,6 @@ export function createNodeTreeCompiler<M extends LogicTreeMethods>(
                     if (intermediateCompiled.length) {
                         const lastCompiledIndex =
                             intermediateCompiled.length - 1;
-                        intermediateCompiled[lastCompiledIndex] =
-                            reference +
-                            ' = ' +
-                            intermediateCompiled[lastCompiledIndex];
 
                         let constType =
                             parameters.type === 'LogicTree'
@@ -689,16 +701,39 @@ export function createNodeTreeCompiler<M extends LogicTreeMethods>(
                         } else {
                             // TODO improve accuracy of this
                         }
+
                         intermediateCompiled[lastCompiledIndex] =
-                            constType +
-                            ' ' +
-                            intermediateCompiled[lastCompiledIndex];
+                            `${constType} ${reference} = ${intermediateCompiled[lastCompiledIndex]}`;
 
-                        compiled = intermediateCompiled.join('\n');
+                        if (multiSampledInput) {
+                            const samplerReference = `sample${getReference(n)}`;
+                            addContextualShaderInclude(
+                                compilationCache,
+                                `vec4 ${samplerReference}(vec2 vUv) {
+                                    ${Object.values(
+                                        resultingCompiledInputs
+                                    ).join('\n')}
 
-                        // TODO if input is a float we should reduce precision for performance?
-                        // compilationCache.compiledInputs[reference] = compiled;
-                        addCompiledInput(reference, compiled, compilationCache);
+                                    ${intermediateCompiled.join('\n')}
+                                    
+                                    return ${reference}${inputType.kind === ReflectionKind.objectLiteral ? '.' + socketReference : ''};
+                                }`
+                            );
+
+                            value = samplerReference;
+                            compiled = '';
+                            // reference = samplerReference;
+                        } else {
+                            compiled = intermediateCompiled.join('\n');
+
+                            // TODO if input is a float we should reduce precision for performance?
+                            // compilationCache.compiledInputs[reference] = compiled;
+                            addCompiledInput(
+                                reference,
+                                compiled,
+                                compilationCache
+                            );
+                        }
                     } else if (!inputType) {
                         // TODO we should store inputType for static transpilers and instead include a warning in the compiled code here?
                         // value = reference;
@@ -782,7 +817,8 @@ export function createNodeTreeCompiler<M extends LogicTreeMethods>(
                     if (
                         currentVectorSpace !== 'UV' &&
                         currentVectorSpace !== 'PRESERVE' &&
-                        !n.internalNodeTree
+                        !n.internalNodeTree &&
+                        values.length === 3 // TODO check if intended type isn't a color?
                     ) {
                         values = [values[0], values[2], values[1]];
                     }
@@ -1471,9 +1507,9 @@ export function createNodeTreeCompiler<M extends LogicTreeMethods>(
                     if (result.length) {
                         result[result.length - 1] += ';';
 
-                        result[result.length - 1] +=
-                            '// vectorSpace = ' +
-                            compilationCache.shader.currentVectorSpace;
+                        // result[result.length - 1] +=
+                        //     '// vectorSpace = ' +
+                        //     compilationCache.shader.currentVectorSpace;
                     }
                     // console.log(
                     //     '[nodeTree.isMethodTranspiler]',

@@ -1,4 +1,4 @@
-{"hash": "c5f9145685ba37543c60d06e7d48e4f2",
+{"hash": "c085a7f818deb0c9de616ac6f48e912d",
   "$treeType": "composition",
   "$internalTrees": {},
   "Group Output": {
@@ -57,6 +57,10 @@
           {
             "node": "Mix.003",
             "socket": "B"
+          },
+          {
+            "node": "Mix.001",
+            "socket": "A"
           }
         ],
         "intended_type": "RGBA",
@@ -81,17 +85,17 @@
         "type": "linked",
         "links": [
           {
-            "node": "Filter",
-            "socket": "Image"
-          },
-          {
             "node": "Mix.003",
             "socket": "A"
+          },
+          {
+            "node": "Mix.001",
+            "socket": "B"
           }
         ],
         "intended_type": "VECTOR3",
         "default_value": null,
-        "vector_space": "PRESERVE"
+        "vector_space": "OBJECT"
       },
       "Position": {
         "type": "linked",
@@ -103,13 +107,9 @@
         ],
         "intended_type": "VECTOR3",
         "default_value": null,
-        "vector_space": "PRESERVE"
+        "vector_space": "OBJECT"
       },
       "Test": {
-        "value": null,
-        "type": "RGBA"
-      },
-      "testValue": {
         "type": "linked",
         "links": [
           {
@@ -117,13 +117,17 @@
             "socket": "B"
           }
         ],
-        "intended_type": "VALUE",
-        "default_value": 0.0
+        "intended_type": "RGBA",
+        "default_value": null
+      },
+      "testValue": {
+        "value": 0.0,
+        "type": "VALUE"
       }
     },
     "properties": {
       "layer": "ViewLayer",
-      "vector_space": "PRESERVE"
+      "vector_space": "OBJECT"
     }
   },
   "Reroute": {
@@ -215,7 +219,7 @@
           0.0,
           0.0
         ],
-        "incoming_vector_space": "PRESERVE",
+        "incoming_vector_space": "UV",
         "vector_space": "PRESERVE"
       },
       "Scale": {
@@ -270,10 +274,10 @@
   },
   "Color Ramp": {
     "id": "Color Ramp",
-    "type": "REROUTE",
+    "type": "VALTORGB",
     "name": "VALTORGB",
     "inputs": {
-      "Input": {
+      "Factor": {
         "type": "linked",
         "links": [
           {
@@ -286,11 +290,11 @@
       }
     },
     "outputs": {
-      "Output": {
+      "Color": {
         "type": "linked",
         "links": [
           {
-            "node": "Mix.002",
+            "node": "Mix.009",
             "socket": "Factor"
           }
         ],
@@ -305,7 +309,7 @@
     "properties": {
       "elements": [
         {
-          "position": 0.15803112089633942,
+          "position": 0.19689114391803741,
           "color": [
             0.0,
             0.0,
@@ -314,16 +318,7 @@
           ]
         },
         {
-          "position": 0.3419690728187561,
-          "color": [
-            1.0,
-            1.0,
-            1.0,
-            1.0
-          ]
-        },
-        {
-          "position": 1.0,
+          "position": 0.22538860142230988,
           "color": [
             1.0,
             1.0,
@@ -363,7 +358,7 @@
       "Uniform": {
         "value": null,
         "type": "VECTOR2",
-        "vector_space": "PRESERVE"
+        "vector_space": "UV"
       },
       "Normalized": {
         "type": "linked",
@@ -379,16 +374,16 @@
         ],
         "intended_type": "VECTOR2",
         "default_value": null,
-        "vector_space": "PRESERVE"
+        "vector_space": "UV"
       },
       "Pixel": {
         "value": null,
         "type": "VECTOR2",
-        "vector_space": "PRESERVE"
+        "vector_space": "UV"
       }
     },
     "properties": {
-      "vector_space": "PRESERVE"
+      "vector_space": "UV"
     }
   },
   "Mix": {
@@ -436,15 +431,8 @@
     },
     "outputs": {
       "Result": {
-        "type": "linked",
-        "links": [
-          {
-            "node": "Mix.002",
-            "socket": "A"
-          }
-        ],
-        "intended_type": "RGBA",
-        "default_value": null
+        "value": null,
+        "type": "RGBA"
       }
     },
     "properties": {
@@ -464,8 +452,8 @@
         "type": "linked",
         "links": [
           {
-            "node": "Render Layers",
-            "socket": "Normal"
+            "node": "Mix.001",
+            "socket": "Result"
           }
         ],
         "intended_type": "RGBA",
@@ -482,7 +470,7 @@
         "input_hidden": false
       },
       "Type": {
-        "value": "Sobel",
+        "value": "Kirsch",
         "type": "MENU",
         "input_hidden": false
       }
@@ -493,11 +481,7 @@
         "links": [
           {
             "node": "Color Ramp",
-            "socket": "Input"
-          },
-          {
-            "node": "Color Ramp.001",
-            "socket": "Input"
+            "socket": "Factor"
           }
         ],
         "intended_type": "RGBA",
@@ -505,174 +489,6 @@
       }
     },
     "properties": {}
-  },
-  "Color Ramp.001": {
-    "id": "Color Ramp.001",
-    "type": "REROUTE",
-    "name": "VALTORGB",
-    "inputs": {
-      "Input": {
-        "type": "linked",
-        "links": [
-          {
-            "node": "Filter",
-            "socket": "Image"
-          }
-        ],
-        "intended_type": "VALUE",
-        "default_value": 0.5
-      }
-    },
-    "outputs": {
-      "Output": {
-        "type": "linked",
-        "links": [
-          {
-            "node": "Mix.001",
-            "socket": "Factor"
-          }
-        ],
-        "intended_type": "RGBA",
-        "default_value": null
-      },
-      "Alpha": {
-        "value": 0.0,
-        "type": "VALUE"
-      }
-    },
-    "properties": {
-      "elements": [
-        {
-          "position": 0.0,
-          "color": [
-            0.0,
-            0.0,
-            0.0,
-            1.0
-          ]
-        },
-        {
-          "position": 0.287564754486084,
-          "color": [
-            1.0,
-            1.0,
-            1.0,
-            1.0
-          ]
-        }
-      ],
-      "color_mode": "RGB",
-      "interpolation": "LINEAR",
-      "hue_interpolation": "NEAR"
-    }
-  },
-  "Mix.001": {
-    "id": "Mix.001",
-    "type": "MIX",
-    "name": "MIX",
-    "inputs": {
-      "Factor": {
-        "type": "linked",
-        "links": [
-          {
-            "node": "Color Ramp.001",
-            "socket": "Output"
-          }
-        ],
-        "intended_type": "VALUE",
-        "default_value": 0.5
-      },
-      "A": {
-        "value": [
-          0.5,
-          0.5,
-          0.5,
-          1.0
-        ],
-        "type": "RGBA",
-        "input_hidden": false
-      },
-      "B": {
-        "value": [
-          0.017568057402968407,
-          0.017568057402968407,
-          0.017568057402968407,
-          1.0
-        ],
-        "type": "RGBA",
-        "input_hidden": false
-      }
-    },
-    "outputs": {
-      "Result": {
-        "value": null,
-        "type": "RGBA"
-      }
-    },
-    "properties": {
-      "data_type": "RGBA",
-      "factor_mode": "UNIFORM",
-      "blend_type": "MULTIPLY",
-      "clamp_factor": true,
-      "clamp_result": false
-    }
-  },
-  "Mix.002": {
-    "id": "Mix.002",
-    "type": "MIX",
-    "name": "MIX",
-    "inputs": {
-      "Factor": {
-        "type": "linked",
-        "links": [
-          {
-            "node": "Color Ramp",
-            "socket": "Output"
-          }
-        ],
-        "intended_type": "VALUE",
-        "default_value": 0.5
-      },
-      "A": {
-        "type": "linked",
-        "links": [
-          {
-            "node": "Mix",
-            "socket": "Result"
-          }
-        ],
-        "intended_type": "RGBA",
-        "default_value": [
-          0.5,
-          0.5,
-          0.5,
-          1.0
-        ]
-      },
-      "B": {
-        "value": [
-          1.0,
-          1.0,
-          1.0,
-          1.0
-        ],
-        "type": "RGBA",
-        "input_hidden": false
-      }
-    },
-    "outputs": {
-      "Result": {
-        "value": null,
-        "type": "RGBA"
-      }
-    },
-    "properties": {
-      "data_type": "RGBA",
-      "factor_mode": "UNIFORM",
-      "blend_type": "OVERLAY",
-      "clamp_factor": true,
-      "clamp_result": false
-    }
   },
   "Group": {
     "id": "Group",
@@ -735,7 +551,7 @@
         "type": "linked",
         "links": [
           {
-            "node": "Mix.008",
+            "node": "Mix.009",
             "socket": "Result"
           }
         ],
@@ -832,7 +648,7 @@
           0.0,
           0.0
         ],
-        "incoming_vector_space": "PRESERVE",
+        "incoming_vector_space": "OBJECT",
         "vector_space": "PRESERVE"
       },
       "Scale": {
@@ -1426,7 +1242,7 @@
         "links": [
           {
             "node": "Render Layers",
-            "socket": "testValue"
+            "socket": "Test"
           }
         ],
         "intended_type": "RGBA",
@@ -1534,7 +1350,7 @@
         "vector_space": "PRESERVE"
       },
       "Angle": {
-        "value": 0.249582,
+        "value": 0.345575,
         "type": "VALUE",
         "input_hidden": false
       }
@@ -1579,12 +1395,12 @@
             0.0,
             0.0
           ],
-          "incoming_vector_space": "PRESERVE",
+          "incoming_vector_space": "UV",
           "vector_space": "PRESERVE"
         },
         {
           "value": [
-            0.19999998807907104,
+            0.25,
             0.0,
             0.0
           ],
@@ -1782,161 +1598,6 @@
       "clamp_result": false
     }
   },
-  "Glare": {
-    "id": "Glare",
-    "type": "GLARE",
-    "name": "GLARE",
-    "inputs": {
-      "Image": {
-        "value": [
-          1.0,
-          1.0,
-          1.0,
-          1.0
-        ],
-        "type": "RGBA",
-        "input_hidden": true
-      },
-      "Type": {
-        "value": "Bloom",
-        "type": "MENU",
-        "input_hidden": false
-      },
-      "Quality": {
-        "value": "Medium",
-        "type": "MENU",
-        "input_hidden": false
-      },
-      "Threshold": {
-        "value": 1.0,
-        "type": "VALUE",
-        "input_hidden": false
-      },
-      "Smoothness": {
-        "value": 0.1,
-        "type": "VALUE",
-        "input_hidden": false
-      },
-      "Clamp": {
-        "value": false,
-        "type": "BOOLEAN",
-        "input_hidden": false
-      },
-      "Maximum": {
-        "value": 10.0,
-        "type": "VALUE",
-        "input_hidden": false
-      },
-      "Strength": {
-        "value": 1.0,
-        "type": "VALUE",
-        "input_hidden": false
-      },
-      "Saturation": {
-        "value": 1.0,
-        "type": "VALUE",
-        "input_hidden": false
-      },
-      "Tint": {
-        "value": [
-          1.0,
-          1.0,
-          1.0,
-          1.0
-        ],
-        "type": "RGBA",
-        "input_hidden": false
-      },
-      "Size": {
-        "value": 0.5,
-        "type": "VALUE",
-        "input_hidden": false
-      },
-      "Streaks": {
-        "value": 4,
-        "type": "INT",
-        "input_hidden": false
-      },
-      "Streaks Angle": {
-        "value": 0.0,
-        "type": "VALUE",
-        "input_hidden": false
-      },
-      "Iterations": {
-        "value": 3,
-        "type": "INT",
-        "input_hidden": false
-      },
-      "Fade": {
-        "value": 0.9,
-        "type": "VALUE",
-        "input_hidden": false
-      },
-      "Color Modulation": {
-        "value": 0.25,
-        "type": "VALUE",
-        "input_hidden": false
-      },
-      "Diagonal": {
-        "value": true,
-        "type": "BOOLEAN",
-        "input_hidden": false
-      },
-      "Sun Position": {
-        "value": [
-          0.5,
-          0.5
-        ],
-        "type": "VECTOR2",
-        "input_hidden": false,
-        "vector_space": "PRESERVE"
-      },
-      "Jitter": {
-        "value": 0.0,
-        "type": "VALUE",
-        "input_hidden": false
-      },
-      "Kernel Data Type": {
-        "value": "Float",
-        "type": "MENU",
-        "input_hidden": false
-      },
-      "Kernel": [
-        {
-          "value": 0.0,
-          "type": "VALUE",
-          "input_hidden": true
-        },
-        {
-          "value": [
-            0.800000011920929,
-            0.800000011920929,
-            0.800000011920929,
-            1.0
-          ],
-          "type": "RGBA",
-          "input_hidden": true
-        }
-      ]
-    },
-    "outputs": {
-      "Image": {
-        "value": null,
-        "type": "RGBA"
-      },
-      "Glare": {
-        "value": null,
-        "type": "RGBA"
-      },
-      "Highlights": {
-        "value": null,
-        "type": "RGBA"
-      }
-    },
-    "properties": {
-      "vector_space": "PRESERVE"
-    }
-  },
   "Color Ramp.006": {
     "id": "Color Ramp.006",
     "type": "VALTORGB",
@@ -1983,7 +1644,7 @@
           ]
         },
         {
-          "position": 0.6499999761581421,
+          "position": 0.5799999833106995,
           "color": [
             0.0,
             0.0,
@@ -2115,8 +1776,8 @@
         "type": "linked",
         "links": [
           {
-            "node": "Group.001",
-            "socket": "Input"
+            "node": "Mix.009",
+            "socket": "A"
           }
         ],
         "intended_type": "RGBA",
@@ -2177,7 +1838,7 @@
           ]
         },
         {
-          "position": 0.6489999890327454,
+          "position": 0.578000009059906,
           "color": [
             1.0,
             1.0,
@@ -2186,7 +1847,7 @@
           ]
         },
         {
-          "position": 0.652999997138977,
+          "position": 0.5820000171661377,
           "color": [
             0.0,
             0.0,
@@ -2198,6 +1859,134 @@
       "color_mode": "RGB",
       "interpolation": "CONSTANT",
       "hue_interpolation": "NEAR"
+    }
+  },
+  "Mix.009": {
+    "id": "Mix.009",
+    "type": "MIX",
+    "name": "MIX",
+    "inputs": {
+      "Factor": {
+        "type": "linked",
+        "links": [
+          {
+            "node": "Color Ramp",
+            "socket": "Color"
+          }
+        ],
+        "intended_type": "VALUE",
+        "default_value": 0.0
+      },
+      "A": {
+        "type": "linked",
+        "links": [
+          {
+            "node": "Mix.008",
+            "socket": "Result"
+          }
+        ],
+        "intended_type": "RGBA",
+        "default_value": [
+          0.5,
+          0.5,
+          0.5,
+          1.0
+        ]
+      },
+      "B": {
+        "value": [
+          0.052866220474243164,
+          0.052866220474243164,
+          0.052866220474243164,
+          1.0
+        ],
+        "type": "RGBA",
+        "input_hidden": false
+      }
+    },
+    "outputs": {
+      "Result": {
+        "type": "linked",
+        "links": [
+          {
+            "node": "Group.001",
+            "socket": "Input"
+          }
+        ],
+        "intended_type": "RGBA",
+        "default_value": null
+      }
+    },
+    "properties": {
+      "data_type": "RGBA",
+      "factor_mode": "UNIFORM",
+      "blend_type": "MULTIPLY",
+      "clamp_factor": true,
+      "clamp_result": false
+    }
+  },
+  "Mix.001": {
+    "id": "Mix.001",
+    "type": "MIX",
+    "name": "MIX",
+    "inputs": {
+      "Factor": {
+        "value": 1.0,
+        "type": "VALUE",
+        "input_hidden": false
+      },
+      "A": {
+        "type": "linked",
+        "links": [
+          {
+            "node": "Render Layers",
+            "socket": "Image"
+          }
+        ],
+        "intended_type": "RGBA",
+        "default_value": [
+          0.5,
+          0.5,
+          0.5,
+          1.0
+        ]
+      },
+      "B": {
+        "type": "linked",
+        "links": [
+          {
+            "node": "Render Layers",
+            "socket": "Normal"
+          }
+        ],
+        "intended_type": "RGBA",
+        "default_value": [
+          0.5,
+          0.5,
+          0.5,
+          1.0
+        ]
+      }
+    },
+    "outputs": {
+      "Result": {
+        "type": "linked",
+        "links": [
+          {
+            "node": "Filter",
+            "socket": "Image"
+          }
+        ],
+        "intended_type": "RGBA",
+        "default_value": null
+      }
+    },
+    "properties": {
+      "data_type": "RGBA",
+      "factor_mode": "UNIFORM",
+      "blend_type": "ADD",
+      "clamp_factor": true,
+      "clamp_result": false
     }
   }
 }

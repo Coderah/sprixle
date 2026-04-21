@@ -1243,8 +1243,12 @@ export class Manager<ExactComponentTypes extends defaultComponentTypes> {
 function findPointerPaths(
     type: Type,
     componentName: string,
-    currentPath: string[] = []
+    currentPath: string[] = [],
+    visited = new Set<Type>()
 ): PointerPath[] {
+    if (visited.has(type)) return [];
+    visited.add(type);
+
     const results: PointerPath[] = [];
 
     // Follow type aliases to their underlying type
@@ -1253,7 +1257,8 @@ function findPointerPaths(
         return findPointerPaths(
             type.origin as Type,
             componentName,
-            currentPath
+            currentPath,
+            visited
         );
     }
 
@@ -1277,7 +1282,8 @@ function findPointerPaths(
         const elementPaths = findPointerPaths(
             type.type as Type,
             componentName,
-            [...currentPath, '[]']
+            [...currentPath, '[]'],
+            visited
         );
         results.push(...elementPaths);
     }
@@ -1293,7 +1299,8 @@ function findPointerPaths(
                 const propPaths = findPointerPaths(
                     prop.type as Type,
                     componentName,
-                    [...currentPath, prop.name as string]
+                    [...currentPath, prop.name as string],
+                    visited
                 );
                 results.push(...propPaths);
             }
@@ -1311,7 +1318,8 @@ function findPointerPaths(
                 const propPaths = findPointerPaths(
                     prop.type as Type,
                     componentName,
-                    [...currentPath, prop.name as string]
+                    [...currentPath, prop.name as string],
+                    visited
                 );
                 results.push(...propPaths);
             }

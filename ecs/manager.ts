@@ -768,6 +768,7 @@ export class Manager<ExactComponentTypes extends defaultComponentTypes> {
                     return true;
                 },
                 deleteProperty(target, p) {
+                    if (!(p in target)) return true;
                     const componentAnnotations =
                         manager.componentAnnotations[p];
 

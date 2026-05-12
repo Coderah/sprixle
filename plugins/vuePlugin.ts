@@ -371,6 +371,8 @@ export function applyVuePlugin<
         IndexedComponent extends Keys<C>,
         E extends EntityWithComponents<C, M, Includes[number]>,
     >(query: Query<C, Includes, M, IndexedComponent, E>) {
+        const cache = new Map<EntityId, ShallowRef<E>>();
+
         const ref = shallowRef(query.entities.map((id) => getEntityRef<E>(id)));
 
         function getEntityRef(id: EntityId) {
@@ -382,6 +384,7 @@ export function applyVuePlugin<
                 // Register this ref with entityWatchers so patchHandlers updates it
                 entityWatchers.set(id, new Set());
                 entityWatchers.get(id)!.add(entityRef);
+                cache.set(id, entityRef);
 
                 return entityRef;
             }
@@ -418,6 +421,7 @@ export function applyVuePlugin<
                 }
             }
             cache.clear();
+            vuePipeline.systems.delete(system);
         });
 
         return ref;

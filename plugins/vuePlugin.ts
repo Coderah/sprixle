@@ -126,6 +126,17 @@ export function applyVuePlugin<
                     }
                 }
             }
+            // Trigger entity watchers (mirrors patchHandlers.components behavior)
+            const entityRefs = entityWatchers.get(id);
+            if (entityRefs?.size) {
+                const entity = manager.getEntity(id);
+                for (let ref of entityRefs) {
+                    if (ref.value === entity) {
+                        ref.value = undefined;
+                    }
+                    ref.value = entity;
+                }
+            }
         },
     };
 

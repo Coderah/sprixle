@@ -101,6 +101,22 @@ Set.prototype.map = function <T, V>(
     return new Set(Array.from(this).map(callbackFn));
 };
 
+// Returns a NEW sorted array, not a Set — a Set has no meaningful internal order,
+// so the only sensible result of sorting one is an ordered sequence you can index
+// and iterate. This is the missing link in the common `query.entities` chain:
+// `q.map(...).filter(...).sort(cmp)` — map/filter return Sets, and previously
+// .sort blew up because Set had no sort. Now the whole chain just works.
+Set.prototype.sort = function <T>(
+    this: Set<T>,
+    compareFn?: (a: T, b: T) => number
+): T[] {
+    return Array.from(this).sort(compareFn);
+};
+
+Set.prototype.toArray = function <T>(this: Set<T>): T[] {
+    return Array.from(this);
+};
+
 Set.prototype.first = function <T>(this: Set<T>) {
     return this.values().next().value;
 };

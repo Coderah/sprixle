@@ -90,6 +90,11 @@ export class Query<
         IndexedComponent
     >;
 
+    // A removed consumer's slot is nulled at runtime (not spliced) so existing
+    // consumerIds — which index into this array and into state.consumerStates —
+    // stay valid. The declared element type stays non-null on purpose: deepkit
+    // reflects this property and a `| null` union here breaks its type encoding.
+    // All iteration sites null-check the runtime value anyway (see destroy()).
     consumers = new Array<
         Consumer<ExactComponentTypes, Includes, M, IndexedComponent, E>
     >();
@@ -261,7 +266,7 @@ export class Query<
         return {
             entities: new Set(),
             consumerStates: this.consumers.map((consumer) =>
-                consumer.createInitialState()
+                consumer ? consumer.createInitialState() : undefined
             ),
 
             indexed: new Map(),
@@ -315,7 +320,7 @@ export class Query<
     resetConsumers() {
         this.entities = new Set();
         this.consumers.forEach((consumer) => {
-            consumer.clear();
+            consumer?.clear();
         });
     }
 
@@ -394,7 +399,7 @@ export class Query<
     }
 
     addEntity(entity: E) {
-        this.consumers.forEach((c) => c.add(entity.id));
+        this.consumers.forEach((c) => c?.add(entity.id));
         this.indexEntity(entity);
 
         if (!this.manager.state.queryMap.has(entity.id)) {
@@ -402,8 +407,6 @@ export class Query<
         }
         this.manager.state.queryMap.get(entity.id)?.add(this.queryName);
         this.lastEntity = entity as E;
-
-        console.log('[QUERY]', this.queryName, 'added entity', entity.id);
     }
 
     updatedEntity(entity: E) {
@@ -424,6 +427,7 @@ export class Query<
         }
 
         this.consumers.forEach((c) => {
+            if (!c) return;
             c.updatedEntities.add(entity.id);
             c.consumedEntities.delete(entity.id);
         });
@@ -434,7 +438,7 @@ export class Query<
         this.queuedEntities.delete(entity.id);
         this.entitiesInSlice.delete(entity.id);
         this.consumers.forEach((c) => {
-            c.remove(entity);
+            c?.remove(entity);
         });
 
         if (this.queryParameters.index) {
@@ -458,7 +462,6 @@ export class Query<
         }
 
         this.manager.state.queryMap.get(entity.id)?.delete(this.queryName);
-        console.log('[QUERY]', this.queryName, 'removed entity', entity.id);
     }
 
     get size() {
@@ -524,7 +527,7 @@ export class Query<
     }
 
     tick() {
-        this.consumers.forEach((c) => c.tick());
+        this.consumers.forEach((c) => c?.tick());
 
         this.entitiesInSlice.clear();
         this.updateTimeSlice();
@@ -634,6 +637,26 @@ export class Consumer<
         this.deletedEntities = new Set();
         this.consumed = false;
         this.consumedEntities = new Set();
+    }
+
+    /**
+     * Detach this consumer from its query so it stops receiving notifications
+     * and is no longer iterated. Call from the owner's teardown (e.g. a Vue
+     * component's onUnmounted) to avoid leaking consumers across mounts.
+     *
+     * The slot is nulled (cast, since the array's declared element type is
+     * non-null for deepkit's sake) rather than spliced, so other consumers'
+     * index-based ids stay valid. Query iteration sites null-check the runtime
+     * value. Inlined here rather than a typed Query.removeConsumer method
+     * because a method param of this 5-arg generic Consumer type breaks
+     * deepkit's reflection encoding.
+     */
+    destroy() {
+        const { consumers } = this.query;
+        if (consumers[this.consumerId] === this) {
+            consumers[this.consumerId] = null as any;
+            this.query.state.consumerStates[this.consumerId] = undefined as any;
+        }
     }
 
     /** called by Query when adding an entity, for internal use */

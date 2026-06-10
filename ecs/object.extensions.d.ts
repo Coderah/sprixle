@@ -21,4 +21,12 @@ declare interface Set<T> {
     find(fn: (value: T) => boolean): T | null;
     every(fn: (value: T) => boolean): boolean;
     some(fn: (value: T) => boolean): boolean;
+    /**
+     * Returns a NEW sorted **array** (not a Set). Lets the common query chain
+     * `q.map(...).filter(...).sort(cmp)` work without an intermediate
+     * `Array.from(...)`. Same comparator contract as `Array.prototype.sort`.
+     */
+    sort(compareFn?: (a: T, b: T) => number): T[];
+    /** Materialize the Set to an array. Shorthand for `Array.from(set)`. */
+    toArray(): T[];
 }

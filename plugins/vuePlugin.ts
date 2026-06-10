@@ -220,7 +220,7 @@ export function applyVuePlugin<
             if (newId) {
                 registerWatcher(newId);
                 const entity = manager.getEntity(newId);
-                ref.value = entity?.components[component] || placeholder;
+                ref.value = entity?.components[component] ?? placeholder;
             } else {
                 ref.value = undefined;
             }
@@ -409,12 +409,23 @@ export function applyVuePlugin<
             ref.value = query.entities.map((id) => getEntityRef<E>(id));
         };
 
+        // Rebuild the array ONCE per tick, and only when query membership actually
+        // changed (entities added or removed). A component *update* on an existing
+        // entity does NOT change the array — each entity ref is kept live
+        // independently via entityWatchers/patchHandlers — so it needs no rebuild.
+        //
+        // Previously this used per-entity `newOrUpdated`/`removed` handlers, so a
+        // per-frame system mutating K entities triggered K full O(querySize)
+        // rebuilds (each allocating an array + a Set via Set.prototype.map) every
+        // frame. That was the dominant cost under load. A single membership-gated
+        // rebuild per tick removes it entirely for the common "things are just
+        // being updated" case.
         const system = manager.createSystem(consumer, {
-            newOrUpdated() {
-                handleChange();
-            },
-            removed() {
-                handleChange();
+            tick() {
+                if (consumer.newEntities.size || consumer.deletedEntities.size) {
+                    handleChange();
+                }
+                consumer.clear();
             },
         });
 
@@ -433,6 +444,7 @@ export function applyVuePlugin<
             }
             cache.clear();
             vuePipeline.systems.delete(system);
+            consumer.destroy();
         });
 
         return ref;
@@ -512,7 +524,11 @@ export function applyVuePlugin<
             });
         }
 
-        // Cleanup cached refs on unmount
+        // Cleanup cached refs on unmount. useQueryIndexedBy is mounted per
+        // row/stack and re-mounts constantly during virtualized scroll, so the
+        // system + consumer MUST be torn down here — otherwise each leaks and
+        // every frame (and every entity mutation) loops over the dead ones,
+        // making scroll lag grow without bound.
         onUnmounted(() => {
             for (let entity of ref.value) {
                 const watchers = entityWatchers.get(entity.value.id);
@@ -523,7 +539,8 @@ export function applyVuePlugin<
                     }
                 }
             }
-            // TODO consumers could leak if done a lot... needs resolved regardless
+            vuePipeline.systems.delete(system);
+            consumer.destroy();
         });
 
         return ref;

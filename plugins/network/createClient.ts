@@ -11,10 +11,61 @@ export function createClient<
     network: ReturnType<typeof applyNetwork<Commands, ComponentTypes>>,
     options?: {
         getToken?: () => string | null | undefined;
+        /**
+         * App-level heartbeat. Browsers cannot send WS ping frames or observe
+         * pong timeouts, so half-open sockets (wifi roam/blip — TCP dies with no
+         * close event) are otherwise invisible to a passive client and it stays
+         * frozen until a manual refresh. `sendPing` should emit a lightweight
+         * message the server acks; any inbound traffic (the ack or normal sync)
+         * counts as liveness. If nothing arrives within `timeoutMs`, the socket is
+         * force-closed to trigger the existing reconnect path.
+         */
+        heartbeat?: {
+            sendPing: () => void;
+            intervalMs?: number;
+            timeoutMs?: number;
+        };
     }
 ) {
     let socket: WebSocket;
     let socketPromise: Promise<WebSocket>;
+
+    // ── Heartbeat watchdog ──────────────────────────────────────────────────
+    const heartbeatIntervalMs = options?.heartbeat?.intervalMs ?? 10_000;
+    const heartbeatTimeoutMs = options?.heartbeat?.timeoutMs ?? 30_000;
+    let heartbeatTimer: ReturnType<typeof setInterval> | undefined;
+    let lastActivity = 0;
+
+    /** Call on every inbound frame so the watchdog knows the socket is alive. */
+    function markActivity() {
+        lastActivity = Date.now();
+    }
+
+    function stopHeartbeat() {
+        if (heartbeatTimer) {
+            clearInterval(heartbeatTimer);
+            heartbeatTimer = undefined;
+        }
+    }
+
+    function startHeartbeat() {
+        if (!options?.heartbeat) return;
+        stopHeartbeat();
+        markActivity();
+        heartbeatTimer = setInterval(() => {
+            if (!socket || socket.readyState !== socket.OPEN) return;
+            if (Date.now() - lastActivity > heartbeatTimeoutMs) {
+                console.warn(
+                    '[NETWORK] heartbeat timeout — closing dead socket to force reconnect'
+                );
+                stopHeartbeat();
+                // Force the onclose the OS never delivered for a half-open socket.
+                socket.close();
+                return;
+            }
+            options.heartbeat!.sendPing();
+        }, heartbeatIntervalMs);
+    }
 
     const reconnect = throttle(
         () => {
@@ -66,10 +117,12 @@ export function createClient<
                         console.log('[NETWORK] OPEN!');
                         network.setNetworkSocket(socket);
                         socketPromise = null;
+                        startHeartbeat();
                         resolve(socket);
 
                         socket.onmessage = (event) => {
                             const { data } = event;
+                            markActivity();
 
                             if (data instanceof ArrayBuffer) {
                                 network.handleIncoming(new Uint8Array(data));
@@ -85,6 +138,7 @@ export function createClient<
                     socket.onclose = (e) => {
                         // console.log('closed', e);
                         // em.state = em.createInitialState();
+                        stopHeartbeat();
                         network.handleDisconnect(e);
                         console.log(
                             '[NETWORK] reconnecting due to close...',

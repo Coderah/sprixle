@@ -69,6 +69,16 @@ export function createServer<
     server.on('connection', async (socket, request) => {
         const client = network.getClientEntity(socket);
 
+        // Native ws ping/pong liveness. Browsers auto-reply to ping frames with a
+        // pong, so this needs no app-level cooperation. A socket that misses a
+        // sweep (half-open — wifi roam/blip, no FIN) is terminated, which fires the
+        // 'close' handler below and deregisters the zombie session entity so the
+        // server stops trying to send to a dead socket.
+        (socket as any).isAlive = true;
+        socket.on('pong', () => {
+            (socket as any).isAlive = true;
+        });
+
         socket.addEventListener('message', (event) => {
             let { data } = event;
 
@@ -87,6 +97,26 @@ export function createServer<
             console.log('client disconnected', client.id);
         });
     });
+
+    // Sweep for dead sockets. Each pass terminates any client that hasn't ponged
+    // since the previous pass, then pings the survivors. terminate() → 'close' →
+    // deregisterEntity, reaping zombie sessions left by half-open connections.
+    const HEARTBEAT_SWEEP_MS = 15_000;
+    const heartbeatSweep = setInterval(() => {
+        for (const socket of server.clients) {
+            if ((socket as any).isAlive === false) {
+                socket.terminate();
+                continue;
+            }
+            (socket as any).isAlive = false;
+            try {
+                socket.ping();
+            } catch {
+                socket.terminate();
+            }
+        }
+    }, HEARTBEAT_SWEEP_MS);
+    server.on('close', () => clearInterval(heartbeatSweep));
 
     if (httpServer) {
         httpServer.listen(config.port);

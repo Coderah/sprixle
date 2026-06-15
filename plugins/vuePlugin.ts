@@ -110,7 +110,24 @@ export function applyVuePlugin<
                 }
             }
             // componentWatchers.delete(entity.id);
-            entityWatchers.delete(entity.id);
+
+            // Null the entity-watcher refs but KEEP the set — mirroring the
+            // componentWatchers treatment above. A SyncEntity-driven
+            // deregister+re-register of the same id (an entity that leaves and
+            // rejoins an index, or a full resetLocalEntities() on reconnect)
+            // must still reach these refs via register(). Deleting the set here
+            // orphaned every cached useQuery/useQueryIndexedBy/useEntity ref
+            // (they live in each consumer's `cache` until unmount and are never
+            // re-added to entityWatchers), so re-registered entities silently
+            // stopped updating the UI — e.g. audience polls freezing after a
+            // reconnect or a playlist row swap. Empty sets are still pruned by
+            // each composable's unmount cleanup.
+            const entityRefs = entityWatchers.get(entity.id);
+            if (entityRefs) {
+                for (let ref of entityRefs) {
+                    ref.value = undefined;
+                }
+            }
             // TODO handle componentWatchers getting cleared (like removeComponent)
         },
 
@@ -310,10 +327,14 @@ export function applyVuePlugin<
                 unregisterWatcher(currentId);
             }
 
-            // Register for new ID and update value
+            // Register for new ID and update value. Guard on newId — mirrors
+            // useComponent.handleIdChange. Without this, clearing the source ref
+            // (e.g. a cue's targetId nulling out when the cue is deregistered)
+            // registers this ref under the `undefined` key, leaking a junk
+            // entityWatchers entry that nothing ever patches.
             currentId = newId;
-            registerWatcher(newId);
             if (newId) {
+                registerWatcher(newId);
                 ref.value = manager.getEntity(newId);
             } else {
                 ref.value = undefined;
@@ -387,19 +408,23 @@ export function applyVuePlugin<
         const ref = shallowRef(query.entities.map((id) => getEntityRef<E>(id)));
 
         function getEntityRef(id: EntityId) {
-            if (!entityWatchers.has(id) || !entityWatchers.get(id).size) {
-                const entityRef = shallowRef(
-                    manager.getEntity(id)
-                ) as ShallowRef<E>;
-
-                // Register this ref with entityWatchers so patchHandlers updates it
-                entityWatchers.set(id, new Set());
-                entityWatchers.get(id)!.add(entityRef);
+            // Each consumer owns its OWN ref per entity, registered in the shared
+            // entityWatchers set (patchHandlers fans every change out to all refs
+            // in the set). We must NOT share a single ref across consumers: when
+            // one consumer unmounts it deletes its refs from entityWatchers, which
+            // would silently orphan every other consumer that had reused the same
+            // ref — their lists then stop reacting to component changes until a
+            // full reload. (This was the "reordered stack doesn't move until
+            // reload" bug: a virtualized SectionView reused useFlatStackItems'
+            // shared ref, then deleted it on unmount.)
+            let entityRef = cache.get(id);
+            if (!entityRef) {
+                entityRef = shallowRef(manager.getEntity(id)) as ShallowRef<E>;
                 cache.set(id, entityRef);
-
-                return entityRef;
+                if (!entityWatchers.has(id)) entityWatchers.set(id, new Set());
+                entityWatchers.get(id)!.add(entityRef);
             }
-            return entityWatchers.get(id).first();
+            return entityRef;
         }
 
         // Consumer and System work to track entity list changes
@@ -473,6 +498,10 @@ export function applyVuePlugin<
             return indexValue;
         };
 
+        // This consumer's own refs, keyed by entity id. See useQuery.getEntityRef
+        // for why refs must be owned per-consumer rather than shared.
+        const cache = new Map<EntityId, ShallowRef<E>>();
+
         const getEntitiesForIndex = (idx: C[IndexedComponent] | undefined) => {
             if (idx === undefined) return [];
             const indexedEntities = query.get(idx);
@@ -484,19 +513,15 @@ export function applyVuePlugin<
         const ref = shallowRef(getEntitiesForIndex(getIndexValue()));
 
         function getEntityRef(entity: E) {
-            if (
-                !entityWatchers.has(entity.id) ||
-                !entityWatchers.get(entity.id).size
-            ) {
-                const entityRef = shallowRef(entity) as ShallowRef<E>;
-
-                // Register this ref with entityWatchers so patchHandlers updates it
-                entityWatchers.set(entity.id, new Set());
+            let entityRef = cache.get(entity.id);
+            if (!entityRef) {
+                entityRef = shallowRef(entity) as ShallowRef<E>;
+                cache.set(entity.id, entityRef);
+                if (!entityWatchers.has(entity.id))
+                    entityWatchers.set(entity.id, new Set());
                 entityWatchers.get(entity.id)!.add(entityRef);
-
-                return entityRef;
             }
-            return entityWatchers.get(entity.id).first();
+            return entityRef;
         }
 
         // Consumer and System work to track entity list changes
@@ -530,15 +555,16 @@ export function applyVuePlugin<
         // every frame (and every entity mutation) loops over the dead ones,
         // making scroll lag grow without bound.
         onUnmounted(() => {
-            for (let entity of ref.value) {
-                const watchers = entityWatchers.get(entity.value.id);
+            for (let [id, entityRef] of cache) {
+                const watchers = entityWatchers.get(id);
                 if (watchers) {
-                    watchers.delete(entity);
+                    watchers.delete(entityRef);
                     if (watchers.size === 0) {
-                        entityWatchers.delete(entity.value.id);
+                        entityWatchers.delete(id);
                     }
                 }
             }
+            cache.clear();
             vuePipeline.systems.delete(system);
             consumer.destroy();
         });

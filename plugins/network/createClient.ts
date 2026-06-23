@@ -33,7 +33,12 @@ export function createClient<
     // ── Heartbeat watchdog ──────────────────────────────────────────────────
     const heartbeatIntervalMs = options?.heartbeat?.intervalMs ?? 10_000;
     const heartbeatTimeoutMs = options?.heartbeat?.timeoutMs ?? 30_000;
+    // After a foreground/online resume we ping immediately and expect an ack
+    // within this short window — much faster than waiting out a full heartbeat
+    // timeout — before declaring the (still-OPEN) socket half-open.
+    const verifyTimeoutMs = Math.min(heartbeatTimeoutMs, 4_000);
     let heartbeatTimer: ReturnType<typeof setInterval> | undefined;
+    let verifyTimer: ReturnType<typeof setTimeout> | undefined;
     let lastActivity = 0;
 
     /** Call on every inbound frame so the watchdog knows the socket is alive. */
@@ -48,6 +53,37 @@ export function createClient<
         }
     }
 
+    /**
+     * Tear down a dead socket and drive the reconnect ourselves.
+     *
+     * We cannot rely on `socket.close()` → `onclose` for a half-open socket: the
+     * closing handshake has no reachable peer, so the browser only fires `close`
+     * after its own (long, unreliable on old Chrome/Chromebooks) handshake
+     * timeout. During that gap the heartbeat is already stopped and nothing has
+     * scheduled a reconnect, so the client silently freezes until a manual
+     * refresh. Detach the handlers, best-effort close, and kick reconnect now.
+     */
+    function forceReconnect(reason: string) {
+        console.warn(`[NETWORK] forcing reconnect: ${reason}`);
+        stopHeartbeat();
+        if (verifyTimer) {
+            clearTimeout(verifyTimer);
+            verifyTimer = undefined;
+        }
+        const dead = socket;
+        if (dead) {
+            // Drop handlers so a late onclose from the dead socket can't race the
+            // fresh connection's reconnect logic.
+            dead.onopen = dead.onmessage = dead.onerror = dead.onclose = null;
+            try {
+                dead.close();
+            } catch {}
+        }
+        network.handleDisconnect({} as CloseEvent);
+        socketPromise = null;
+        reconnect();
+    }
+
     function startHeartbeat() {
         if (!options?.heartbeat) return;
         stopHeartbeat();
@@ -55,16 +91,70 @@ export function createClient<
         heartbeatTimer = setInterval(() => {
             if (!socket || socket.readyState !== socket.OPEN) return;
             if (Date.now() - lastActivity > heartbeatTimeoutMs) {
-                console.warn(
-                    '[NETWORK] heartbeat timeout — closing dead socket to force reconnect'
-                );
-                stopHeartbeat();
-                // Force the onclose the OS never delivered for a half-open socket.
-                socket.close();
+                forceReconnect('heartbeat timeout');
                 return;
             }
             options.heartbeat!.sendPing();
         }, heartbeatIntervalMs);
+    }
+
+    /**
+     * Proactive recovery trigger for `online` / `focus` / `visibilitychange`.
+     *
+     * A LAN-only wifi blip or a backgrounded/slept display (old Chromebooks
+     * throttle hard) can leave us with a socket that still reads OPEN but is
+     * actually dead, and the rAF render loop frozen. When the device comes back
+     * we don't want to wait out the up-to-30s heartbeat window:
+     *   - not OPEN  → reconnect straight away
+     *   - OPEN      → ping now and, if no frame arrives within verifyTimeoutMs,
+     *                 treat it as half-open and force reconnect.
+     */
+    function verifyConnection() {
+        if (
+            typeof document !== 'undefined' &&
+            document.visibilityState === 'hidden'
+        )
+            return;
+
+        if (
+            !socket ||
+            socket.readyState === socket.CLOSED ||
+            socket.readyState === socket.CLOSING
+        ) {
+            socketPromise = null;
+            reconnect();
+            return;
+        }
+        // A connection attempt is already in flight; let it resolve.
+        if (socket.readyState !== socket.OPEN) return;
+        // Without a ping mechanism we can't elicit a frame to confirm liveness,
+        // so don't risk false-positive reconnecting a healthy idle socket.
+        if (!options?.heartbeat) return;
+
+        const probeAt = Date.now();
+        options.heartbeat.sendPing();
+        if (verifyTimer) clearTimeout(verifyTimer);
+        verifyTimer = setTimeout(() => {
+            verifyTimer = undefined;
+            // No inbound frame since the probe → the OPEN socket is half-open.
+            if (
+                socket &&
+                socket.readyState === socket.OPEN &&
+                lastActivity < probeAt
+            ) {
+                forceReconnect('resume probe unanswered');
+            }
+        }, verifyTimeoutMs);
+    }
+
+    if (typeof window !== 'undefined') {
+        window.addEventListener('online', verifyConnection);
+        window.addEventListener('focus', verifyConnection);
+        if (typeof document !== 'undefined') {
+            document.addEventListener('visibilitychange', () => {
+                if (document.visibilityState === 'visible') verifyConnection();
+            });
+        }
     }
 
     const reconnect = throttle(

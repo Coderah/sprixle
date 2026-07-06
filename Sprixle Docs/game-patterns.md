@@ -51,6 +51,7 @@ src/server/  ← server entry + server-only systems (networked projects)
 ## Input
 
 - `applyInputPlugin` with **declarative binds**: `upsertInputBinds({ click: [MouseLeft, Touch0], ... })` with activation `press|held|release`, then `createInputBindHandlers(pressMap, releaseMap)`. Keyboard/mouse/touch/gamepad unified; world-position raycasting via `useThreeForWorldPosition` + camera.
+- **Custom input sources** (orrery WebMIDI): the plugin returns `injectInput(name, state, value?)` (press = `now()`, release = `null`) and `pulseInput(name, value?)` (momentary — auto-releases after propagating to binds, like `*Move` inputs; `value` rides `inputPosition`, e.g. a relative-encoder delta magnitude read off the bind entity in handlers). A source adapter (MIDI/OSC/serial parser) injects canonical names (`'MidiNote36'`) and **binds do all mapping** — `inputBinds: ['KeyA', 'MidiNote36']` is one bind, two physical controls. `resolveInputMode` option classifies custom names into `activeInputMode`. Magnitude caveat: handlers should only honor `inputPosition` when the bind's `inputName` is the analog input — a later keypress on the same bind would stale-read it otherwise.
 - **Input buffering** (shadow-boxer): on a rejected state change, store `{ bufferedInput, time }` and retry within a leniency window (~300ms) each tick. Essential feel for action games.
 - Route input handlers through actions (they may be RPCs on networked games — cursory-world's mouse-move → `actions.movePlayer` reconciled RPC).
 

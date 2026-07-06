@@ -22,7 +22,11 @@ export type Input =
     | `Mouse${string}`
     | `Touch${number}`
     | `Touch${number}Move`
-    | `Gamepad${string}`;
+    | `Gamepad${string}`
+    // custom input sources (MIDI, OSC, serial…) inject arbitrary names via
+    // injectInput/pulseInput — keep them prefixed (e.g. 'MidiNote36') so
+    // resolveInputMode and bind-hint tooling can classify them
+    | (string & {});
 
 const gamepadButtons = [
     'A',
@@ -68,6 +72,9 @@ interface InputPluginOptions {
     useThreeForWorldPosition?: boolean;
     threeCamera?: Camera;
     allowOtherMouseEvents?: boolean;
+    /** classify custom-source input names into activeInputMode values (e.g.
+     * name starting 'Midi' → 'midi'); checked before the built-in prefixes */
+    resolveInputMode?: (inputName: string) => string | undefined;
 }
 
 export type InputComponents = {
@@ -94,7 +101,16 @@ export type InputComponents = {
     inputRelPosition: number | number[] | Vector2;
     inputWorldPosition: Vector3;
 
-    activeInputMode: 'touch' | 'pointer' | 'keyboard' | 'gamepad';
+    /** momentary raw input (pulseInput): auto-released after propagating to
+     * binds, same mechanism as *Move inputs */
+    inputMomentary: boolean;
+
+    activeInputMode:
+        | 'touch'
+        | 'pointer'
+        | 'keyboard'
+        | 'gamepad'
+        | (string & {});
 };
 
 export function collapseVectorToDirection(vec2: Vector2, deadzone = 0) {
@@ -139,6 +155,53 @@ export function applyInputPlugin<
 
     function createInputEntityId(inputName: string) {
         return 'input' + inputName;
+    }
+
+    /**
+     * Custom input sources (MIDI, OSC, serial…): inject raw input state by
+     * name — the exposed equivalent of the internal DOM handlers. press =
+     * `injectInput(name, now())`, release = `injectInput(name, null)`; an
+     * optional analog `value` rides inputPosition (quietSet, like gamepad
+     * axes) and propagates to bound bind entities. Binds reference custom
+     * names in `inputBinds` like any other input; keep names prefixed
+     * ('MidiNote36') so resolveInputMode and hint tooling can classify them.
+     */
+    function injectInput(
+        name: string,
+        state: number | null,
+        value?: number | number[] | Vector2
+    ) {
+        const entity =
+            manager.getEntity(createInputEntityId(name)) ||
+            manager.createEntity(createInputEntityId(name));
+
+        entity.components.inputName = name as Input;
+
+        if (value !== undefined) {
+            entity.quietSet('inputPosition', value);
+            entity.components.inputBindIds?.forEach((bindId) => {
+                manager.getEntity(bindId)?.quietSet('inputPosition', value);
+            });
+        }
+
+        entity.components.inputState = state;
+        manager.registerEntity(entity);
+
+        return entity;
+    }
+
+    /**
+     * Momentary event (encoder detent, one-shot message): a press that
+     * auto-releases after propagating to binds — the same mechanism as *Move
+     * inputs. `value` carries magnitude (e.g. a relative-CC delta) via
+     * inputPosition; press-activation bind handlers read it off the bind
+     * entity.
+     */
+    function pulseInput(name: string, value?: number | number[] | Vector2) {
+        const entity = injectInput(name, now(), value);
+        entity.components.inputMomentary = true;
+
+        return entity;
     }
 
     function setupRaycastFromMousePosition(
@@ -359,6 +422,8 @@ export function applyInputPlugin<
 
     return {
         setupRaycastFromMousePosition,
+        injectInput,
+        pulseInput,
         inputActiveModeSystem: manager.createSystem(
             rawInputQuery.createConsumer(),
             {
@@ -369,7 +434,16 @@ export function applyInputPlugin<
                     );
                 },
                 updated(entity) {
-                    if (entity.components.inputName.startsWith('Mouse')) {
+                    const customMode = options.resolveInputMode?.(
+                        entity.components.inputName
+                    );
+
+                    if (customMode) {
+                        manager.setSingletonEntityComponent(
+                            'activeInputMode',
+                            customMode
+                        );
+                    } else if (entity.components.inputName.startsWith('Mouse')) {
                         manager.setSingletonEntityComponent(
                             'activeInputMode',
                             'pointer'
@@ -481,7 +555,8 @@ export function applyInputPlugin<
                     });
 
                     if (
-                        entity.components.inputName.endsWith('Move') &&
+                        (entity.components.inputName.endsWith('Move') ||
+                            entity.components.inputMomentary) &&
                         entity.components.inputState
                     ) {
                         entity.components.inputState = null;
@@ -540,7 +615,8 @@ export function applyInputPlugin<
                     });
 
                     if (
-                        entity.components.inputName.endsWith('Move') &&
+                        (entity.components.inputName.endsWith('Move') ||
+                            entity.components.inputMomentary) &&
                         entity.components.inputState
                     ) {
                         entity.components.inputState = null;

@@ -20,6 +20,18 @@ Mined from the game projects (2026-07 survey of test-pilots, cursory-world, sobe
 14. **Query dedup is dead code** (verified 2026-07) — `Manager.createQuery` intends to return an existing identical query (`if (state.queries.has(query.queryName)) return existing`), but the `Query` constructor runs first and unconditionally appends a uuid to `queryName` when `state.queryStates` already holds it — so the `queries.has` check can never succeed and every identical definition creates a fresh independent query. Either fix the ordering (compute the name and check before constructing) or delete the branch and document that queries are never shared.
 15. **Sim-time determinism policy** — sims freely mix wall-clock `now()` into gameplay state (lanebreak's match FSM, timestamps in components). This conflicts with the intended `'replay'` reconciliation strategy, headless/server determinism, and record-replay debugging. Decide and document: gameplay reads pipeline time (`useInternalTime`) only; wall clock stays at the edges.
 
+16. **Deepkit serializer silently corrupted an interface array in ONE project's webpack build — root cause unconfirmed** (orrery, 2026-07) — `em.createSerializer<T>()` where `T` reached an imported interface array (`PhraseNote[]`) through `Partial<ComponentTypes>` round-tripped FINE under ts-node but in orrery's webpack/ts-loader build silently encoded array elements as nothing — decode returned `[undefined × n]`, no error. **Do NOT read this as "deepkit breaks under webpack"** — other projects serialize very complex component structures through webpack builds without issue, so the trigger is likely something orrery-specific (candidates: ambient `declare module` shims for untyped ESM deps in the same import graph, the components-interface shape, import order). Worth a proper diagnosis if it recurs elsewhere. Orrery's workaround: disk format uses raw `bson` serialize/deserialize (plain-data saves need no reflection — see its `encoders.ts` disk section); fine as a project-local pattern, not an engine rule.
+
+17. **InputPlugin: custom input sources** — ✅ BUILT (orrery, 2026-07): `injectInput(
+    name, state, value?)` + `pulseInput(name, value?)` (momentary, auto-released via
+    the *Move mechanism; `inputMomentary` component), `Input` type widened for
+    project-defined names, `resolveInputMode` option for activeInputMode
+    classification. Encoder deltas resolved as up/down pulses whose magnitude rides
+    `inputPosition` (quietSet, like gamepad axes) — see game-patterns.md Input for
+    the pattern + the stale-magnitude caveat. Remaining niceties: a dedicated value
+    activation type for continuous/absolute controls (faders, analog sticks), and
+    extraction candidate #8's bind-hint UI now renders custom binds for free.
+
 ## Plugin extraction candidates (source: project code)
 
 Ranked by leverage. Each names the donor implementation.

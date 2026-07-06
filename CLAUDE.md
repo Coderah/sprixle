@@ -4,6 +4,14 @@ Sprixle is a rendering-agnostic TypeScript ECS engine, dropped into each game pr
 
 Do not modify engine code from a game project unless you are deliberately fixing/improving the engine.
 
+## Working style
+
+**Do not build or verify.** No `tsc`, no webpack compiles, no dev servers, no
+headless-browser runs to prove your code works — the user is a skilled engineer who
+builds and verifies on his own cadence, and end-to-end verification wastes tokens.
+Make the change, state what to observe when he runs it, and stop. Only exception: a
+cheap sanity test of an isolated algorithm (e.g. running a pure function in node).
+
 ## Architecture philosophy
 
 Two principles sit above every rule below — when a change you're about to make conflicts with them, restructure the change:

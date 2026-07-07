@@ -9,8 +9,41 @@ Do not modify engine code from a game project unless you are deliberately fixing
 **Do not build or verify.** No `tsc`, no webpack compiles, no dev servers, no
 headless-browser runs to prove your code works — the user is a skilled engineer who
 builds and verifies on his own cadence, and end-to-end verification wastes tokens.
-Make the change, state what to observe when he runs it, and stop. Only exception: a
-cheap sanity test of an isolated algorithm (e.g. running a pure function in node).
+Make the change, state what to observe when he runs it, and stop. The one sanctioned
+exception is a **cheap sanity test of an isolated pure algorithm** in node — the
+`scratchpad/*-sanity.mjs` files (e.g. `t7-varlength-sanity.mjs`) are this exception in
+practice: prove the math in isolation, never drive the app.
+
+**Forked work out of a master agent.** For multi-part work you (the master agent) stay
+the orchestrator — hold the plan, delegate the parts, keep the conclusions not the file
+dumps.
+
+- **Read/explore fan-out parallelizes freely.** Read-only agents never collide, so
+  launch them together (one message, multiple calls) and synthesize their reports.
+- **Parallelize UNRELATED implementation, serialize RELATED — the test is the work, not
+  the file.** Nearly every change touches `components.ts`/`actions.ts`, so "different
+  files" is the wrong bar: two agents adding *independent* components/actions in
+  different regions of the same file merge cleanly. Serialize when the changes *relate* —
+  same logic, interdependent, or one's output feeds the other's edit. This is not a
+  never-parallelize rule; it's "don't parallelize work that collides in meaning." When
+  unsure whether two parts relate, serialize.
+- **Lean fresh over fork, but decide per agent.** A fresh agent carries lean context and
+  lets you pick the model; a fork inherits the whole transcript (no re-briefing, but
+  locked to the parent model and dragging the full context along). A good spec doc
+  externalizes the context a build needs, which usually tips it toward fresh — but it's
+  the delegating call each time, not a rule.
+- **Editing agents run in a git worktree** (`isolation: "worktree"`, fresh or fork
+  alike): their edits land in an isolated checkout, so the user's working tree stays put
+  — they keep the app running and make their own small tweaks without the dev server
+  reloading on every agent write. Read-only fan-out skips it (no edits, and worktrees
+  cost setup + disk). A worktree isolates the *live filesystem, not the merge* — related
+  work still conflicts on integration, so the relatedness rule above still governs.
+- **Commit between batches.** A forked build checkpoints: integrate each completed
+  batch's worktree back and commit before launching the next, so the tree is always
+  recoverable, the user sees one controlled reload (not a stream), and the next batch
+  starts clean. This is the standing exception to "commit only when asked" — it holds for
+  a multi-batch forked build the user has set in motion (branch first if on the default
+  branch, as always).
 
 ## Architecture philosophy
 
@@ -48,6 +81,7 @@ All under `src/sprixle/Sprixle Docs/`:
 - **legacy-modernization.md** — old idioms you WILL see in older branches (shadow-boxer, sobelow) and their modern replacements. `boilerplate/` is stale; see this doc before copying from it.
 - **new-project.md** — checklist for standing up a new project on the engine.
 - **engine-roadmap.md** — known engine gaps and plugin-extraction candidates mined from the game projects. Check it before hand-rolling something; add to it when you feel a gap.
+- **contract-docs.md** — the prompt-set method: how to author and reconcile a project's `<project>-<topic>.md` contract/scope docs (framing, locked decisions, verified groundwork, the reconciliation-authority pattern, status/SCAR markers). Read it before writing or reconciling a scope doc. This is a *method* doc, not an engine-source doc.
 
 `plugins.md` is auto-generated signature tables (via `generate-docs.ts`); regenerate rather than hand-edit.
 

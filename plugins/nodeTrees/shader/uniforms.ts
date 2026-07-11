@@ -13,8 +13,10 @@ export const depthUniform = {
     value: new Texture(),
 };
 
+// globalThis, not window: this module must stay importable in headless node (server sim, benchmark
+// harness) where DOM globals don't exist. The renderer plugin overwrites it on resize regardless.
 export const resolutionUniform = {
-    value: new Vector2(window.innerWidth, window.innerHeight),
+    value: new Vector2(globalThis.innerWidth ?? 1, globalThis.innerHeight ?? 1),
 };
 
 export const cameraNearUniform = {

@@ -22,18 +22,25 @@ export enum InterpolationType {
 // TODO add memoization through data hashing
 const LUT_SIZE = 257;
 
-const canvas = document.createElement('canvas');
-canvas.width = LUT_SIZE;
-canvas.height = 1;
-const context = canvas.getContext('2d')!;
+// Lazy: this module must stay importable in headless node (server sim, benchmark harness), so no
+// DOM access at module scope. Creating a LUT without a DOM is still an error — by then you're
+// rendering, and that's a real misuse worth throwing on.
+let lutContext: CanvasRenderingContext2D | null = null;
+function getLUTContext(): CanvasRenderingContext2D {
+    if (!lutContext) {
+        const canvas = document.createElement('canvas');
+        canvas.width = LUT_SIZE;
+        canvas.height = 1;
+        lutContext = canvas.getContext('2d')!;
+    }
+    return lutContext;
+}
 
 export function createColorRampLUT(
     colorRampData: ColorStop[],
     interpolationType: InterpolationType = InterpolationType.LINEAR
 ) {
-    // TODO remove hack for test code
-    // if (typeof document === 'undefined') return new Texture();
-
+    const context = getLUTContext();
     const imageData = context.createImageData(LUT_SIZE, 1);
     const data = imageData.data;
 

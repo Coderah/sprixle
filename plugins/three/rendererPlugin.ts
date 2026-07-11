@@ -33,7 +33,9 @@ import { DepthPass } from './pass/DepthPass';
 import { ShaderTreeComponentTypes } from './shaderTreePlugin';
 import { MaterialManagerComponentTypes } from './materialManagerPlugin';
 import { PassTargets } from '../nodeTrees/shader/blender/viewLayer';
-import { OutputPass } from 'three/examples/jsm/postprocessing/OutputPass';
+// Explicit .js: node's exports-map resolution (headless import of this plugin) needs the real
+// subpath; webpack tolerates the extensionless form but node does not.
+import { OutputPass } from 'three/examples/jsm/postprocessing/OutputPass.js';
 
 THREE.ColorManagement.enabled = true;
 
@@ -112,12 +114,14 @@ export type RendererPluginComponents = RenderPassComponents &
 const renderConfigurationDefaults: RenderConfigurationComponents = {
     isRendererConfiguration: true,
 
-    rSize: new THREE.Vector2(window.innerWidth, window.innerHeight),
+    // globalThis, not window: module-scope defaults must not throw in headless node (server sim,
+    // benchmark harness); the resize handler corrects them as soon as a real renderer exists.
+    rSize: new THREE.Vector2(globalThis.innerWidth ?? 1, globalThis.innerHeight ?? 1),
 
     rClearColor: new Color('black'),
     rClearAlpha: 1,
 
-    rPixelRatio: window.devicePixelRatio || 1,
+    rPixelRatio: globalThis.devicePixelRatio || 1,
 
     rMSAASamples: 0,
 
@@ -323,7 +327,9 @@ export default sprixlePlugin(function RendererPlugin<
             minFilter: THREE.LinearFilter,
             magFilter: THREE.LinearFilter,
             format: THREE.RGBAFormat,
-            type: canRenderToFloatType ? THREE.FloatType : THREE.HalfFloatType,
+            samples: rMSAASamples,
+            // type: canRenderToFloatType ? THREE.FloatType : THREE.HalfFloatType,
+            type: THREE.HalfFloatType,
             anisotropy: maxAnisotropy,
         };
 
@@ -335,7 +341,7 @@ export default sprixlePlugin(function RendererPlugin<
             );
             // parameters.depthTexture.type = canRenderToFloatType
             //     ? THREE.FloatType
-            //     : THREE.HalfFloatType;
+            //     : THREE.HalfFloatType;stanjk
             // TODO how do shaders access the depth uniform if not prepass?
             if (depthPrepass?.components.rPassTextureUniform) {
                 depthPrepass.components.rPassTextureUniform.value =
@@ -354,7 +360,6 @@ export default sprixlePlugin(function RendererPlugin<
                 ...parameters,
                 depthBuffer: true,
                 count: validTargets?.length || 1,
-                samples: rMSAASamples,
             }
         );
 
@@ -391,8 +396,6 @@ export default sprixlePlugin(function RendererPlugin<
                 depthBuffer: false,
                 // depthBuffer: true,
                 count: 1,
-                // count: validTargets?.length || 1,
-                samples: rMSAASamples,
             }
         );
 

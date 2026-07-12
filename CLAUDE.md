@@ -38,6 +38,19 @@ dumps.
   reloading on every agent write. Read-only fan-out skips it (no edits, and worktrees
   cost setup + disk). A worktree isolates the *live filesystem, not the merge* — related
   work still conflicts on integration, so the relatedness rule above still governs.
+  **SCAR — agent worktrees come up broken two ways** (hit 2026-07-07, all three agents
+  of a batch): (1) `src/sprixle/` is EMPTY — `git worktree add` never initializes
+  submodules, so the engine source is missing and the root CLAUDE.md's
+  `@src/sprixle/CLAUDE.md` import fails at agent boot (this doc never loads for that
+  agent); (2) the worktree may be based at the DEFAULT-branch merge-base, not the
+  working branch's HEAD — none of the branch's code or docs present. The protocol,
+  IN ORDER (a stale base can record an uncheckoutable submodule pointer, so the
+  ff-merge must precede the init): every worktree agent's prompt starts with
+  (1) verify `git log --oneline -1` matches the working branch's HEAD — if stale,
+  `git merge --ff-only <branch>` (never `reset --hard`; the sandbox blocks it);
+  (2) `git submodule update --init src/sprixle`; (3) read `src/sprixle/CLAUDE.md`
+  explicitly — the boot @-import already failed before any fix could land, so the
+  read must be explicit.
 - **Commit between batches.** A forked build checkpoints: integrate each completed
   batch's worktree back and commit before launching the next, so the tree is always
   recoverable, the user sees one controlled reload (not a stream), and the next batch

@@ -47,6 +47,37 @@ Ranked by leverage. Each names the donor implementation.
 9. **Scene manager** (shadow-boxer/sobelow/lanebreak convergently) — `sceneName` singleton + pipeline gating + enter/exit consumer hooks + tagged scene-object cleanup (`isSceneObject` sweep with mesh/material disposal).
 10. **Ortho camera fit** (shadow-boxer `cameraBounds.ts`) — fit an OrthographicCamera to a fixed design box on resize; zero coupling, drop-in.
 11. **calculatedComponents recompute helper** (laok) — formalize the base/derived overlay: declare derived keys + a recompute fn; engine wires the consumers and the `?? components` read path.
+12. **InputPlugin touch guard is a latent always-true bug** (birbdex, 2026-07) — `handleTouchStart`/`handleTouchEnd` gate their `preventDefault`+`stopPropagation`+`stopImmediatePropagation` on `event.currentTarget === domElement`, but `currentTarget` in a bubble listener is ALWAYS the bound element, so it fires for every touch on the page and swallows overlaid-UI taps/scroll on device (see vue-bridge.md SCAR). Interim fix shipped: added `allowOtherTouchEvents` opt-out (default off, no regression). **Proper fix:** gate on `event.target === domElement` (only hijack gestures that land on the surface itself, not those bubbling from overlaid UI) and/or bind `domElement` to the actual play surface instead of `document.body`. Not changed by default because canvas games binding to `body` with a child `<canvas>` would then stop swallowing gestures — decide per the engine owner.
+
+13. **PWA install plugin** (birbdex, 2026-07-10) — **DONE, in engine.** `promptInstall.ts`
+    gained `applyPromptInstallPlugin(manager)`: pure `isStandalone()` (checks `display-mode`
+    **and** iOS `navigator.standalone`) + `detectPlatform()` (iPadOS via `maxTouchPoints`), an
+    `installStatus` singleton component (`standalone`/`platform`/`canPrompt`/`dismissed`), and a
+    system that captures the Android `beforeinstallprompt` **into a closure** (the old function
+    discarded it into a local — dead code) plus `appinstalled`, publishing state. `install()`
+    fires the native prompt (no-op iOS); `dismissInstall()` persists to localStorage. Renders
+    nothing — the project supplies the Vue surface. Old imperative `promptInstall()` kept
+    `@deprecated`. Pattern: **detection + capture in the plugin, presentation in the project.**
+14. **Web Push plugin** (birbdex `birbdex-editions-push.md` EP5, future) — a real engine gap: no
+    push/notification surface exists. Needs a **service worker** (none in engine yet — pairs with
+    a local-persistence/offline plugin, item below), VAPID handling, a subscription lifecycle
+    keyed to an app-defined account id, and `push`/`notificationclick` handlers that open a
+    deep link. **iOS constraint:** delivery only to installed (home-screen) PWAs. Blocked on a
+    backend in the donor project (Path B), so extract when the first project actually ships it.
+15. **Local per-user persistence (ECS ↔ IndexedDB)** (birbdex SP3 — **prototyped project-side
+    2026-07-10, extraction candidate**) — a `persisted`-tag query snapshotted to IndexedDB on
+    debounced change (system reacts to add/remove) and rehydrated on `init`. birbdex chose a
+    **JSON projection over `em.createSerializer`/BSON** deliberately — its server backup is JSON
+    (`dex/<key>.json`), so one shape backs both local storage and the sync upload; a general
+    engine plugin should support *both* codecs (BSON for networked snapshots, JSON for
+    server-JSON alignment) behind one `applyPersistencePlugin(manager, { key, codec, tag })`.
+    Donor: `src/client/idb.ts` + `system/persistenceSystem.ts`.
+16. **Offline write outbox** (birbdex SV10, candidate) — an offline-first write queue: an entity
+    per pending server op (persisted alongside #15), a drain system that delivers when
+    `navigator.onLine` with **2xx=done / 409=terminal / 5xx=retry-with-ceiling** semantics and
+    `(op, key)` dedupe. Pairs with any local-first + eventual-server project. Donor:
+    `src/client/system/outboxSystem.ts`. Keep the local mutation immediate; the outbox only
+    carries the *server reconciliation*, never gates the local reward.
 
 ## Documentation debt (beyond these docs)
 

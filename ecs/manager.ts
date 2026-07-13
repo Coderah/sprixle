@@ -592,6 +592,10 @@ export class Manager<ExactComponentTypes extends defaultComponentTypes> {
         K extends Keys<typeof this.ComponentTypes>,
         V extends Object | Array<unknown>,
     >(entity: T, componentType: K, value: V): V {
+        // null is a legitimate value inside Nested components (e.g. a cleared
+        // `currentStep: null`); typeof null === 'object', so without this guard the
+        // child recursion below feeds null into the marker read and crashes.
+        if (value === null) return value;
         // @ts-ignore
         if (value.__isSprixleNestedProxy) return value;
         if (typeof value !== 'object') {

@@ -72,6 +72,16 @@ interface InputPluginOptions {
     useThreeForWorldPosition?: boolean;
     threeCamera?: Camera;
     allowOtherMouseEvents?: boolean;
+    /**
+     * When true, touch handlers do NOT `preventDefault`/`stopPropagation` — required for any
+     * app with an overlaid DOM/Vue UI on touch devices. The touch handlers guard on
+     * `event.currentTarget === domElement`, but `currentTarget` in a bubble listener is ALWAYS
+     * the bound element, so that guard is always true → by default every touch on the page has
+     * its default action cancelled, which kills tap→click synthesis (buttons, `@click`),
+     * scrolling, etc. Leave false for a full-surface game canvas that wants to swallow browser
+     * gestures; set true for a UI-first app and use CSS `touch-action` on the play surface.
+     */
+    allowOtherTouchEvents?: boolean;
     /** classify custom-source input names into activeInputMode values (e.g.
      * name starting 'Midi' → 'midi'); checked before the built-in prefixes */
     resolveInputMode?: (inputName: string) => string | undefined;
@@ -347,7 +357,10 @@ export function applyInputPlugin<
         };
 
         const handleTouchStart = (event: TouchEvent) => {
-            if (event.currentTarget === domElement) {
+            if (
+                event.currentTarget === domElement &&
+                !options?.allowOtherTouchEvents
+            ) {
                 event.preventDefault();
                 event.stopPropagation();
                 event.stopImmediatePropagation();
@@ -369,7 +382,10 @@ export function applyInputPlugin<
         };
 
         const handleTouchEnd = (event: TouchEvent) => {
-            if (event.currentTarget === domElement) {
+            if (
+                event.currentTarget === domElement &&
+                !options?.allowOtherTouchEvents
+            ) {
                 event.preventDefault();
                 event.stopPropagation();
                 event.stopImmediatePropagation();

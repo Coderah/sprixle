@@ -1,6 +1,17 @@
 /// <reference path="../types.d.ts" />
 
+import { Manager, defaultComponentTypes } from '../ecs/manager';
+import { SingletonComponent } from '../ecs/types';
+
 /**
+ * @deprecated Imperative DOM-injection install prompt. Kept for older projects that import it;
+ * new projects should use {@link applyPromptInstallPlugin} — a detection helper + system + a
+ * reactive `installStatus` singleton the UI reads (see `birbdex-identity-storage.md` SP2). The
+ * old shape has three defects the plugin fixes: (1) Android install is dead code (the
+ * `beforeinstallprompt` event is captured into a local and discarded); (2) iOS detection misses
+ * modern iPadOS; (3) it hard-injects a fixed white overlay, so it can't match a project's
+ * aesthetic and violates the "effects live in systems" principle.
+ *
  * Checks if the application is running as an installed PWA and prompts the user to install if not.
  * Provides specific instructions for Safari users.
  */
@@ -58,4 +69,155 @@ interface BeforeInstallPromptEvent extends Event {
         platform: string;
     }>;
     prompt(): Promise<void>;
+}
+
+// ---------------------------------------------------------------------------
+// PWA install, reshaped as a plugin (birbdex-identity-storage.md SP2).
+//
+// Decision (architecture principle 1) is a component write; the effect — rendering the
+// prompt, firing the native dialog — lives elsewhere: a project's Vue surface reads the
+// `installStatus` singleton and calls `install()` / `dismissInstall()`. The plugin only
+// detects, captures the Android deferred prompt (the bug the old function had), and
+// publishes state. It renders NOTHING, so each project styles the nudge in-aesthetic.
+// ---------------------------------------------------------------------------
+
+export type InstallPlatform = 'ios' | 'android' | 'other';
+
+export interface InstallStatus {
+    /** already running as an installed / standalone PWA (nothing to prompt) */
+    standalone: boolean;
+    platform: InstallPlatform;
+    /** an Android `beforeinstallprompt` was captured → {@link install} can show the native UI */
+    canPrompt: boolean;
+    /** the user waved off the in-app nudge (persisted to localStorage) */
+    dismissed: boolean;
+}
+
+export type PromptInstallComponents = {
+    /** reactive install state the UI reads; a singleton (one per app) */
+    installStatus: InstallStatus & SingletonComponent;
+};
+
+/**
+ * Are we running as an installed / standalone PWA? Checks BOTH the `display-mode` media query
+ * AND iOS Safari's `navigator.standalone` flag (iOS never reports `display-mode: standalone`).
+ */
+export function isStandalone(): boolean {
+    return (
+        window.matchMedia?.('(display-mode: standalone)').matches === true ||
+        (navigator as any).standalone === true
+    );
+}
+
+/**
+ * Coarse platform for the install UX. Fixes the old iOS defect: modern iPadOS reports as a
+ * desktop Mac (`Macintosh` UA), so fall back to `maxTouchPoints` to still classify it as iOS.
+ */
+export function detectPlatform(): InstallPlatform {
+    const ua = navigator.userAgent;
+    const iOSUA = /iPad|iPhone|iPod/.test(ua) && !(window as any).MSStream;
+    const iPadOS = /Mac/.test(ua) && navigator.maxTouchPoints > 1;
+    if (iOSUA || iPadOS) return 'ios';
+    if (/Android/.test(ua)) return 'android';
+    return 'other';
+}
+
+const INSTALL_DISMISS_KEY = 'sprixle:install-dismissed';
+
+/**
+ * Install-prompt plugin (SP2). Returns the system to add to a pipeline, a query, and the
+ * `install`/`dismissInstall` actions the UI calls. The live `beforeinstallprompt` event is
+ * held in a closure (never in a component — it's a non-serializable DOM object); the component
+ * carries only serializable primitives.
+ */
+export function applyPromptInstallPlugin<
+    ComponentTypes extends defaultComponentTypes & PromptInstallComponents
+>(manager: Manager<ComponentTypes>) {
+    // the captured Android prompt — the thing the old promptInstall() discarded into a local
+    let deferredPrompt: BeforeInstallPromptEvent | null = null;
+
+    const readDismissed = () => {
+        try {
+            return localStorage.getItem(INSTALL_DISMISS_KEY) === '1';
+        } catch {
+            return false;
+        }
+    };
+    const writeDismissed = (v: boolean) => {
+        try {
+            if (v) localStorage.setItem(INSTALL_DISMISS_KEY, '1');
+            else localStorage.removeItem(INSTALL_DISMISS_KEY);
+        } catch {
+            /* private mode / storage disabled — dismissal just won't persist */
+        }
+    };
+
+    const currentStatus = (): InstallStatus => ({
+        standalone: isStandalone(),
+        platform: detectPlatform(),
+        canPrompt: deferredPrompt !== null,
+        dismissed: readDismissed(),
+    });
+
+    const publish = () =>
+        manager.setSingletonEntityComponent(
+            'installStatus',
+            currentStatus() as ComponentTypes['installStatus']
+        );
+
+    const installStatusQuery = manager.createQuery({
+        includes: ['installStatus'],
+    });
+
+    return {
+        installStatusQuery,
+
+        /**
+         * Fire the native Android install dialog. No-op on iOS (there is no programmatic
+         * install — the Vue surface shows the Share → Add to Home Screen steps there). Returns
+         * the user's choice, or `{ outcome: 'unavailable' }` when no prompt was captured.
+         */
+        async install() {
+            if (!deferredPrompt) return { outcome: 'unavailable' as const };
+            const evt = deferredPrompt;
+            deferredPrompt = null; // a captured prompt is single-use
+            await evt.prompt();
+            const choice = await evt.userChoice;
+            publish(); // canPrompt is now false
+            return choice;
+        },
+
+        /** Remember the user dismissed the nudge (persisted); the UI reads `installStatus.dismissed`. */
+        dismissInstall() {
+            writeDismissed(true);
+            publish();
+        },
+
+        /** Clear the dismissal (e.g. an explicit "install the dex" button should re-nudge). */
+        resetInstallDismissal() {
+            writeDismissed(false);
+            publish();
+        },
+
+        installSystem: manager.createSystem(
+            installStatusQuery.createConsumer(),
+            {
+                init() {
+                    // capture the Android deferred prompt so install() can fire it later —
+                    // this is the dead-code bug from the old promptInstall(), fixed
+                    window.addEventListener('beforeinstallprompt', (e: Event) => {
+                        e.preventDefault(); // suppress Chrome's mini-infobar; we drive the UI
+                        deferredPrompt = e as BeforeInstallPromptEvent;
+                        publish();
+                    });
+                    // once installed, reflect standalone and drop the stale captured prompt
+                    window.addEventListener('appinstalled', () => {
+                        deferredPrompt = null;
+                        publish();
+                    });
+                    publish(); // initial detection
+                },
+            }
+        ),
+    };
 }

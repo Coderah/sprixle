@@ -69,7 +69,7 @@ Attach by type intersection in `components.ts`:
 |---|---|
 | `TrackPrevious` | The prior value is copied into `entity.previousComponents` on change (Vectors are cloned). Only annotated keys populate `previousComponents`. Indexed query components get this automatically. |
 | `SingletonComponent` | Enforced unique; lives on a lazily-created entity whose **id is the component name**. |
-| `Nested<T>` | Wraps the value in a deep proxy so any nested mutation auto-calls `willUpdate` — no manual flagging. |
+| `Nested<T>` | Wraps the value in a deep proxy so any nested mutation auto-calls `willUpdate` — no manual flagging. `null` values inside are safe — passed through unwrapped (guarded 2026-07-12; previously crashed `wrapNested`, first hit by APS's `resolution.currentStep: null`). |
 | `Pointer<Map, 'name'>` | Serializes as a key into a named data source registered with `em.registerPointers({name: map})`; rehydrates as the live reference. Use for static game-data references (see gameDataPlugin). |
 
 ```ts

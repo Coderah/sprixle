@@ -1,15 +1,20 @@
 # Blender Authoring — practical conventions
 
-*Engine ref: f3f5215 (2026-07-05)*
+*Engine ref: f3f5215 (2026-07-13)*
 
 Companion to `blender.md` (concepts/roadmap). This is the working knowledge needed to author `.blend` content and wire it at runtime. Reference implementations: **lanebreak-tactics** (shaderTree + prefabs + batching, the deepest usage) and **sobelow** (feature-tag-driven scene loading).
 
-## The two channels (plus hot reload)
+## The three channels (plus hot reload)
 
 1. **GLTF export** — geometry, materials (with node trees serialized into `material.userData.shaderTree`), animations, cameras, and exported attributes travel in `.glb` extras (`export_extras: true` in the addon's exporter).
-2. **Live websocket** — the Blender addon runs a ws server on **port 9001**, pushing debounced `{type: logicTree|shaderTree|sceneChange|export, name, data}` messages. Enable with `enableNodeTreeBlenderConnection()` (dev only); `shaderTreePlugin`/`logicTreePlugin` listen on `blenderEvents` and recompile live.
+2. **Live websocket — shader/logic trees** — the Blender addon runs a ws server on **port 9001**, pushing debounced `{type: logicTree|shaderTree|sceneChange|export, name, data}` messages. Enable with `enableNodeTreeBlenderConnection()` (dev only); `shaderTreePlugin`/`logicTreePlugin` listen on `blenderEvents` and recompile live.
+3. **Live websocket — realtime geometry** — when a MESH object's geometry or transform changes in Blender, the addon debounces (300ms) and exports the changed objects to `<blend>.realtime.glb` next to the blend file, then sends `{type: "realtimeGeometry", name: "<blend>.realtime.glb"}` over the same ws connection. The [`applyRealtimeGeometryPlugin`](../blender/realtimeGeometryPlugin.ts) on the TS side fetches the GLB and swaps geometry/transform on matching scene objects by name. The blend file's directory must be accessible to the web app (e.g. served by the dev server or a symlink into the assets directory).
 
 The same shader tree can arrive both baked-in-GLB and live-over-ws. Gate live events behind initial load with `setBlenderRealtimePromise(loadPromise)` or hot-reload races startup.
+
+**Realtime geometry caveats:** Only MESH objects trigger exports; each export is a full GLB of the changed objects — the TS side matches by object name and replaces geometry + transform in place. Materials are re-exported with each change (a future version should wire through `materialManagerPlugin` for dedup). If you edit a material without touching geometry, only the shader tree ws message fires (not a geometry export).
+
+**Known gaps (see `realtimeGeometryPlugin.ts` header):** (1) `materialManagerPlugin` integration so compiled shaderTree materials survive geometry swaps. (2) A generalized `sceneLoader` plugin suite so every project doesn't roll its own GLB loading + feature-tag dispatch; this plugin should write to an `object3D` component, not the scene graph directly. (3) `object3D` should be an ECS component and scene-graph sync should be a separate reaction — this plugin shortcuts that for now.
 
 ## The `+feature(arg)` name DSL — the most important convention
 

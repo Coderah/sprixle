@@ -21,6 +21,7 @@ import bpy
 from bpy.app.handlers import persistent
 from websocket_server import WebsocketServer
 import json
+import os
 
 auto_load.init()
 
@@ -29,6 +30,48 @@ active_scene = None
 pending_updates = {}  # key -> {'cancelled': bool}
 
 DEBOUNCE_MS = 300  # ms to wait before sending after last update for a given id
+
+pending_realtime_objects = set()
+realtime_export_scheduled = False
+
+
+def schedule_realtime_export(object_name):
+    global pending_realtime_objects, realtime_export_scheduled
+    pending_realtime_objects.add(object_name)
+
+    if not realtime_export_scheduled:
+        realtime_export_scheduled = True
+        bpy.app.timers.register(do_realtime_export, first_interval=DEBOUNCE_MS / 1000.0)
+
+
+def do_realtime_export():
+    global pending_realtime_objects, realtime_export_scheduled
+    realtime_export_scheduled = False
+
+    if not pending_realtime_objects:
+        return None
+
+    batch = list(pending_realtime_objects)
+    pending_realtime_objects = set()
+
+    blend_path = bpy.data.filepath
+    if not blend_path:
+        return None
+
+    blend_name = os.path.splitext(os.path.basename(blend_path))[0]
+    realtime_path = f'//{blend_name}.realtime.glb'
+
+    successful = exporter.realtime_export(batch, realtime_path)
+
+    if successful:
+        global server
+        if server:
+            server.send_message_to_all(json.dumps({
+                "type": "realtimeGeometry",
+                "name": f"{blend_name}.realtime.glb"
+            }))
+
+    return None
 
 
 def debounced_send(key, message_data):
@@ -139,6 +182,10 @@ def handleDepsGraphUpdate(scene, graph):
     for object in graph.objects:
         object = bpy.data.objects[object.name]
         if not hasattr(object, 'modifiers'): continue
+
+        if object.type == 'MESH':
+            schedule_realtime_export(object.name)
+
         modifier = next((m for m in object.modifiers if m.type == 'NODES' and m.node_group and '+logic' in m.node_group.name), None)
         if modifier is None:
             continue
@@ -146,14 +193,10 @@ def handleDepsGraphUpdate(scene, graph):
         if not modifier.node_group.name in (update.id.name for update in graph.updates): continue
         if modifier in graphs_serialized: continue
 
-    
         print('logic tree update for')
         print(object)
         
-        # print(json)
         (data, name) = node_trees.serialize(object)
-
-        # last_serialized_trees[object.name]
 
         if data and server:
             graphs_serialized.append(modifier)

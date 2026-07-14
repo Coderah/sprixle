@@ -100,6 +100,54 @@ def prepareInstancesForExport(object):
 
     return False
      
+def realtime_export(object_names, filepath):
+    abs_path = bpy.path.abspath(filepath)
+
+    original_selected = [obj for obj in bpy.data.objects if obj.select_get()]
+    original_active = bpy.context.view_layer.objects.active
+
+    bpy.ops.object.select_all(action='DESELECT')
+
+    objects_to_export = []
+    for name in object_names:
+        obj = bpy.data.objects.get(name)
+        if obj and obj.type == 'MESH':
+            obj.select_set(True)
+            objects_to_export.append(obj)
+
+    if not objects_to_export:
+        for obj in original_selected:
+            obj.select_set(True)
+        return False
+
+    bpy.context.view_layer.objects.active = objects_to_export[0]
+
+    bpy.ops.export_scene.gltf(
+        filepath=abs_path,
+        use_selection=True,
+        export_format='GLB',
+        export_extras=True,
+        export_yup=True,
+        export_apply=True,
+        export_attributes=True,
+        export_normals=True,
+        export_texcoords=True,
+        export_materials='EXPORT',
+        export_lights=False,
+        export_cameras=False,
+        export_animations=False,
+        gltf_export_id="SprixleRealtime",
+    )
+
+    bpy.ops.object.select_all(action='DESELECT')
+    for obj in original_selected:
+        obj.select_set(True)
+    if original_active:
+        bpy.context.view_layer.objects.active = original_active
+
+    return True
+
+
 def cleanupInstanceExport(object):
     if not hasattr(object, 'modifiers'): return
 

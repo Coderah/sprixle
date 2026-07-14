@@ -17,7 +17,7 @@ class BlenderEvents extends EventTarget {
                 tree,
             },
         });
-        if (type === 'logicTree' || type === 'shaderTree') {
+        if (type === 'logicTree' || type === 'shaderTree' || type === 'realtimeGeometry') {
             requestAnimationFrame(() => {
                 promiseToAwait.then(() => {
                     console.log('[BlenderRealtime]', type, name, tree);
@@ -37,12 +37,12 @@ class BlenderEvents extends EventTarget {
         options?: AddEventListenerOptions | boolean
     );
     addEventListener(
-        type: 'sceneChange' | 'export',
+        type: 'sceneChange' | 'export' | 'realtimeGeometry',
         callback: (event: CustomEvent<{ name: string }>) => void,
         options?: AddEventListenerOptions | boolean
     );
     addEventListener(
-        type: 'logicTree' | 'shaderTree' | 'export' | 'sceneChange',
+        type: 'logicTree' | 'shaderTree' | 'export' | 'sceneChange' | 'realtimeGeometry',
         callback:
             | ((event: CustomEvent<{ name: string }>) => void)
             | ((event: CustomEvent<{ tree: NodeTree; name: string }>) => void),

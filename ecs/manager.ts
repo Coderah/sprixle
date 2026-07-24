@@ -35,9 +35,11 @@ import { deserializeBSON, serializeBSON } from '@deepkit/bson';
 import {
     AsyncSystem,
     Yieldable,
+    SerializedAsyncSystem,
     createDelayCondition,
     createEntityWaitCondition,
     createQueryWaitCondition,
+    deserializeAsyncSystem,
 } from './asyncSystem';
 
 export type Keys<T> = keyof T;
@@ -620,6 +622,47 @@ export class Manager<ExactComponentTypes extends defaultComponentTypes> {
         predicate?: (entity: Entity<Partial<ExactComponentTypes>>) => boolean,
     ): Yieldable {
         return createQueryWaitCondition(query.queryName, predicate);
+    }
+
+    private _asyncGenRegistry = new Map<
+        string,
+        AsyncSystem<ExactComponentTypes>['_genFn']
+    >();
+
+    registerAsyncGen(
+        id: string,
+        genFn: AsyncSystem<ExactComponentTypes>['_genFn'],
+    ): void {
+        this._asyncGenRegistry.set(id, genFn);
+    }
+
+    deserializeAsyncSystem(
+        saved: SerializedAsyncSystem,
+        genFnOrId?: string | AsyncSystem<ExactComponentTypes>['_genFn'],
+    ): AsyncSystem<ExactComponentTypes> {
+        let genFn: AsyncSystem<ExactComponentTypes>['_genFn'];
+        if (typeof genFnOrId === 'string') {
+            genFn = this._asyncGenRegistry.get(genFnOrId);
+            if (!genFn) {
+                throw new Error(
+                    `[deserializeAsyncSystem] no registered async gen for id "${genFnOrId}"`,
+                );
+            }
+        } else if (genFnOrId) {
+            genFn = genFnOrId;
+        } else if (saved.id) {
+            genFn = this._asyncGenRegistry.get(saved.id);
+            if (!genFn) {
+                throw new Error(
+                    `[deserializeAsyncSystem] no registered async gen for id "${saved.id}"`,
+                );
+            }
+        } else {
+            throw new Error(
+                '[deserializeAsyncSystem] must provide genFn, genFn id, or saved.id matching a registered gen',
+            );
+        }
+        return deserializeAsyncSystem(this, saved, genFn);
     }
 
     protected flagUpdate(

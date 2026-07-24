@@ -321,3 +321,134 @@ export function flushAsyncResumes(
 
     return count;
 }
+
+// --- Serialization ---
+
+export type SerializedCondition =
+    | { _spx: 'delay'; ms: number; deadline: number; _deadlineSet: boolean }
+    | { _spx: 'entityWait'; entityId: string; component: string; mode: string; _lastSeen?: any }
+    | { _spx: 'queryWait'; queryName: string }
+    | { _spx: 'promise'; resolved: boolean; value?: any; error?: any }
+    | null;
+
+export interface SerializedAsyncSystem {
+    id?: string;
+    tag?: string;
+    currentCondition: SerializedCondition;
+    delta: number;
+}
+
+export function serializeAsyncSystem(
+    system: AsyncSystem<any>,
+): SerializedAsyncSystem {
+    const cond = system._currentCondition;
+    let serializedCond: SerializedCondition = null;
+
+    if (cond) {
+        const spx = (cond as any)._spx;
+        switch (spx) {
+            case 'delay': {
+                const c = cond as DelayCondition;
+                serializedCond = {
+                    _spx: 'delay',
+                    ms: c.ms,
+                    deadline: c.deadline,
+                    _deadlineSet: c._deadlineSet,
+                };
+                break;
+            }
+            case 'entityWait': {
+                const c = cond as EntityWaitCondition;
+                serializedCond = {
+                    _spx: 'entityWait',
+                    entityId: String(c.entityId),
+                    component: c.component,
+                    mode: c.mode,
+                    _lastSeen: c._lastSeen,
+                };
+                break;
+            }
+            case 'queryWait': {
+                const c = cond as QueryWaitCondition;
+                serializedCond = {
+                    _spx: 'queryWait',
+                    queryName: c.queryName,
+                };
+                break;
+            }
+            case 'promise': {
+                const c = cond as PromiseCondition;
+                serializedCond = {
+                    _spx: 'promise',
+                    resolved: c.resolved,
+                    value: c.value,
+                    error: c.error,
+                };
+                break;
+            }
+        }
+    }
+
+    return {
+        id: system.id,
+        tag: system.tag,
+        currentCondition: serializedCond,
+        delta: system._delta,
+    };
+}
+
+export function deserializeAsyncSystem<CT extends defaultComponentTypes>(
+    em: Manager<CT>,
+    saved: SerializedAsyncSystem,
+    genFn: AsyncSystem<CT>['_genFn'],
+): AsyncSystem<CT> {
+    let currentCondition: Yieldable | null = null;
+
+    if (saved.currentCondition) {
+        switch (saved.currentCondition._spx) {
+            case 'delay':
+                currentCondition = {
+                    _spx: 'delay',
+                    ms: saved.currentCondition.ms,
+                    deadline: saved.currentCondition.deadline,
+                    _deadlineSet: saved.currentCondition._deadlineSet,
+                };
+                break;
+            case 'entityWait':
+                currentCondition = {
+                    _spx: 'entityWait',
+                    entityId: saved.currentCondition.entityId,
+                    component: saved.currentCondition.component,
+                    mode: saved.currentCondition.mode,
+                    _lastSeen: saved.currentCondition._lastSeen,
+                };
+                break;
+            case 'queryWait':
+                currentCondition = {
+                    _spx: 'queryWait',
+                    queryName: saved.currentCondition.queryName,
+                };
+                break;
+            case 'promise': {
+                const sc = saved.currentCondition;
+                currentCondition = {
+                    _spx: 'promise',
+                    promise: Promise.resolve(sc.value),
+                    resolved: sc.resolved,
+                    value: sc.value,
+                    error: sc.error,
+                };
+                break;
+            }
+        }
+    }
+
+    return {
+        id: saved.id,
+        tag: saved.tag,
+        _genFn: genFn,
+        _generator: null,
+        _currentCondition: currentCondition,
+        _delta: saved.delta,
+    };
+}

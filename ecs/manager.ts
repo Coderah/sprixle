@@ -32,6 +32,13 @@ import {
 import { ConsumerSystem, QuerySystem, System } from './system';
 import { Annotations } from './types';
 import { deserializeBSON, serializeBSON } from '@deepkit/bson';
+import {
+    AsyncSystem,
+    Yieldable,
+    createDelayCondition,
+    createEntityWaitCondition,
+    createQueryWaitCondition,
+} from './asyncSystem';
 
 export type Keys<T> = keyof T;
 export type EntityId = string | bigint;
@@ -564,6 +571,55 @@ export class Manager<ExactComponentTypes extends defaultComponentTypes> {
                 sourceOrSystem.tag = 'UntaggedSystem[' + now() + ']';
             return sourceOrSystem;
         }
+    }
+
+    createAsyncSystem<
+        Includes extends Keys<ExactComponentTypes>[],
+    >(
+        genFn: (
+            em: Manager<ExactComponentTypes>,
+            delta: number,
+        ) => Generator<Yieldable, boolean | void, any>,
+        system?: Partial<
+            AsyncSystem<ExactComponentTypes>
+        >,
+    ): AsyncSystem<ExactComponentTypes> {
+        if (!system?.tag) {
+            system = {
+                ...(system || {}),
+                tag: 'AsyncSystem[' + now() + ']',
+            };
+        }
+        return {
+            _genFn: genFn,
+            _generator: null,
+            _currentCondition: null,
+            _delta: 0,
+            ...system,
+        };
+    }
+
+    delay(ms: number): Yieldable {
+        return createDelayCondition(ms);
+    }
+
+    waitForEntity(
+        entityId: EntityId,
+        component: Keys<ExactComponentTypes>,
+        mode: 'added' | 'removed' | 'changed' = 'added',
+    ): Yieldable {
+        return createEntityWaitCondition(
+            entityId,
+            component as string,
+            mode,
+        );
+    }
+
+    waitForQuery(
+        query: Query<ExactComponentTypes, any, Manager<ExactComponentTypes>, any>,
+        predicate?: (entity: Entity<Partial<ExactComponentTypes>>) => boolean,
+    ): Yieldable {
+        return createQueryWaitCondition(query.queryName, predicate);
     }
 
     protected flagUpdate(

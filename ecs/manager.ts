@@ -32,6 +32,15 @@ import {
 import { ConsumerSystem, QuerySystem, System } from './system';
 import { Annotations } from './types';
 import { deserializeBSON, serializeBSON } from '@deepkit/bson';
+import {
+    AsyncSystem,
+    Yieldable,
+    SerializedAsyncSystem,
+    createDelayCondition,
+    createEntityWaitCondition,
+    createQueryWaitCondition,
+    deserializeAsyncSystem,
+} from './asyncSystem';
 
 export type Keys<T> = keyof T;
 export type EntityId = string | bigint;
@@ -564,6 +573,96 @@ export class Manager<ExactComponentTypes extends defaultComponentTypes> {
                 sourceOrSystem.tag = 'UntaggedSystem[' + now() + ']';
             return sourceOrSystem;
         }
+    }
+
+    createAsyncSystem<
+        Includes extends Keys<ExactComponentTypes>[],
+    >(
+        genFn: (
+            em: Manager<ExactComponentTypes>,
+            delta: number,
+        ) => Generator<Yieldable, boolean | void, any>,
+        system?: Partial<
+            AsyncSystem<ExactComponentTypes>
+        >,
+    ): AsyncSystem<ExactComponentTypes> {
+        if (!system?.tag) {
+            system = {
+                ...(system || {}),
+                tag: 'AsyncSystem[' + now() + ']',
+            };
+        }
+        return {
+            _genFn: genFn,
+            _generator: null,
+            _currentCondition: null,
+            _delta: 0,
+            ...system,
+        };
+    }
+
+    delay(ms: number): Yieldable {
+        return createDelayCondition(ms);
+    }
+
+    waitForEntity(
+        entityId: EntityId,
+        component: Keys<ExactComponentTypes>,
+        mode: 'added' | 'removed' | 'changed' = 'added',
+    ): Yieldable {
+        return createEntityWaitCondition(
+            entityId,
+            component as string,
+            mode,
+        );
+    }
+
+    waitForQuery(
+        query: Query<ExactComponentTypes, any, Manager<ExactComponentTypes>, any>,
+        predicate?: (entity: Entity<Partial<ExactComponentTypes>>) => boolean,
+    ): Yieldable {
+        return createQueryWaitCondition(query.queryName, predicate);
+    }
+
+    private _asyncGenRegistry = new Map<
+        string,
+        AsyncSystem<ExactComponentTypes>['_genFn']
+    >();
+
+    registerAsyncGen(
+        id: string,
+        genFn: AsyncSystem<ExactComponentTypes>['_genFn'],
+    ): void {
+        this._asyncGenRegistry.set(id, genFn);
+    }
+
+    deserializeAsyncSystem(
+        saved: SerializedAsyncSystem,
+        genFnOrId?: string | AsyncSystem<ExactComponentTypes>['_genFn'],
+    ): AsyncSystem<ExactComponentTypes> {
+        let genFn: AsyncSystem<ExactComponentTypes>['_genFn'];
+        if (typeof genFnOrId === 'string') {
+            genFn = this._asyncGenRegistry.get(genFnOrId);
+            if (!genFn) {
+                throw new Error(
+                    `[deserializeAsyncSystem] no registered async gen for id "${genFnOrId}"`,
+                );
+            }
+        } else if (genFnOrId) {
+            genFn = genFnOrId;
+        } else if (saved.id) {
+            genFn = this._asyncGenRegistry.get(saved.id);
+            if (!genFn) {
+                throw new Error(
+                    `[deserializeAsyncSystem] no registered async gen for id "${saved.id}"`,
+                );
+            }
+        } else {
+            throw new Error(
+                '[deserializeAsyncSystem] must provide genFn, genFn id, or saved.id matching a registered gen',
+            );
+        }
+        return deserializeAsyncSystem(this, saved, genFn);
     }
 
     protected flagUpdate(

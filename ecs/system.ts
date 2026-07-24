@@ -9,6 +9,7 @@ import {
 } from './manager';
 import { endPerformanceMeasure, startPerformanceMeasure } from './performance';
 import { Consumer, Query } from './query';
+import { AsyncSystem, evaluateAsyncSystem, flushAsyncResumes, ResumeEntry } from './asyncSystem';
 
 export interface System<
     ExactComponentTypes extends defaultComponentTypes,
@@ -126,7 +127,8 @@ export interface QuerySystem<
 export type AnySystem<ExactComponentTypes extends defaultComponentTypes> =
     | System<ExactComponentTypes, Manager<ExactComponentTypes>, any>
     | QuerySystem<ExactComponentTypes, any>
-    | ConsumerSystem<ExactComponentTypes, any>;
+    | ConsumerSystem<ExactComponentTypes, any>
+    | AsyncSystem<ExactComponentTypes>;
 
 /** Pipelines compose Systems (and other Pipelines). They will properly run in sequence and ensure internal processing is done between each. */
 export class Pipeline<ExactComponentTypes extends defaultComponentTypes> {
@@ -210,6 +212,8 @@ export class Pipeline<ExactComponentTypes extends defaultComponentTypes> {
         if (!this.condition()) return;
         startPerformanceMeasure(this);
 
+        const asyncResumes: ResumeEntry[] = [];
+
         this.systems.forEach((system) => {
             let systemDelta = delta;
             if (system.interval) {
@@ -218,6 +222,17 @@ export class Pipeline<ExactComponentTypes extends defaultComponentTypes> {
                 systemDelta = intervalDelta;
             }
             if (system.condition && !system.condition()) return;
+
+            if ('_generator' in system) {
+                const resumeEntry = evaluateAsyncSystem(
+                    system as AsyncSystem<any>,
+                    this.manager,
+                    this.now,
+                    systemDelta,
+                );
+                if (resumeEntry) asyncResumes.push(resumeEntry);
+                return;
+            }
 
             startPerformanceMeasure(system, { systemDelta });
 
@@ -253,13 +268,17 @@ export class Pipeline<ExactComponentTypes extends defaultComponentTypes> {
                 if ('removed' in system && system.removed) {
                     source.forDeleted(system.removed, systemDelta);
                 } else {
-                    // TODO could be cleaner.
                     source.deletedEntities.clear();
                 }
             }
             endPerformanceMeasure(system);
             this.manager.subTick();
         });
+
+        if (asyncResumes.length > 0) {
+            flushAsyncResumes(asyncResumes, this.manager, this.now);
+            this.manager.subTick();
+        }
 
         endPerformanceMeasure(this);
     }

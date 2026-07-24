@@ -1,6 +1,6 @@
 # Async Systems — generator-based coroutines in the ECS
 
-*Engine ref: 9e76509 (2026-07-24)*
+*Engine ref: 9e76509 (2026-07-24); networking patterns added 2026-07-24*
 
 Source: `ecs/asyncSystem.ts`, `ecs/system.ts:208-284`, `ecs/manager.ts:576-623`.
 
@@ -210,6 +210,109 @@ em.createAsyncSystem(function* (em) {
     em.quickEntity({ dialogBox: { text: 'Hello.' }, isDialog: true as true });
 });
 ```
+
+## Networking patterns
+
+Async systems linearize several network patterns that currently require separate systems + shared mutable state. For context, read `Sprixle Docs/networking.md` — these patterns assume the two proven sync shapes (broadcast patch-sync and targeted entity projection).
+
+### Batch sync accumulator
+
+Replaces the interval-based `syncSystem` + shared mutable `Map` for shape A (broadcast patch-sync). The accumulator lives in generator-local scope instead of module scope, and the flush loop is self-contained:
+
+```ts
+em.createAsyncSystem(function* (em) {
+    let queue: Map<EntityId, Partial<SerializableComponents>> = new Map();
+
+    em.patchHandlers = {
+        components(id, components) {
+            const existing = queue.get(id) || {};
+            Object.assign(existing, components);
+            queue.set(id, existing);
+        },
+        removeComponent(id, key) {
+            const existing = queue.get(id) || {};
+            (existing as any)[key] = undefined;
+            queue.set(id, existing);
+        },
+    };
+
+    while (true) {
+        yield em.delay(16);
+        if (queue.size === 0) continue;
+        const snapshot = queue;
+        queue = new Map();
+        network.send(GameCommands.statePatch, encodeStatePatch(snapshot));
+    }
+});
+```
+
+This is a direct replacement for the shape-A pattern in `networking.md:62-66`. The generator closure owns the queue — no module-level mutable state, no separate system definition. The `yield em.delay(N)` replaces `interval(N)` on the sync system.
+
+### Per-entity reactive publish
+
+For targeted entity projection (shape B) or Valkey/pub-sub backplanes, react to component changes per entity and publish immediately instead of batching:
+
+```ts
+em.createAsyncSystem(function* (em) {
+    while (true) {
+        const entity = yield em.waitForQuery(syncableQuery);
+        yield em.delay(0); // let same-tick writes settle
+        publishEntity(entity);
+    }
+});
+```
+
+This is chatty by default — prefer batching for high-frequency components (position). Combine with `interval` on the async system to rate-limit:
+
+```ts
+em.createAsyncSystem(function* (em) { /* ... */ }, {
+    interval: interval(50), // fire at most every 50ms
+});
+```
+
+### Connection watchdog
+
+Heartbeat and dead-connection detection as linear async logic instead of `setInterval` + imperative checks:
+
+```ts
+em.createAsyncSystem(function* (em) {
+    while (true) {
+        yield em.delay(5000);
+        const now = Date.now();
+        for (const client of activeClientsQuery) {
+            if (now - client.components.lastPong > 30000) {
+                client.components.connectionState = 'dead' as const;
+                // Systems react: deregister, clean up, notify peers
+            }
+        }
+    }
+});
+```
+
+### Late-joiner state sync
+
+Async system state is serializable — conditions and delta are captured as plain objects. This means an in-flight coroutine (timed sequence, countdown, spawn wave) can be serialized on the server and sent to a reconnecting client as part of state sync:
+
+```ts
+import { serializeAsyncSystem, deserializeAsyncSystem } from '../sprixle/ecs/asyncSystem';
+
+// Server: serialize in-flight state
+const serialized = pipeline.asyncSystems
+    .filter(s => s.tag === 'replayable')
+    .map(serializeAsyncSystem);
+network.send(GameCommands.syncAsyncState, serialized, client);
+
+// Client: reconstruct and resume
+const saved = decodeMessage(data);
+for (const entry of saved) {
+    const genFn = asyncGenRegistry.get(entry.genFnId);
+    if (!genFn) continue;
+    const system = em.deserializeAsyncSystem(entry, genFn);
+    clientPipeline.systems.add(system);
+}
+```
+
+Caveats: generator local variables are lost (JS internals); predicate functions for `queryWait` are not serializable — use an `id`-based registry (`em.registerAsyncGen(id, fn)`) and skip conditions that can't be rehydrated. Unresolved Promises become `PromiseCondition` with `resolved: false` — they will re-resolve on the client's first tick.
 
 ## Caveats
 

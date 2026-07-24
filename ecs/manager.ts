@@ -29,9 +29,21 @@ import {
     QueryParametersInput,
     QueryState,
 } from './query';
-import { ConsumerSystem, QuerySystem, System } from './system';
+import { ConsumerSystem, Pipeline, QuerySystem, System } from './system';
 import { Annotations } from './types';
+import { isWorkerScope } from './sabPool';
+import type { SABTransport, SerializedQueryDef, WriteEntry } from './sabTransport';
+import type { WorkerPipelineConfig } from './workerPipeline';
 import { deserializeBSON, serializeBSON } from '@deepkit/bson';
+import {
+    AsyncSystem,
+    Yieldable,
+    SerializedAsyncSystem,
+    createDelayCondition,
+    createEntityWaitCondition,
+    createQueryWaitCondition,
+    deserializeAsyncSystem,
+} from './asyncSystem';
 
 export type Keys<T> = keyof T;
 export type EntityId = string | bigint;
@@ -151,6 +163,22 @@ export class Manager<ExactComponentTypes extends defaultComponentTypes> {
 
     genId: () => EntityId = uuid;
 
+    // ── Worker mode state ──────────────────────────────────────────
+    /** 'main' (default) or 'worker' (auto-detected from DedicatedWorkerGlobalScope) */
+    readonly mode: 'main' | 'worker' = 'main';
+    /** Worker-side transport (lazy-initialized via _handleWorkerInit) */
+    _transport?: SABTransport;
+    /** Whether the SAB transport is active and ready */
+    _transportReady: boolean = false;
+    /** Query definitions collected before transport init for the handshake */
+    _pendingQueryDefs: SerializedQueryDef[] = [];
+    /** Pending write-back entries (worker-authored mutations) */
+    _writeBuffer: WriteEntry[] = [];
+    /** True while _applyDeltas is running — suppresses write-back during delta intake */
+    _applyingDeltas: boolean = false;
+    /** Pipelines registered on this manager (for worker tick drive) */
+    _pipelines = new Set<Pipeline<ExactComponentTypes>>();
+
     // Global registry for pointer serialization/deserialization
     private static globalPointerRegistry = new Map<
         string,
@@ -221,6 +249,12 @@ export class Manager<ExactComponentTypes extends defaultComponentTypes> {
         this.pointerPaths = pointerPaths;
 
         this.state = this.createInitialState();
+
+        // Detect worker scope and initialize worker mode
+        if (isWorkerScope()) {
+            this.mode = 'worker';
+            self.onmessage = (e: MessageEvent) => this._handleWorkerInit(e.data);
+        }
     }
 
     patchHandlers?: {
@@ -358,6 +392,9 @@ export class Manager<ExactComponentTypes extends defaultComponentTypes> {
      * Create a serializer function that handles pointer components
      */
     createSerializer<T>(type?: ReceiveType<T>) {
+        if (this.mode === 'worker') {
+            throw new Error('[Manager.createSerializer] Serialization is handled by the SAB transport in worker mode.');
+        }
         const managerId = this.instanceId;
         // setSerializationManagerContext(managerId);
         // const serializer = getBSONSerializer<T>();
@@ -374,6 +411,9 @@ export class Manager<ExactComponentTypes extends defaultComponentTypes> {
      * Create a deserializer function that handles pointer components
      */
     createDeserializer<T>(type?: ReceiveType<T>) {
+        if (this.mode === 'worker') {
+            throw new Error('[Manager.createDeserializer] Deserialization is handled by the SAB transport in worker mode.');
+        }
         const managerId = this.instanceId;
         // setSerializationManagerContext(managerId);
         // const deserializer = getBSONDeserializer<T>();
@@ -481,6 +521,16 @@ export class Manager<ExactComponentTypes extends defaultComponentTypes> {
 
         this.state.queries.set(query.queryName, query);
 
+        // Worker mode: collect query definition for init handshake
+        if (this.mode === 'worker') {
+            this._onQueryCreated({
+                includes: (queryParameters.includes as unknown as string[]) || [],
+                excludes: queryParameters.excludes as unknown as string[] | undefined,
+                flexible: queryParameters.flexible,
+                index: queryParameters.index as string | undefined,
+            });
+        }
+
         return query;
     }
 
@@ -564,6 +614,117 @@ export class Manager<ExactComponentTypes extends defaultComponentTypes> {
                 sourceOrSystem.tag = 'UntaggedSystem[' + now() + ']';
             return sourceOrSystem;
         }
+    }
+
+    createAsyncSystem<
+        Includes extends Keys<ExactComponentTypes>[],
+    >(
+        genFn: (
+            em: Manager<ExactComponentTypes>,
+            delta: number,
+        ) => Generator<Yieldable, boolean | void, any>,
+        system?: Partial<
+            AsyncSystem<ExactComponentTypes>
+        >,
+    ): AsyncSystem<ExactComponentTypes> {
+        if (!system?.tag) {
+            system = {
+                ...(system || {}),
+                tag: 'AsyncSystem[' + now() + ']',
+            };
+        }
+        return {
+            _genFn: genFn,
+            _generator: null,
+            _currentCondition: null,
+            _delta: 0,
+            ...system,
+        };
+    }
+
+    createPipeline(...systems: Array<Pipeline<ExactComponentTypes>['systems'] extends Set<infer S> ? S : never>): Pipeline<ExactComponentTypes> {
+        const pipeline = new Pipeline(this, ...systems);
+        if (this.mode === 'worker') {
+            this._pipelines.add(pipeline);
+        }
+        return pipeline;
+    }
+
+    /**
+     * Create a WorkerPipeline that offloads its systems to a Web Worker.
+     * Only valid in main-thread mode.
+     */
+    createWorkerPipeline(config: WorkerPipelineConfig): Promise<import('./workerPipeline').WorkerPipeline<ExactComponentTypes>> {
+        if (this.mode === 'worker') {
+            throw new Error('[Manager.createWorkerPipeline] Cannot create a WorkerPipeline from within a worker.');
+        }
+        return import('./workerPipeline').then(({ WorkerPipeline }) =>
+            new WorkerPipeline(this, config)
+        );
+    }
+
+    delay(ms: number): Yieldable {
+        return createDelayCondition(ms);
+    }
+
+    waitForEntity(
+        entityId: EntityId,
+        component: Keys<ExactComponentTypes>,
+        mode: 'added' | 'removed' | 'changed' = 'added',
+    ): Yieldable {
+        return createEntityWaitCondition(
+            entityId,
+            component as string,
+            mode,
+        );
+    }
+
+    waitForQuery(
+        query: Query<ExactComponentTypes, any, Manager<ExactComponentTypes>, any>,
+        predicate?: (entity: Entity<Partial<ExactComponentTypes>>) => boolean,
+    ): Yieldable {
+        return createQueryWaitCondition(query.queryName, predicate);
+    }
+
+    private _asyncGenRegistry = new Map<
+        string,
+        AsyncSystem<ExactComponentTypes>['_genFn']
+    >();
+
+    registerAsyncGen(
+        id: string,
+        genFn: AsyncSystem<ExactComponentTypes>['_genFn'],
+    ): void {
+        this._asyncGenRegistry.set(id, genFn);
+    }
+
+    deserializeAsyncSystem(
+        saved: SerializedAsyncSystem,
+        genFnOrId?: string | AsyncSystem<ExactComponentTypes>['_genFn'],
+    ): AsyncSystem<ExactComponentTypes> {
+        let genFn: AsyncSystem<ExactComponentTypes>['_genFn'];
+        if (typeof genFnOrId === 'string') {
+            genFn = this._asyncGenRegistry.get(genFnOrId);
+            if (!genFn) {
+                throw new Error(
+                    `[deserializeAsyncSystem] no registered async gen for id "${genFnOrId}"`,
+                );
+            }
+        } else if (genFnOrId) {
+            genFn = genFnOrId;
+        } else if (saved.id) {
+            genFn = this._asyncGenRegistry.get(saved.id);
+            if (!genFn) {
+                throw new Error(
+                    `[deserializeAsyncSystem] no registered async gen for id "${saved.id}"`,
+                );
+            }
+        } else {
+            throw new Error(
+                '[deserializeAsyncSystem] must provide genFn, genFn id, or saved.id matching a registered gen',
+            );
+        }
+        return deserializeAsyncSystem(this, saved, genFn);
     }
 
     protected flagUpdate(
@@ -769,6 +930,11 @@ export class Manager<ExactComponentTypes extends defaultComponentTypes> {
                         );
                     }
 
+                    // Worker mode: buffer write-back for worker-authored changes
+                    if (manager.mode === 'worker' && !manager._applyingDeltas) {
+                        manager._bufferWrite(entity.id, componentType as string, target[componentType]);
+                    }
+
                     return true;
                 },
                 deleteProperty(target, p) {
@@ -791,6 +957,12 @@ export class Manager<ExactComponentTypes extends defaultComponentTypes> {
                         entity.id,
                         p as keyof ExactComponentTypes
                     );
+
+                    // Worker mode: buffer delete write-back
+                    if (manager.mode === 'worker' && !manager._applyingDeltas) {
+                        manager._bufferWriteDeletion(entity.id, p as string);
+                    }
+
                     return true;
                 },
             }),
@@ -816,6 +988,26 @@ export class Manager<ExactComponentTypes extends defaultComponentTypes> {
         components: Components,
         id = this.genId()
     ) {
+        if (this.mode === 'worker') {
+            // Optimistic create: suppress individual write-backs, emit a single create entry
+            this._applyingDeltas = true;
+            const entity = this.getEntity(id) || this.createEntity(id);
+            this.addComponents(entity, components);
+            this.registerEntity(entity);
+            this._applyingDeltas = false;
+            // Collect the components we just set for the write-back
+            const createComponents: Record<string, unknown> = {};
+            for (const key of Object.keys(components as Record<string, unknown>)) {
+                createComponents[key] = (entity.components as any)[key];
+            }
+            this._writeBuffer.push({ entity: id, set: {}, delete: [], create: createComponents });
+            return entity as EntityWithComponents<
+                ExactComponentTypes,
+                typeof this,
+                Keys<Components>
+            >;
+        }
+
         const entity = this.getEntity(id) || this.createEntity(id);
         this.addComponents(entity, components);
         this.registerEntity(entity);
@@ -979,6 +1171,13 @@ export class Manager<ExactComponentTypes extends defaultComponentTypes> {
         this.updatedEntity(entity, false, false);
 
         this.patchHandlers?.deregister?.(entity);
+
+        // Worker mode: queue destroy write-back
+        if (this.mode === 'worker' && !this._applyingDeltas) {
+            // Merge with any pending writes for this entity — destroy supersedes them
+            this._writeBuffer = this._writeBuffer.filter(w => w.entity !== entity.id);
+            this._writeBuffer.push({ entity: entity.id, set: {}, delete: [], destroy: true });
+        }
     }
 
     addEntityMapping(
@@ -1235,6 +1434,156 @@ export class Manager<ExactComponentTypes extends defaultComponentTypes> {
         type: K
     ): (typeof this.ComponentTypes)[K] {
         return entity.components[type];
+    }
+
+    // ── Worker-Mode Methods ────────────────────────────────────
+
+    /** Handle the initial SAB handshake from the main thread */
+    private async _handleWorkerInit(eventData: any): Promise<void> {
+        if (eventData?.type !== 'sabInit') return;
+
+        const { sendSABs, recvSABs, signalSAB } = eventData;
+        if (!signalSAB) {
+            console.error('[Manager._handleWorkerInit] No signal SAB in init message');
+            return;
+        }
+
+        const { SABTransport } = await import('./sabTransport');
+        // sendSABs = worker→main buffers, recvSABs = main→worker buffers
+        this._transport = SABTransport.initWorker(sendSABs, recvSABs, signalSAB);
+        this._transportReady = true;
+
+        // Send collected query definitions to main thread
+        this._transport.sendInit(this._pendingQueryDefs);
+
+        // Wait for initial snapshot
+        const snapshotMsg = this._transport.awaitMessage(5000);
+        if (snapshotMsg?.msg.type === 'snapshot') {
+            this._applySnapshot(snapshotMsg.msg.entities);
+        }
+    }
+
+    /** Delay guard: call after createQuery to collect defs before transport ready */
+    _onQueryCreated(def: { includes: string[]; excludes?: string[]; flexible?: boolean; index?: string }): void {
+        if (!this._transportReady) {
+            this._pendingQueryDefs.push({
+                includes: def.includes,
+                excludes: def.excludes,
+                flexible: def.flexible,
+                index: def.index,
+            });
+        }
+    }
+
+    /** Apply a full state snapshot from the main thread */
+    _applySnapshot(snapshot: Record<EntityId, Record<string, unknown>>): void {
+        this._applyingDeltas = true;
+        for (const [entityId, components] of Object.entries(snapshot)) {
+            let entity = this.getEntity(entityId);
+            if (!entity) entity = this.createEntity(entityId);
+
+            for (const [key, value] of Object.entries(components)) {
+                entity.quietSet(key as keyof ExactComponentTypes, value as any);
+            }
+        }
+        this._applyingDeltas = false;
+        this.subTick();
+    }
+
+    /** Apply entity deltas from the main thread */
+    _applyDeltas(patches: Array<{ entity: EntityId; set: Record<string, unknown>; delete: string[] }>): void {
+        this._applyingDeltas = true;
+        for (const patch of patches) {
+            let entity = this.getEntity(patch.entity);
+
+            // Handle entity removal
+            if (patch.delete.length > 0 && Object.keys(patch.set).length === 0 &&
+                patch.delete.length >= this.neededComponentTypesCount() * 0.5) {
+                // All or most needed components deleted — treat as entity removal
+                if (entity) {
+                    this._applyingDeltas = false; // allow deregister through normal path
+                    this.deregisterEntity(entity);
+                    this._applyingDeltas = true;
+                }
+                continue;
+            }
+
+            if (!entity) {
+                // Entity doesn't exist yet — create it
+                entity = this.createEntity(patch.entity);
+                this.registerEntity(entity);
+            }
+
+            for (const [key, value] of Object.entries(patch.set)) {
+                entity.quietSet(key as keyof ExactComponentTypes, value as any);
+            }
+            for (const key of patch.delete) {
+                delete (entity.components as any)[key];
+            }
+        }
+        this._applyingDeltas = false;
+        this.subTick();
+    }
+
+    /** Buffer a component set write-back */
+    _bufferWrite(entityId: EntityId, componentType: string, value: unknown): void {
+        // Merge into existing write-back entry for this entity
+        const existing = this._writeBuffer.find(w => w.entity === entityId && !w.create && !w.destroy);
+        if (existing) {
+            existing.set[componentType] = value;
+            existing.delete = existing.delete.filter(d => d !== componentType);
+        } else {
+            this._writeBuffer.push({
+                entity: entityId,
+                set: { [componentType]: value },
+                delete: [],
+            });
+        }
+    }
+
+    /** Buffer a component deletion write-back */
+    _bufferWriteDeletion(entityId: EntityId, componentType: string): void {
+        const existing = this._writeBuffer.find(w => w.entity === entityId && !w.create && !w.destroy);
+        if (existing) {
+            delete existing.set[componentType];
+            if (!existing.delete.includes(componentType)) existing.delete.push(componentType);
+        } else {
+            this._writeBuffer.push({
+                entity: entityId,
+                set: {},
+                delete: [componentType],
+            });
+        }
+    }
+
+    /** Drain and return accumulated write-back entries */
+    _drainWrites(): WriteEntry[] {
+        const writes = this._writeBuffer.splice(0);
+        return writes;
+    }
+
+    /** Run a tick in worker mode: apply deltas, run pipelines, collect writes */
+    _workerTick(delta: number, deltas?: Array<{ entity: EntityId; set: Record<string, unknown>; delete: string[] }>): WriteEntry[] {
+        // 1. Apply incoming deltas
+        if (deltas && deltas.length > 0) {
+            this._applyDeltas(deltas);
+        }
+        this.subTick();
+
+        // 2. Run worker pipelines
+        for (const pipeline of this._pipelines) {
+            pipeline.tick(delta);
+        }
+
+        // 3. Drain write-back buffer
+        return this._drainWrites();
+    }
+
+    /** Count of needed component types (for full removal detection) */
+    private neededComponentTypesCount(): number {
+        let count = 0;
+        for (const _ of this.componentNames) count++;
+        return count;
     }
 }
 

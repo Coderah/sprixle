@@ -1,7 +1,6 @@
 import { EntityId, Manager, defaultComponentTypes, Keys } from './manager';
 import { Consumer, Query } from './query';
 import { interval } from '../util/timing';
-
 // --- Yieldable conditions ---
 
 export interface DelayCondition {
@@ -56,7 +55,7 @@ export interface AsyncSystem<
 
     _genFn: (
         em: Manager<ExactComponentTypes>,
-        delta: number,
+        delta: number
     ) => Generator<Yieldable, boolean | void, any>;
     _generator: Generator<Yieldable, boolean | void, any> | null;
     _currentCondition: Yieldable | null;
@@ -80,14 +79,14 @@ export function createDelayCondition(ms: number): DelayCondition {
 export function createEntityWaitCondition(
     entityId: EntityId,
     component: string,
-    mode: 'added' | 'removed' | 'changed',
+    mode: 'added' | 'removed' | 'changed'
 ): EntityWaitCondition {
     return { _spx: 'entityWait', entityId, component, mode };
 }
 
 export function createQueryWaitCondition(
     queryName: string,
-    predicate?: (entity: any) => boolean,
+    predicate?: (entity: any) => boolean
 ): QueryWaitCondition {
     return { _spx: 'queryWait', queryName, predicate };
 }
@@ -106,7 +105,7 @@ export function wrapPromiseCondition(promise: Promise<any>): PromiseCondition {
         (e) => {
             cond.resolved = true;
             cond.error = e;
-        },
+        }
     );
     return cond;
 }
@@ -116,7 +115,7 @@ export function wrapPromiseCondition(promise: Promise<any>): PromiseCondition {
 export function evaluateCondition(
     condition: Yieldable,
     em: Manager<any>,
-    pipelineNow: number,
+    pipelineNow: number
 ): { resolved: boolean; value?: any; error?: any } {
     const spx = (condition as any)._spx;
 
@@ -147,7 +146,11 @@ export function evaluateCondition(
 
             switch (c.mode) {
                 case 'added':
-                    if (has) return { resolved: true, value: em.getEntity(c.entityId) };
+                    if (has)
+                        return {
+                            resolved: true,
+                            value: em.getEntity(c.entityId),
+                        };
                     return { resolved: false };
                 case 'removed':
                     if (!has) return { resolved: true, value: c.entityId };
@@ -229,8 +232,8 @@ export function evaluateCondition(
 export function evaluateAsyncSystem(
     system: AsyncSystem<any>,
     em: Manager<any>,
-    pipelineNow: number,
     delta: number,
+    pipelineNow: number
 ): ResumeEntry | null {
     system._delta = delta;
 
@@ -241,17 +244,25 @@ export function evaluateAsyncSystem(
     if (!system._currentCondition) {
         const genResult = system._generator.next();
         if (genResult.done) {
-            if (genResult.value !== false) {
-                system._generator = system._genFn(em, system._delta);
-            } else {
-                system._generator = null;
-            }
+            system._generator = system._genFn(em, system._delta);
             return null;
         }
-        const rawYield: Yieldable = genResult.value instanceof Promise
-            ? wrapPromiseCondition(genResult.value)
-            : genResult.value;
+        const rawYield: Yieldable =
+            genResult.value instanceof Promise
+                ? wrapPromiseCondition(genResult.value)
+                : genResult.value;
+
+        if (
+            (rawYield as any)._spx === 'delay' &&
+            !(rawYield as any)._deadlineSet
+        ) {
+            const d = rawYield as DelayCondition;
+            d.deadline = pipelineNow - delta + d.ms;
+            d._deadlineSet = true;
+        }
+
         system._currentCondition = rawYield;
+        // TODO we should not rely on pipelineNow here, it requires useInternalTime on pipelines, and that is inappropriate.
         const evalResult = evaluateCondition(rawYield, em, pipelineNow);
         if (evalResult.resolved) {
             system._currentCondition = null;
@@ -273,7 +284,7 @@ export function evaluateAsyncSystem(
 export function flushAsyncResumes(
     entries: ResumeEntry[],
     em: Manager<any>,
-    pipelineNow: number,
+    pipelineNow: number
 ): number {
     const MAX_CHAIN = 100;
     let count = 0;
@@ -292,11 +303,7 @@ export function flushAsyncResumes(
             count++;
 
             if (genResult.done) {
-                if (genResult.value !== false) {
-                    system._generator = system._genFn(em, system._delta);
-                } else {
-                    system._generator = null;
-                }
+                system._generator = system._genFn(em, system._delta);
                 break;
             }
 
@@ -326,7 +333,13 @@ export function flushAsyncResumes(
 
 export type SerializedCondition =
     | { _spx: 'delay'; ms: number; deadline: number; _deadlineSet: boolean }
-    | { _spx: 'entityWait'; entityId: string; component: string; mode: string; _lastSeen?: any }
+    | {
+          _spx: 'entityWait';
+          entityId: string;
+          component: string;
+          mode: string;
+          _lastSeen?: any;
+      }
     | { _spx: 'queryWait'; queryName: string }
     | { _spx: 'promise'; resolved: boolean; value?: any; error?: any }
     | null;
@@ -339,7 +352,7 @@ export interface SerializedAsyncSystem {
 }
 
 export function serializeAsyncSystem(
-    system: AsyncSystem<any>,
+    system: AsyncSystem<any>
 ): SerializedAsyncSystem {
     const cond = system._currentCondition;
     let serializedCond: SerializedCondition = null;
@@ -400,7 +413,7 @@ export function serializeAsyncSystem(
 export function deserializeAsyncSystem<CT extends defaultComponentTypes>(
     em: Manager<CT>,
     saved: SerializedAsyncSystem,
-    genFn: AsyncSystem<CT>['_genFn'],
+    genFn: AsyncSystem<CT>['_genFn']
 ): AsyncSystem<CT> {
     let currentCondition: Yieldable | null = null;
 

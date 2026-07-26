@@ -227,8 +227,8 @@ export class Pipeline<ExactComponentTypes extends defaultComponentTypes> {
                 const resumeEntry = evaluateAsyncSystem(
                     system as AsyncSystem<any>,
                     this.manager,
-                    this.now,
                     systemDelta,
+                    this.now,
                 );
                 if (resumeEntry) asyncResumes.push(resumeEntry);
                 return;

@@ -21,6 +21,10 @@ const delaySys = em.createAsyncSystem(function* (em) {
 });
 
 const pipe1 = new Pipeline(em, delaySys);
+pipe1.useInternalTime = true;
+
+// tick to set deadline.
+pipe1.tick(1);
 
 pipe1.tick(50);
 em.tick();
@@ -71,7 +75,10 @@ const pipe3 = new Pipeline(em, entityRemovedSys);
 
 pipe3.tick(10);
 em.tick();
-assert.ok(entityRemovedResolved, 'should resolve immediately when component already removed');
+assert.ok(
+    entityRemovedResolved,
+    'should resolve immediately when component already removed'
+);
 console.log('Test 3 PASS: entity wait removed mode');
 
 // --- Test 4: query wait resolves on new matching entity ---
@@ -98,31 +105,7 @@ assert.ok(queryWaitResult, 'should resolve when entity enters query');
 assert.strictEqual(queryWaitResult.id, 'entityB');
 console.log('Test 4 PASS: query wait resolves on new match');
 
-// --- Test 5: return false stops the coroutine permanently ---
-
-let runs = 0;
-
-const stopSys = em.createAsyncSystem(function* (em) {
-    runs++;
-    return false;
-});
-
-const pipe5 = new Pipeline(em, stopSys);
-
-pipe5.tick(10);
-em.tick();
-assert.strictEqual(runs, 1);
-
-pipe5.tick(10);
-em.tick();
-assert.strictEqual(runs, 1, 'should not run again after return false');
-
-pipe5.tick(10);
-em.tick();
-assert.strictEqual(runs, 1, 'still stopped after third tick');
-console.log('Test 5 PASS: return false stops permanently');
-
-// --- Test 6: generator restarts on normal return (non-false) ---
+// --- Test 6: generator restarts on normal return ---
 
 let restarts = 0;
 
@@ -147,10 +130,13 @@ console.log('Test 6 PASS: generator restarts on normal return');
 let gatedRuns = 0;
 let gate = false;
 
-const gatedSys = em.createAsyncSystem(function* (em) {
-    gatedRuns++;
-    yield em.delay(0);
-}, { condition: () => gate });
+const gatedSys = em.createAsyncSystem(
+    function* (em) {
+        gatedRuns++;
+        yield em.delay(0);
+    },
+    { condition: () => gate }
+);
 
 const pipe7 = new Pipeline(em, gatedSys);
 

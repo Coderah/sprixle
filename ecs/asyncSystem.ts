@@ -1,6 +1,7 @@
 import { EntityId, Manager, defaultComponentTypes, Keys } from './manager';
 import { Consumer, Query } from './query';
 import { interval } from '../util/timing';
+import { now } from '../util/now';
 // --- Yieldable conditions ---
 
 export interface DelayCondition {
@@ -114,8 +115,7 @@ export function wrapPromiseCondition(promise: Promise<any>): PromiseCondition {
 
 export function evaluateCondition(
     condition: Yieldable,
-    em: Manager<any>,
-    pipelineNow: number
+    em: Manager<any>
 ): { resolved: boolean; value?: any; error?: any } {
     const spx = (condition as any)._spx;
 
@@ -130,11 +130,11 @@ export function evaluateCondition(
         case 'delay': {
             const c = condition as DelayCondition;
             if (!c._deadlineSet) {
-                c.deadline = pipelineNow + c.ms;
+                c.deadline = now() + c.ms;
                 c._deadlineSet = true;
             }
-            if (pipelineNow >= c.deadline) {
-                return { resolved: true, value: pipelineNow - c.deadline };
+            if (now() >= c.deadline) {
+                return { resolved: true, value: now() - c.deadline };
             }
             return { resolved: false };
         }
@@ -232,8 +232,7 @@ export function evaluateCondition(
 export function evaluateAsyncSystem(
     system: AsyncSystem<any>,
     em: Manager<any>,
-    delta: number,
-    pipelineNow: number
+    delta: number
 ): ResumeEntry | null {
     system._delta = delta;
 
@@ -257,13 +256,12 @@ export function evaluateAsyncSystem(
             !(rawYield as any)._deadlineSet
         ) {
             const d = rawYield as DelayCondition;
-            d.deadline = pipelineNow - delta + d.ms;
+            d.deadline = now() - delta + d.ms;
             d._deadlineSet = true;
         }
 
         system._currentCondition = rawYield;
-        // TODO we should not rely on pipelineNow here, it requires useInternalTime on pipelines, and that is inappropriate.
-        const evalResult = evaluateCondition(rawYield, em, pipelineNow);
+        const evalResult = evaluateCondition(rawYield, em);
         if (evalResult.resolved) {
             system._currentCondition = null;
             return { system, value: evalResult.value, error: evalResult.error };
@@ -271,7 +269,7 @@ export function evaluateAsyncSystem(
         return null;
     }
 
-    const result = evaluateCondition(system._currentCondition, em, pipelineNow);
+    const result = evaluateCondition(system._currentCondition, em);
     if (result.resolved) {
         system._currentCondition = null;
         return { system, value: result.value, error: result.error };

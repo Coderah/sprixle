@@ -21,17 +21,17 @@ const delaySys = em.createAsyncSystem(function* (em) {
 });
 
 const pipe1 = new Pipeline(em, delaySys);
-pipe1.useInternalTime = true;
 
 // tick to set deadline.
-pipe1.tick(1);
+em.start(50);
 
 pipe1.tick(50);
-em.tick();
+em.end();
 assert.strictEqual(delayResolved, false, 'should not resolve at 50ms');
 
+em.start(60);
 pipe1.tick(60);
-em.tick();
+em.end();
 assert.ok(delayResolved, 'should resolve after 110ms total');
 console.log('Test 1 PASS: delay resolves after deadline');
 
@@ -48,14 +48,16 @@ const entityWaitSys = em.createAsyncSystem(function* (em) {
 
 const pipe2 = new Pipeline(em, entityWaitSys);
 
+em.start(10);
 pipe2.tick(10);
-em.tick();
+em.end();
 assert.strictEqual(entityWaitResult, null, 'entity not ready yet');
 
 entityA.components.ready = true as true;
 
+em.start(10);
 pipe2.tick(10);
-em.tick();
+em.end();
 assert.ok(entityWaitResult, 'should resolve after component added');
 assert.strictEqual(entityWaitResult.id, 'entityA');
 console.log('Test 2 PASS: entity wait resolves on component add');
@@ -73,8 +75,9 @@ const entityRemovedSys = em.createAsyncSystem(function* (em) {
 
 const pipe3 = new Pipeline(em, entityRemovedSys);
 
+em.start(10);
 pipe3.tick(10);
-em.tick();
+em.end();
 assert.ok(
     entityRemovedResolved,
     'should resolve immediately when component already removed'
@@ -92,15 +95,16 @@ const queryWaitSys = em.createAsyncSystem(function* (em) {
 });
 
 const pipe4 = new Pipeline(em, queryWaitSys);
-
+em.start(10);
 pipe4.tick(10);
-em.tick();
+em.end();
 assert.strictEqual(queryWaitResult, null, 'no ready entity yet');
 
 const entityB = em.quickEntity({ ready: true as true }, 'entityB');
 
+em.start(10);
 pipe4.tick(10);
-em.tick();
+em.end();
 assert.ok(queryWaitResult, 'should resolve when entity enters query');
 assert.strictEqual(queryWaitResult.id, 'entityB');
 console.log('Test 4 PASS: query wait resolves on new match');
@@ -116,12 +120,14 @@ const restartSys = em.createAsyncSystem(function* (em) {
 
 const pipe6 = new Pipeline(em, restartSys);
 
+em.start(20);
 pipe6.tick(20);
-em.tick();
+em.end();
 assert.strictEqual(restarts, 1, 'first run');
 
+em.start(20);
 pipe6.tick(20);
-em.tick();
+em.end();
 assert.strictEqual(restarts, 2, 'should restart after normal return');
 console.log('Test 6 PASS: generator restarts on normal return');
 
@@ -140,14 +146,16 @@ const gatedSys = em.createAsyncSystem(
 
 const pipe7 = new Pipeline(em, gatedSys);
 
+em.start(10);
 pipe7.tick(10);
-em.tick();
+em.end();
 assert.strictEqual(gatedRuns, 0, 'gate closed');
 
 gate = true;
 
+em.start(10);
 pipe7.tick(10);
-em.tick();
+em.end();
 assert.strictEqual(gatedRuns, 1, 'gate opened, runs once');
 console.log('Test 7 PASS: condition gates the async system');
 
@@ -166,16 +174,19 @@ const chainSys = em.createAsyncSystem(function* (em) {
 
 const pipe8 = new Pipeline(em, chainSys);
 
+em.start(10);
 pipe8.tick(10);
-em.tick();
+em.end();
 assert.deepStrictEqual(chainResults, [1], 'first yield resolved');
 
+em.start(10);
 pipe8.tick(10);
-em.tick();
+em.end();
 assert.deepStrictEqual(chainResults, [1, 2], 'second yield resolved');
 
+em.start(10);
 pipe8.tick(10);
-em.tick();
+em.end();
 assert.deepStrictEqual(chainResults, [1, 2, 3], 'third yield resolved');
 console.log('Test 8 PASS: chaining multiple yields');
 

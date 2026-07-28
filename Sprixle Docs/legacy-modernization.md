@@ -17,6 +17,7 @@ Older branches (shadow-boxer, sobelow, parts of laok/lanebreak) pin older engine
 | Manual `em.subTick()` between hand-called system functions | compose systems into a `Pipeline` (it subTicks after each system) |
 | `console.log` in per-collision / per-transition hot paths | `util/log` wrappers, or remove; hot-path logging shipped as jank |
 | Raw `Date.now()` in systems | `now()` (memoized, pipeline-time aware) |
+| `em.tick()` at end of frame | `em.start(delta)` at frame start, `em.end()` at frame end (see `tick-deprecation.md`) |
 
 ## Engine facts that trip people up
 

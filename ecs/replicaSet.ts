@@ -78,8 +78,8 @@ export class ReplicaSet<CT extends defaultComponentTypes> {
         if (queryDefs.length === 0 && !config?.extraComponents?.length) {
             console.warn(
                 '[ReplicaSet] Worker has no queries and no extraComponents specified. ' +
-                'All component types will be assumed needed. Consider adding queries ' +
-                'or specifying neededComponents for better performance.'
+                    'All component types will be assumed needed. Consider adding queries ' +
+                    'or specifying neededComponents for better performance.'
             );
             for (const name of this.manager.componentNames) {
                 this.neededComponentTypes.add(name);
@@ -93,7 +93,11 @@ export class ReplicaSet<CT extends defaultComponentTypes> {
                 excludes: def.excludes as unknown as any[],
                 flexible: def.flexible,
                 index: def.index as unknown as any,
-            } as QueryParametersInput<typeof this.manager.ComponentTypes, any, any>);
+            } as QueryParametersInput<
+                typeof this.manager.ComponentTypes,
+                any,
+                any
+            >);
             this._mirrorQueries.push({
                 query: mirrorQuery as any,
                 lastEntities: new Set(),
@@ -157,7 +161,10 @@ export class ReplicaSet<CT extends defaultComponentTypes> {
                 delete existing.set[d];
             }
         } else {
-            this._pendingDeltas.set(entityId, { set: filtered, delete: deleted });
+            this._pendingDeltas.set(entityId, {
+                set: filtered,
+                delete: deleted,
+            });
         }
 
         // Update tracked state snapshot
@@ -169,10 +176,20 @@ export class ReplicaSet<CT extends defaultComponentTypes> {
     }
 
     /** Flush accumulated deltas and return them. Returns null if nothing to flush. */
-    flush(): { patches: Array<{ entity: EntityId; set: Record<string, unknown>; delete: string[] }> } | null {
+    flush(): {
+        patches: Array<{
+            entity: EntityId;
+            set: Record<string, unknown>;
+            delete: string[];
+        }>;
+    } | null {
         this._updateNeededEntities();
 
-        const patches: Array<{ entity: EntityId; set: Record<string, unknown>; delete: string[] }> = [];
+        const patches: Array<{
+            entity: EntityId;
+            set: Record<string, unknown>;
+            delete: string[];
+        }> = [];
 
         // Component-level deltas
         for (const [entityId, delta] of this._pendingDeltas) {
@@ -215,7 +232,9 @@ export class ReplicaSet<CT extends defaultComponentTypes> {
                 patches.push({
                     entity: entityId,
                     set: {},
-                    delete: [...this.neededComponentTypes] as unknown as string[],
+                    delete: [
+                        ...this.neededComponentTypes,
+                    ] as unknown as string[],
                 });
 
                 this._sentEntities.delete(entityId);
@@ -261,7 +280,7 @@ export class ReplicaSet<CT extends defaultComponentTypes> {
     }
 
     /** Check if a newly registered entity matches any worker queries */
-    checkEntity(entity: CT['Entity']): void {
+    checkEntity(entity: (typeof this.manager)['Entity']): void {
         for (const { query } of this._mirrorQueries) {
             if (query.entityMatches(entity)) {
                 // Entity will be picked up on next flush via _updateNeededEntities
@@ -327,12 +346,12 @@ export class ReplicaSet<CT extends defaultComponentTypes> {
                 }
             },
 
-            register(entity: CT['Entity']) {
+            register(entity: (typeof self.manager)['Entity']) {
                 existing.register?.(entity);
                 self.checkEntity(entity);
             },
 
-            deregister(entity: CT['Entity']) {
+            deregister(entity: (typeof self.manager)['Entity']) {
                 existing.deregister?.(entity);
                 self.handleEntityRemoved(entity.id);
             },

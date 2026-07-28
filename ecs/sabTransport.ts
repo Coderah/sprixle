@@ -1,62 +1,20 @@
 /**
  * SABTransport — higher-level transport layer wrapping SABPool.
- * Provides a typed message-passing interface for the WorkerPipeline.
+ * Provides a typed BSON message-passing interface for the WorkerPipeline.
+ *
+ * The pool handles raw bytes; the transport handles BSON serialization
+ * and the message type definitions.
  */
 
-import type { EntityId } from './manager';
 import {
-    SABPool,
-    TransportConfig,
-    createInitTransfer,
-} from './sabPool';
+    bsonBinarySerializer,
+    deserializeBSON,
+    serializeBSON,
+} from '@deepkit/bson';
+import type { EntityId } from './manager';
+import { SABPool, TransportConfig, createInitTransfer } from './sabPool';
 
-// ── Wire Types ─────────────────────────────────────────────────────
-
-export interface WorkerInit {
-    type: 'init';
-    queryDefs: SerializedQueryDef[];
-}
-
-export interface WorkerSnapshot {
-    type: 'snapshot';
-    entities: Record<EntityId, Record<string, unknown>>;
-}
-
-export interface WorkerDeltas {
-    type: 'deltas';
-    patches: Array<{
-        entity: EntityId;
-        set: Record<string, unknown>;
-        delete: string[];
-    }>;
-}
-
-export interface WorkerTick {
-    type: 'tick';
-    delta: number;
-}
-
-export interface WorkerTickComplete {
-    type: 'tickComplete';
-    writes: Array<WriteEntry>;
-}
-
-export interface WorkerReset {
-    type: 'reset';
-}
-
-export interface WorkerShutdown {
-    type: 'shutdown';
-}
-
-export type WorkerMessage =
-    | WorkerInit
-    | WorkerSnapshot
-    | WorkerDeltas
-    | WorkerTick
-    | WorkerTickComplete
-    | WorkerReset
-    | WorkerShutdown;
+// ── Wire Message Types ──────────────────────────────────────────────
 
 export interface SerializedQueryDef {
     includes: string[];
@@ -72,6 +30,52 @@ export interface WriteEntry {
     create?: Record<string, unknown>;
     destroy?: boolean;
 }
+
+export interface WorkerInitMsg {
+    type: 'init';
+    queryDefs: SerializedQueryDef[];
+}
+
+export interface WorkerSnapshotMsg {
+    type: 'snapshot';
+    entities: Record<EntityId, Record<string, unknown>>;
+}
+
+export interface WorkerDeltasMsg {
+    type: 'deltas';
+    patches: Array<{
+        entity: EntityId;
+        set: Record<string, unknown>;
+        delete: string[];
+    }>;
+}
+
+export interface WorkerTickMsg {
+    type: 'tick';
+    delta: number;
+}
+
+export interface WorkerTickCompleteMsg {
+    type: 'tickComplete';
+    writes: WriteEntry[];
+}
+
+export interface WorkerResetMsg {
+    type: 'reset';
+}
+
+export interface WorkerShutdownMsg {
+    type: 'shutdown';
+}
+
+export type WorkerMessage =
+    | WorkerInitMsg
+    | WorkerSnapshotMsg
+    | WorkerDeltasMsg
+    | WorkerTickMsg
+    | WorkerTickCompleteMsg
+    | WorkerResetMsg
+    | WorkerShutdownMsg;
 
 // ── Transport ──────────────────────────────────────────────────────
 
@@ -92,7 +96,18 @@ export class SABTransport {
     // ── Send ────────────────────────────────────────────────────────
 
     send(msg: WorkerMessage): void {
-        this.sendPool.writeMessage(msg);
+        let serialized: Uint8Array;
+        try {
+            serialized = serializeBSON<WorkerMessage>(
+                msg,
+                bsonBinarySerializer
+            );
+        } catch (e) {
+            throw new Error(
+                `[SABTransport] BSON serialization failed: ${(e as Error).message}`
+            );
+        }
+        this.sendPool.writeRaw(serialized);
     }
 
     sendInit(queryDefs: SerializedQueryDef[]): void {
@@ -103,7 +118,7 @@ export class SABTransport {
         this.send({ type: 'snapshot', entities });
     }
 
-    sendDeltas(patches: WorkerDeltas['patches']): void {
+    sendDeltas(patches: WorkerDeltasMsg['patches']): void {
         this.send({ type: 'deltas', patches });
     }
 
@@ -127,18 +142,45 @@ export class SABTransport {
 
     /** Non-blocking: read next message or null */
     tryRecv(): { msg: WorkerMessage; seq: number } | null {
-        const result = this.recvPool.readMessage(this._recvSeq);
+        const result = this.recvPool.readRaw(this._recvSeq);
         if (!result) return null;
         this._recvSeq = result.seq;
-        return { msg: result.data as WorkerMessage, seq: result.seq };
+        let msg: WorkerMessage;
+        try {
+            msg = deserializeBSON<WorkerMessage>(
+                result.data,
+                0,
+                bsonBinarySerializer
+            ) as WorkerMessage;
+        } catch (e) {
+            throw e;
+            throw new Error(
+                `[SABTransport] BSON deserialization failed: ${(e as Error).message}`
+            );
+        }
+        return { msg, seq: result.seq };
     }
 
     /** Blocking: await next message with optional timeout */
-    awaitMessage(timeoutMs?: number): { msg: WorkerMessage; seq: number } | null {
-        const result = this.recvPool.awaitMessage(this._recvSeq, timeoutMs);
+    awaitMessage(
+        timeoutMs?: number
+    ): { msg: WorkerMessage; seq: number } | null {
+        const result = this.recvPool.awaitRaw(this._recvSeq, timeoutMs);
         if (!result) return null;
         this._recvSeq = result.seq;
-        return { msg: result.data as WorkerMessage, seq: result.seq };
+        let msg: WorkerMessage;
+        try {
+            msg = deserializeBSON<WorkerMessage>(
+                result.data,
+                0,
+                bsonBinarySerializer
+            ) as WorkerMessage;
+        } catch (e) {
+            throw new Error(
+                `[SABTransport] BSON deserialization failed: ${(e as Error).message}`
+            );
+        }
+        return { msg, seq: result.seq };
     }
 
     /** Non-blocking poll for pending inbound messages */
@@ -151,12 +193,20 @@ export class SABTransport {
     /** Main thread side: allocate pools and create init transfer for a Worker */
     static initMain(config: TransportConfig): {
         transport: SABTransport;
-        initMessage: { type: 'sabInit'; sendSABs: SharedArrayBuffer[]; recvSABs: SharedArrayBuffer[]; signalSAB: SharedArrayBuffer };
+        initMessage: {
+            type: 'sabInit';
+            sendSABs: SharedArrayBuffer[];
+            recvSABs: SharedArrayBuffer[];
+            signalSAB: SharedArrayBuffer;
+        };
         transfer: SharedArrayBuffer[];
     } {
         const { sendPool, recvPool } = SABPool.createMain(config);
         const transport = new SABTransport(sendPool, recvPool);
-        const { message: initMessage, transfer } = createInitTransfer(sendPool, recvPool);
+        const { message: initMessage, transfer } = createInitTransfer(
+            sendPool,
+            recvPool
+        );
         return { transport, initMessage, transfer };
     }
 
@@ -164,9 +214,13 @@ export class SABTransport {
     static initWorker(
         sendSABs: SharedArrayBuffer[],
         recvSABs: SharedArrayBuffer[],
-        signalSAB: SharedArrayBuffer,
+        signalSAB: SharedArrayBuffer
     ): SABTransport {
-        const { sendPool, recvPool } = SABPool.createWorker(sendSABs, recvSABs, signalSAB);
+        const { sendPool, recvPool } = SABPool.createWorker(
+            sendSABs,
+            recvSABs,
+            signalSAB
+        );
         return new SABTransport(sendPool, recvPool);
     }
 }

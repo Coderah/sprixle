@@ -5,8 +5,21 @@
 
 import assert from 'assert';
 import { defaultComponentTypes, EntityId, Manager } from '../ecs/manager';
-import { SABPool, SAB_HEADER_SIZE, SIGNAL_SAB_SIZE, isWorkerScope } from '../ecs/sabPool';
-import { SABTransport, WorkerInit, WorkerSnapshot, WorkerDeltas, WorkerTick, WorkerTickComplete, WriteEntry } from '../ecs/sabTransport';
+import {
+    SABPool,
+    SAB_HEADER_SIZE,
+    SIGNAL_SAB_SIZE,
+    isWorkerScope,
+} from '../ecs/sabPool';
+import {
+    SABTransport,
+    WorkerInitMsg,
+    WorkerSnapshotMsg,
+    WorkerDeltasMsg,
+    WorkerTickMsg,
+    WorkerTickCompleteMsg,
+    WriteEntry,
+} from '../ecs/sabTransport';
 import { ReplicaSet } from '../ecs/replicaSet';
 
 // ── Component Types ────────────────────────────────────────────────
@@ -22,17 +35,29 @@ type ComponentTypes = defaultComponentTypes & {
 // ── SAB Pool Tests ─────────────────────────────────────────────────
 
 {
-    const poolConfig = { sendPool: { count: 2, bufferSize: 4096 }, recvPool: { count: 2, bufferSize: 2048 } };
+    const poolConfig = {
+        sendPool: { count: 2, bufferSize: 4096 },
+        recvPool: { count: 2, bufferSize: 2048 },
+    };
     const { sendPool, recvPool } = SABPool.createMain(poolConfig);
 
     // Pool structure
     assert.ok(sendPool.buffers.length === 2, 'sendPool has 2 buffers');
     assert.ok(recvPool.buffers.length === 2, 'recvPool has 2 buffers');
-    assert.ok(sendPool.buffers[0]!.sab.byteLength === 4096, 'send buffer is correct size');
-    assert.ok(recvPool.buffers[0]!.sab.byteLength === 2048, 'recv buffer is correct size');
+    assert.ok(
+        sendPool.buffers[0]!.sab.byteLength === 4096,
+        'send buffer is correct size'
+    );
+    assert.ok(
+        recvPool.buffers[0]!.sab.byteLength === 2048,
+        'recv buffer is correct size'
+    );
 
     // Signal SAB size
-    assert.ok(sendPool.signal.sab.byteLength === SIGNAL_SAB_SIZE, 'signal SAB is correct size');
+    assert.ok(
+        sendPool.signal.sab.byteLength === SIGNAL_SAB_SIZE,
+        'signal SAB is correct size'
+    );
 
     // All buffers start free
     for (const buf of sendPool.buffers) {
@@ -50,12 +75,12 @@ type ComponentTypes = defaultComponentTypes & {
     sendPool.returnToFree(buf!);
     assert.strictEqual(buf!.owner, 0, 'returned buffer is free');
 
-    // BSON write and read round-trip
+    // Raw byte write and read round-trip
     const msgBuf = sendPool.tryAcquire();
     assert.ok(msgBuf !== null, 'can acquire for write');
-    const testData = { hello: 'world', count: 42 };
-    const writeResult = sendPool.writeMessage(testData);
-    assert.ok(writeResult, 'writeMessage succeeded');
+    const testData = new Uint8Array([1, 2, 3, 42]);
+    const writeResult = sendPool.writeRaw(testData);
+    assert.ok(writeResult, 'writeRaw succeeded');
 
     // Reading from recv pool (receiving what was "sent" to worker)
     // Simulate: the buffer was written by main (owner=1) and released to worker (owner=2)
@@ -70,7 +95,10 @@ type ComponentTypes = defaultComponentTypes & {
 // ── Signal SAB Tests ───────────────────────────────────────────────
 
 {
-    const poolConfig = { sendPool: { count: 1, bufferSize: 1024 }, recvPool: { count: 1, bufferSize: 1024 } };
+    const poolConfig = {
+        sendPool: { count: 1, bufferSize: 1024 },
+        recvPool: { count: 1, bufferSize: 1024 },
+    };
     const { sendPool } = SABPool.createMain(poolConfig);
 
     const signal = sendPool.signal;
@@ -95,30 +123,43 @@ type ComponentTypes = defaultComponentTypes & {
     console.log('[Signal SAB] All signal tests passed');
 }
 
-// ── BSON Message Round-Trip Tests ──────────────────────────────────
+// ── BSON Message Round-Trip Tests (via transport) ──────────────────
 
 {
-    const poolConfig = { sendPool: { count: 2, bufferSize: 4096 }, recvPool: { count: 2, bufferSize: 4096 } };
+    const poolConfig = {
+        sendPool: { count: 2, bufferSize: 4096 },
+        recvPool: { count: 2, bufferSize: 4096 },
+    };
     const { sendPool, recvPool } = SABPool.createMain(poolConfig);
+    const mainTransport = new SABTransport(sendPool, recvPool);
 
-    // Write a message via writeMessage (send pool)
-    const original = { type: 'tick' as const, delta: 0.016 };
-    sendPool.writeMessage(original);
+    // Simulate worker side by creating worker pools pointing at the same buffers
+    const workerTransport = SABTransport.initWorker(
+        recvPool.buffers.map(b => b.sab),   // worker send = main recv
+        sendPool.buffers.map(b => b.sab),   // worker recv = main send
+        sendPool.signal.sab,
+    );
 
-    // To simulate receiving: we need to find a buffer that was "sent" (owner=worker for main side)
-    // Since we're on the "main" side, writeMessage releases with owner=2 (worker side)
-    // For recvPool, the worker writes with its own "release to main" which would set owner=1
-    // Let's test the actual BSON round-trip by reading what we wrote
-    const recvBuf = recvPool.tryAcquire();
-    assert.ok(recvBuf !== null, 'can acquire recv buffer');
+    // Main sends a typed message
+    mainTransport.send({ type: 'tick', delta: 0.016 });
 
-    // Write a message as "worker" would (using recv pool, releasing to main)
-    recvPool.writeMessage({ type: 'tickComplete' as const, writes: [] });
+    // Worker receives it
+    const workerResult = workerTransport.tryRecv();
+    assert.ok(workerResult !== null, 'worker receives message');
+    assert.strictEqual(workerResult!.msg.type, 'tick', 'message type preserved');
+    assert.strictEqual(
+        (workerResult!.msg as WorkerTickMsg).delta,
+        0.016,
+        'message delta preserved'
+    );
 
-    // Read it from the "main" side perspective
-    const readResult = recvPool.readMessage(0);
-    assert.ok(readResult !== null, 'readMessage returns data');
-    assert.strictEqual((readResult!.data as any).type, 'tickComplete', 'message type preserved');
+    // Worker sends a response
+    workerTransport.send({ type: 'tickComplete', writes: [] });
+
+    // Main receives it
+    const mainResult = mainTransport.tryRecv();
+    assert.ok(mainResult !== null, 'main receives message');
+    assert.strictEqual(mainResult!.msg.type, 'tickComplete', 'message type preserved');
 
     console.log('[BSON Round-Trip] Message round-trip passed');
 }
@@ -129,16 +170,23 @@ type ComponentTypes = defaultComponentTypes & {
     const em = new Manager<ComponentTypes>();
     const rs = new ReplicaSet(em);
 
-    const queryDefs = [
-        { includes: ['position', 'velocity'] },
-    ];
+    const queryDefs = [{ includes: ['position', 'velocity'] }];
 
     rs.init(queryDefs);
 
     // Component auto-detection
-    assert.ok(rs.neededComponentTypes.has('position'), 'detects position from query');
-    assert.ok(rs.neededComponentTypes.has('velocity'), 'detects velocity from query');
-    assert.ok(!rs.neededComponentTypes.has('mass'), 'does not include non-queried component');
+    assert.ok(
+        rs.neededComponentTypes.has('position'),
+        'detects position from query'
+    );
+    assert.ok(
+        rs.neededComponentTypes.has('velocity'),
+        'detects velocity from query'
+    );
+    assert.ok(
+        !rs.neededComponentTypes.has('mass'),
+        'does not include non-queried component'
+    );
 
     // Create entity and verify snapshot
     const entity = em.quickEntity({
@@ -154,16 +202,20 @@ type ComponentTypes = defaultComponentTypes & {
     assert.ok('velocity' in snapshot[id]!, 'velocity in snapshot');
     assert.ok(!('mass' in snapshot[id]!), 'mass not in snapshot (not needed)');
 
-    // Delta accumulation
-    entity.components.position.x = 5;
+    // Delta accumulation — replace whole component so proxy set-trap fires
+    entity.components.position = { x: 5, y: 0 };
     em.subTick();
 
     const flushResult = rs.flush();
     assert.ok(flushResult !== null, 'flush produces deltas');
     assert.ok(flushResult!.patches.length > 0, 'flush has patches');
-    const posPatch = flushResult!.patches.find(p => p.entity === id);
+    const posPatch = flushResult!.patches.find((p) => p.entity === id);
     assert.ok(posPatch !== undefined, 'position entity has a patch');
-    assert.strictEqual(posPatch!.set.position.x, 5, 'delta has correct position.x');
+    assert.strictEqual(
+        posPatch!.set.position.x,
+        5,
+        'delta has correct position.x'
+    );
 
     // Second flush with no changes
     const flush2 = rs.flush();
@@ -177,7 +229,7 @@ type ComponentTypes = defaultComponentTypes & {
 
     const flush3 = rs.flush();
     assert.ok(flush3 !== null, 'new entity triggers flush');
-    const addPatch = flush3!.patches.find(p => p.entity === entity2.id);
+    const addPatch = flush3!.patches.find((p) => p.entity === entity2.id);
     assert.ok(addPatch !== undefined, 'new entity has an add patch');
     assert.ok('position' in addPatch!.set, 'add patch includes position');
 
@@ -187,7 +239,9 @@ type ComponentTypes = defaultComponentTypes & {
 
     const flush4 = rs.flush();
     assert.ok(flush4 !== null, 'entity removal triggers flush');
-    const removePatch = flush4!.patches.find(p => p.entity === entity2.id && p.delete.length > 0);
+    const removePatch = flush4!.patches.find(
+        (p) => p.entity === entity2.id && p.delete.length > 0
+    );
     assert.ok(removePatch !== undefined, 'removed entity has delete patch');
 
     // Clean up
@@ -205,9 +259,15 @@ type ComponentTypes = defaultComponentTypes & {
 
     rs.init([], { extraComponents: ['health', 'mass'] });
 
-    assert.ok(rs.neededComponentTypes.has('health'), 'extra component detected');
+    assert.ok(
+        rs.neededComponentTypes.has('health'),
+        'extra component detected'
+    );
     assert.ok(rs.neededComponentTypes.has('mass'), 'extra component detected');
-    assert.ok(!rs.neededComponentTypes.has('position'), 'non-declared component not needed');
+    assert.ok(
+        !rs.neededComponentTypes.has('position'),
+        'non-declared component not needed'
+    );
 
     console.log('[ReplicaSet extraComponents] Extra component tests passed');
 }
@@ -218,12 +278,19 @@ type ComponentTypes = defaultComponentTypes & {
     // Manager in main mode (default in Node.js — no WorkerGlobalScope)
     const em = new Manager<ComponentTypes>();
     assert.strictEqual(em.mode, 'main', 'Manager defaults to main mode');
-    assert.strictEqual(em._transportReady, false, 'transport not ready in main mode');
+    assert.strictEqual(
+        em._transportReady,
+        false,
+        'transport not ready in main mode'
+    );
 
     // createSerializer works in main mode
     const serializer = em.createSerializer<{ x: number }>();
     const serialized = serializer({ x: 42 });
-    assert.ok(serialized instanceof Uint8Array, 'serialization produces Uint8Array');
+    assert.ok(
+        serialized instanceof Uint8Array,
+        'serialization produces Uint8Array'
+    );
     assert.ok(serialized.byteLength > 0, 'serialized data not empty');
 
     // createDeserializer works in main mode
@@ -234,10 +301,18 @@ type ComponentTypes = defaultComponentTypes & {
     // createPipeline works
     const pipeline = em.createPipeline();
     assert.ok(pipeline.systems.size === 0, 'creates empty pipeline');
-    assert.strictEqual(em._pipelines.size, 0, 'main mode does not add to _pipelines');
+    assert.strictEqual(
+        em._pipelines.size,
+        0,
+        'main mode does not add to _pipelines'
+    );
 
     // createQuery does not collect defs in main mode
-    assert.strictEqual(em._pendingQueryDefs.length, 0, 'no pending query defs in main mode');
+    assert.strictEqual(
+        em._pendingQueryDefs.length,
+        0,
+        'no pending query defs in main mode'
+    );
 
     console.log('[Manager main mode] Main mode tests passed');
 }
@@ -258,12 +333,20 @@ type ComponentTypes = defaultComponentTypes & {
     em._bufferWrite(id, 'velocity', { x: 1, y: 0 });
 
     const writes = em._drainWrites();
-    assert.strictEqual(writes.length, 1, 'one entity, one combined write entry');
+    assert.strictEqual(
+        writes.length,
+        1,
+        'one entity, one combined write entry'
+    );
     assert.strictEqual(writes[0]!.entity, id, 'correct entity id');
-    assert.deepStrictEqual(writes[0]!.set, {
-        position: { x: 10, y: 0 },
-        velocity: { x: 1, y: 0 },
-    }, 'combined writes');
+    assert.deepStrictEqual(
+        writes[0]!.set,
+        {
+            position: { x: 10, y: 0 },
+            velocity: { x: 1, y: 0 },
+        },
+        'combined writes'
+    );
 
     // Second drain is empty
     const writes2 = em._drainWrites();
@@ -273,14 +356,22 @@ type ComponentTypes = defaultComponentTypes & {
     em._bufferWriteDeletion(id, 'velocity');
     const writes3 = em._drainWrites();
     assert.strictEqual(writes3.length, 1, 'deletion creates entry');
-    assert.deepStrictEqual(writes3[0]!.delete, ['velocity'], 'deletion tracked');
+    assert.deepStrictEqual(
+        writes3[0]!.delete,
+        ['velocity'],
+        'deletion tracked'
+    );
 
     // Set + delete on same entity merges
     em._bufferWrite(id, 'mass', 5);
     em._bufferWriteDeletion(id, 'mass');
     const writes4 = em._drainWrites();
     assert.strictEqual(writes4.length, 1, 'set+delete merges to one entry');
-    assert.strictEqual(writes4[0]!.set.mass, undefined, 'set overwritten by delete');
+    assert.strictEqual(
+        writes4[0]!.set.mass,
+        undefined,
+        'set overwritten by delete'
+    );
     assert.ok(writes4[0]!.delete.includes('mass'), 'delete recorded');
 
     // Clean up
@@ -305,8 +396,16 @@ type ComponentTypes = defaultComponentTypes & {
 
     const entity = em.getEntity('entity_a' as EntityId);
     assert.ok(entity !== undefined, 'entity created from delta');
-    assert.deepStrictEqual(entity!.components.position, { x: 1, y: 2 }, 'position set from delta');
-    assert.deepStrictEqual(entity!.components.velocity, { x: 0, y: 0 }, 'velocity set from delta');
+    assert.deepStrictEqual(
+        entity!.components.position,
+        { x: 1, y: 2 },
+        'position set from delta'
+    );
+    assert.deepStrictEqual(
+        entity!.components.velocity,
+        { x: 0, y: 0 },
+        'velocity set from delta'
+    );
 
     // Apply incremental delta
     em._applyDeltas([
@@ -317,8 +416,16 @@ type ComponentTypes = defaultComponentTypes & {
         },
     ]);
 
-    assert.strictEqual(entity!.components.position.x, 3, 'position updated from delta');
-    assert.strictEqual(entity!.components.velocity, undefined, 'velocity deleted from delta');
+    assert.strictEqual(
+        entity!.components.position.x,
+        3,
+        'position updated from delta'
+    );
+    assert.strictEqual(
+        entity!.components.velocity,
+        undefined,
+        'velocity deleted from delta'
+    );
 
     // Clean up
     em.deregisterEntity(entity!);
@@ -332,7 +439,11 @@ type ComponentTypes = defaultComponentTypes & {
     const em = new Manager<ComponentTypes>();
 
     em._applySnapshot({
-        entity_a: { position: { x: 0, y: 0 }, velocity: { x: 1, y: 1 }, mass: 42 },
+        entity_a: {
+            position: { x: 0, y: 0 },
+            velocity: { x: 1, y: 1 },
+            mass: 42,
+        },
         entity_b: { position: { x: 10, y: 10 }, mass: 5 },
     });
 
@@ -342,7 +453,11 @@ type ComponentTypes = defaultComponentTypes & {
     assert.ok(a !== undefined, 'entity_a created from snapshot');
     assert.ok(b !== undefined, 'entity_b created from snapshot');
     assert.strictEqual(a!.components.mass, 42, 'mass preserved');
-    assert.strictEqual(b!.components.position.x, 10, 'entity_b position correct');
+    assert.strictEqual(
+        b!.components.position.x,
+        10,
+        'entity_b position correct'
+    );
 
     // Clean up
     em.deregisterEntity(a!);
@@ -364,8 +479,16 @@ type ComponentTypes = defaultComponentTypes & {
     });
 
     assert.strictEqual(em._pendingQueryDefs.length, 1, 'query def collected');
-    assert.deepStrictEqual(em._pendingQueryDefs[0]!.includes, ['position', 'velocity'], 'includes collected');
-    assert.strictEqual(em._pendingQueryDefs[0]!.flexible, undefined, 'flexible not set');
+    assert.deepStrictEqual(
+        em._pendingQueryDefs[0]!.includes,
+        ['position', 'velocity'],
+        'includes collected'
+    );
+    assert.strictEqual(
+        em._pendingQueryDefs[0]!.flexible,
+        undefined,
+        'flexible not set'
+    );
 
     const query2 = em.createQuery({
         includes: ['mass'],
@@ -373,9 +496,20 @@ type ComponentTypes = defaultComponentTypes & {
         flexible: true,
     });
 
-    assert.strictEqual(em._pendingQueryDefs.length, 2, 'second query def collected');
-    assert.strictEqual(em._pendingQueryDefs[1]!.flexible, true, 'flexible flag collected');
-    assert.ok(em._pendingQueryDefs[1]!.excludes!.includes('health'), 'excludes collected');
+    assert.strictEqual(
+        em._pendingQueryDefs.length,
+        2,
+        'second query def collected'
+    );
+    assert.strictEqual(
+        em._pendingQueryDefs[1]!.flexible,
+        true,
+        'flexible flag collected'
+    );
+    assert.ok(
+        em._pendingQueryDefs[1]!.excludes!.includes('health'),
+        'excludes collected'
+    );
 
     // Reset mode
     (em as any).mode = 'main';
@@ -387,7 +521,11 @@ type ComponentTypes = defaultComponentTypes & {
 
 {
     // In Node.js (no WorkerGlobalScope), should return false
-    assert.strictEqual(isWorkerScope(), false, 'isWorkerScope is false in Node.js');
+    assert.strictEqual(
+        isWorkerScope(),
+        false,
+        'isWorkerScope is false in Node.js'
+    );
 
     console.log('[isWorkerScope] Detection tests passed');
 }
@@ -396,20 +534,23 @@ type ComponentTypes = defaultComponentTypes & {
 
 {
     // Verify message types have the expected shape
-    const initMsg: WorkerInit = { type: 'init', queryDefs: [] };
+    const initMsg: WorkerInitMsg = { type: 'init', queryDefs: [] };
     assert.strictEqual(initMsg.type, 'init');
 
-    const snapMsg: WorkerSnapshot = { type: 'snapshot', entities: {} };
+    const snapMsg: WorkerSnapshotMsg = { type: 'snapshot', entities: {} };
     assert.strictEqual(snapMsg.type, 'snapshot');
 
-    const deltaMsg: WorkerDeltas = { type: 'deltas', patches: [] };
+    const deltaMsg: WorkerDeltasMsg = { type: 'deltas', patches: [] };
     assert.strictEqual(deltaMsg.type, 'deltas');
 
-    const tickMsg: WorkerTick = { type: 'tick', delta: 0.016 };
+    const tickMsg: WorkerTickMsg = { type: 'tick', delta: 0.016 };
     assert.strictEqual(tickMsg.type, 'tick');
     assert.strictEqual(tickMsg.delta, 0.016);
 
-    const completeMsg: WorkerTickComplete = { type: 'tickComplete', writes: [] };
+    const completeMsg: WorkerTickCompleteMsg = {
+        type: 'tickComplete',
+        writes: [],
+    };
     assert.strictEqual(completeMsg.type, 'tickComplete');
 
     const write: WriteEntry = {
@@ -434,12 +575,20 @@ type ComponentTypes = defaultComponentTypes & {
     } as Partial<ComponentTypes>);
 
     assert.ok(entity !== undefined, 'quickEntity works in worker mode');
-    assert.strictEqual(entity.components.position.x, 5, 'entity has correct position');
+    assert.strictEqual(
+        entity.components.position.x,
+        5,
+        'entity has correct position'
+    );
 
     const writes = em._drainWrites();
     assert.strictEqual(writes.length, 1, 'quickEntity produces write-back');
     assert.ok(writes[0]!.create !== undefined, 'write-back is a create entry');
-    assert.strictEqual((writes[0]!.create as any).position.x, 5, 'create entry has correct data');
+    assert.strictEqual(
+        (writes[0]!.create as any).position.x,
+        5,
+        'create entry has correct data'
+    );
 
     // Clean up
     em.deregisterEntity(entity);
@@ -463,7 +612,11 @@ type ComponentTypes = defaultComponentTypes & {
     const writes = em._drainWrites();
 
     assert.strictEqual(writes.length, 1, 'deregister produces write-back');
-    assert.strictEqual(writes[0]!.destroy, true, 'write-back is a destroy entry');
+    assert.strictEqual(
+        writes[0]!.destroy,
+        true,
+        'write-back is a destroy entry'
+    );
     assert.strictEqual(writes[0]!.entity, entity.id, 'correct entity id');
 
     (em as any).mode = 'main';
@@ -490,7 +643,11 @@ type ComponentTypes = defaultComponentTypes & {
 
     const created = em.getEntity('created_entity' as EntityId);
     assert.ok(created !== undefined, 'entity created from write-back');
-    assert.strictEqual(created!.components.mass, 100, 'mass set on created entity');
+    assert.strictEqual(
+        created!.components.mass,
+        100,
+        'mass set on created entity'
+    );
 
     // Test component set via write-back
     rs.applyWrites([
@@ -501,8 +658,16 @@ type ComponentTypes = defaultComponentTypes & {
         },
     ]);
 
-    assert.strictEqual(created!.components.position.x, 5, 'position updated from write-back');
-    assert.deepStrictEqual(created!.components.velocity, { x: 0, y: 0 }, 'velocity set from write-back');
+    assert.strictEqual(
+        created!.components.position.x,
+        5,
+        'position updated from write-back'
+    );
+    assert.deepStrictEqual(
+        created!.components.velocity,
+        { x: 0, y: 0 },
+        'velocity set from write-back'
+    );
 
     // Test deletion via write-back
     rs.applyWrites([
@@ -513,7 +678,11 @@ type ComponentTypes = defaultComponentTypes & {
         },
     ]);
 
-    assert.strictEqual(created!.components.mass, undefined, 'mass deleted from write-back');
+    assert.strictEqual(
+        created!.components.mass,
+        undefined,
+        'mass deleted from write-back'
+    );
 
     // Test destroy via write-back
     rs.applyWrites([
@@ -525,7 +694,11 @@ type ComponentTypes = defaultComponentTypes & {
         },
     ]);
 
-    assert.strictEqual(em.getEntity('created_entity' as EntityId), undefined, 'entity destroyed from write-back');
+    assert.strictEqual(
+        em.getEntity('created_entity' as EntityId),
+        undefined,
+        'entity destroyed from write-back'
+    );
 
     console.log('[applyWrites] Main-thread write-back intake tests passed');
 }

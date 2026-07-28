@@ -18,6 +18,10 @@ module.exports = {
         host: '0.0.0.0',
         port: 3000,
         // hot: true,
+        headers: {
+            'Cross-Origin-Opener-Policy': 'same-origin',
+            'Cross-Origin-Embedder-Policy': 'credentialless',
+        },
         static: {
             directory: path.resolve(__dirname, './assets'),
             publicPath: '/assets',

@@ -2,9 +2,10 @@
  * SAB Pool — pre-allocated SharedArrayBuffer pool with Atomics-based
  * acquire/release/signal. Designed for zero-allocation, zero-postMessage
  * cross-thread data transfer after initialization.
+ *
+ * The pool stores and transports raw bytes. Serialization/deserialization
+ * is the caller's responsibility (see SABTransport).
  */
-
-import { bsonBinarySerializer, deserializeBSON, serializeBSON } from '@deepkit/bson';
 
 // ── Buffer Layout ──────────────────────────────────────────────────
 //
@@ -15,7 +16,7 @@ import { bsonBinarySerializer, deserializeBSON, serializeBSON } from '@deepkit/b
 //   4       4      dataLength (bytes written to payload)
 //   8       4      sequence (monotonic, ties signal to buffer)
 //   12      4      flags (reserved for future use)
-//   16      N-16   BSON payload (N = configurable bufferSize)
+//   16      N-16   payload (raw bytes, N = configurable bufferSize)
 //
 // ── Signal SAB Layout ──────────────────────────────────────────────
 //
@@ -322,84 +323,57 @@ export class SABPool {
         return this.signal.shutdown === 1;
     }
 
-    // ── BSON Write & Read ───────────────────────────────────────────
+    // ── Raw Write & Read ────────────────────────────────────────────
 
-    /** Scratch buffer size for BSON pre-serialization. Should match max pool buffer payload size. */
-    private _scratch?: Uint8Array;
-
-    private getScratch(): Uint8Array {
-        if (!this._scratch || this._scratch.byteLength < this.buffers[0]!.payloadSize) {
-            this._scratch = new Uint8Array(this.buffers[0]!.payloadSize);
-        }
-        return this._scratch;
-    }
-
-    /** Serialize data as BSON into a pool buffer. Acquires, writes, releases to receiver. */
-    writeMessage(data: unknown): boolean {
-        // 1. Serialize to scratch buffer
-        const scratch = this.getScratch();
-        let serialized: Uint8Array;
-        try {
-            serialized = serializeBSON(data as any, bsonBinarySerializer);
-        } catch (e) {
-            throw new Error(`[SABPool] BSON serialization failed: ${(e as Error).message}`);
-        }
-
-        // 2. Check size
-        if (serialized.byteLength > this.buffers[0]!.payloadSize) {
+    /** Copy raw bytes into a pool buffer. Acquires, writes, releases to receiver. */
+    writeRaw(data: Uint8Array): boolean {
+        if (data.byteLength > this.buffers[0]!.payloadSize) {
             throw new Error(
-                `[SABPool] Message (${serialized.byteLength} bytes) exceeds pool buffer payload size ` +
+                `[SABPool] Data (${data.byteLength} bytes) exceeds pool buffer payload size ` +
                 `(${this.buffers[0]!.payloadSize} bytes). Increase pool bufferSize.`
             );
         }
 
-        // 3. Acquire a buffer
         const buf = this.acquire();
-        if (!buf) return false; // timeout
+        if (!buf) return false;
 
-        // 4. Copy BSON into buffer payload
-        const src = new Uint8Array(serialized.buffer, serialized.byteOffset, serialized.byteLength);
         const dst = new Uint8Array(buf.sab, buf.payloadOffset, buf.payloadSize);
-        dst.set(src);
-        buf.setDataLength(serialized.byteLength);
+        dst.set(data);
+        buf.setDataLength(data.byteLength);
 
-        // 5. Release to receiver
         const receiver = this.side === OWNER_MAIN ? OWNER_WORKER : OWNER_MAIN;
         this.releaseToReceiver(buf, receiver);
 
         return true;
     }
 
-    /** Read the next pending message (non-blocking). Returns deserialized data or null. */
-    readMessage(lastSeenSeq: number): { data: unknown; seq: number } | null {
+    /** Read the next pending message (non-blocking). Returns raw bytes or null. */
+    readRaw(lastSeenSeq: number): { data: Uint8Array; seq: number } | null {
         const result = this.tryRecv(lastSeenSeq);
         if (!result) return null;
 
         const { buf, seq } = result;
 
-        // Deserialize BSON from buffer payload
-        const payload = new Uint8Array(buf.sab, buf.payloadOffset, buf.dataLength);
-        let data: unknown;
-        try {
-            data = deserializeBSON(payload, 0, bsonBinarySerializer);
-        } catch (e) {
-            throw new Error(`[SABPool] BSON deserialization failed: ${(e as Error).message}`);
-        }
+        const source = new Uint8Array(buf.sab, buf.payloadOffset, buf.dataLength);
+        // TODO: this copy defeats the zero-copy intent of SAB transport.
+        // DeepKit BSON / TextDecoder cannot operate on SharedArrayBuffer-backed views.
+        // If BSON is replaced with a SAB-safe codec (JSON, FlatBuffers, or manual DataView)
+        // this copy goes away and deserialization reads directly from the pool buffer.
+        const payload = source.slice(); // detach from SAB (TypedArray.slice returns non-shared ArrayBuffer)
 
-        // Return buffer to free
         this.returnToFree(buf);
 
-        return { data, seq };
+        return { data: payload, seq };
     }
 
-    /** Block waiting for the next message from peer. Returns deserialized data. */
-    awaitMessage(lastSeenSeq: number, timeoutMs?: number): { data: unknown; seq: number } | null {
+    /** Block waiting for the next raw message from peer. */
+    awaitRaw(lastSeenSeq: number, timeoutMs?: number): { data: Uint8Array; seq: number } | null {
         const deadline = timeoutMs ? Date.now() + timeoutMs : undefined;
 
         while (true) {
             if (this.isShutdown) return null;
 
-            const result = this.readMessage(lastSeenSeq);
+            const result = this.readRaw(lastSeenSeq);
             if (result) return result;
 
             const remaining = deadline ? Math.max(0, deadline - Date.now()) : undefined;

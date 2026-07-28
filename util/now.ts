@@ -1,10 +1,6 @@
-import { memoize } from 'lodash';
-import { Pipeline } from '../ecs/system';
-
 let timeDiff = 0;
 
-export function setTimeSyncDiff(serverNow: number, pingSentAt = Date.now()) {
-    memoizedGlobalNow.cache.clear?.();
+export function setTimeSyncDiff(serverNow: number, pingSentAt = now.real()) {
     timeDiff = pingSentAt - serverNow;
 
     console.log('serverTime diff set', timeDiff);
@@ -14,16 +10,14 @@ export function getTimeDiff(): number {
     return timeDiff;
 }
 
-let activePipeline: Pipeline<any> | null = null;
+let activeTimeTarget: { now: number } | null = null;
 
-export function setTimeActivePipeline(pipeline: Pipeline<any> | null) {
-    activePipeline = pipeline;
+export function setActiveTimeTarget(timeTarget: { now: number } | null) {
+    activeTimeTarget = timeTarget;
 }
 
-export const memoizedGlobalNow = memoize((): number => {
-    return Date.now() - timeDiff;
-});
-
 export const now = (): number => {
-    return activePipeline ? activePipeline.now : memoizedGlobalNow();
+    return activeTimeTarget ? activeTimeTarget.now : Date.now();
 };
+
+now.real = () => Date.now();

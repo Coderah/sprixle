@@ -30,7 +30,7 @@ entity.components.position = new Vector2();
 manager.registerEntity(entity);
 
 manager.subTick();
-manager.tick();
+manager.end();
 
 assert.equal(inactivePositionQuery.size, 1);
 assert.equal(positionQuery.size, 1);

@@ -17,7 +17,7 @@ import { Vector2, Vector3 } from 'three';
 import uuid from 'uuid-random';
 import '../data/bsonPointerSerializer';
 import { setSerializationManagerContext } from '../data/bsonPointerSerializer';
-import { memoizedGlobalNow, now } from '../util/now';
+import { now, setActiveTimeTarget } from '../util/now';
 import { keys } from './dict';
 import './object.extensions';
 import { endPerformanceMeasure, startPerformanceMeasure } from './performance';
@@ -76,6 +76,8 @@ export type EntityAdminState<
     ExactComponentTypes extends defaultComponentTypes,
     E = Entity<ComponentTypes>,
 > = {
+    now: number;
+
     entities: Map<EntityId, E>;
     /** Maps entity type to set of Entity Ids */
     entityMap: EntityMap<ComponentTypes>;
@@ -417,6 +419,7 @@ export class Manager<ExactComponentTypes extends defaultComponentTypes> {
             typeof this.ComponentTypes,
             ExactComponentTypes
         > = {
+            now: 0,
             entities: new Map(),
             entityMap: importableState?.entityMap || new Map(),
             componentMap: importableState?.componentMap || new Map(),
@@ -575,16 +578,12 @@ export class Manager<ExactComponentTypes extends defaultComponentTypes> {
         }
     }
 
-    createAsyncSystem<
-        Includes extends Keys<ExactComponentTypes>[],
-    >(
+    createAsyncSystem<Includes extends Keys<ExactComponentTypes>[]>(
         genFn: (
             em: Manager<ExactComponentTypes>,
-            delta: number,
+            delta: number
         ) => Generator<Yieldable, boolean | void, any>,
-        system?: Partial<
-            AsyncSystem<ExactComponentTypes>
-        >,
+        system?: Partial<AsyncSystem<ExactComponentTypes>>
     ): AsyncSystem<ExactComponentTypes> {
         if (!system?.tag) {
             system = {
@@ -608,18 +607,19 @@ export class Manager<ExactComponentTypes extends defaultComponentTypes> {
     waitForEntity(
         entityId: EntityId,
         component: Keys<ExactComponentTypes>,
-        mode: 'added' | 'removed' | 'changed' = 'added',
+        mode: 'added' | 'removed' | 'changed' = 'added'
     ): Yieldable {
-        return createEntityWaitCondition(
-            entityId,
-            component as string,
-            mode,
-        );
+        return createEntityWaitCondition(entityId, component as string, mode);
     }
 
     waitForQuery(
-        query: Query<ExactComponentTypes, any, Manager<ExactComponentTypes>, any>,
-        predicate?: (entity: Entity<Partial<ExactComponentTypes>>) => boolean,
+        query: Query<
+            ExactComponentTypes,
+            any,
+            Manager<ExactComponentTypes>,
+            any
+        >,
+        predicate?: (entity: Entity<Partial<ExactComponentTypes>>) => boolean
     ): Yieldable {
         return createQueryWaitCondition(query.queryName, predicate);
     }
@@ -631,21 +631,21 @@ export class Manager<ExactComponentTypes extends defaultComponentTypes> {
 
     registerAsyncGen(
         id: string,
-        genFn: AsyncSystem<ExactComponentTypes>['_genFn'],
+        genFn: AsyncSystem<ExactComponentTypes>['_genFn']
     ): void {
         this._asyncGenRegistry.set(id, genFn);
     }
 
     deserializeAsyncSystem(
         saved: SerializedAsyncSystem,
-        genFnOrId?: string | AsyncSystem<ExactComponentTypes>['_genFn'],
+        genFnOrId?: string | AsyncSystem<ExactComponentTypes>['_genFn']
     ): AsyncSystem<ExactComponentTypes> {
         let genFn: AsyncSystem<ExactComponentTypes>['_genFn'];
         if (typeof genFnOrId === 'string') {
             genFn = this._asyncGenRegistry.get(genFnOrId);
             if (!genFn) {
                 throw new Error(
-                    `[deserializeAsyncSystem] no registered async gen for id "${genFnOrId}"`,
+                    `[deserializeAsyncSystem] no registered async gen for id "${genFnOrId}"`
                 );
             }
         } else if (genFnOrId) {
@@ -654,12 +654,12 @@ export class Manager<ExactComponentTypes extends defaultComponentTypes> {
             genFn = this._asyncGenRegistry.get(saved.id);
             if (!genFn) {
                 throw new Error(
-                    `[deserializeAsyncSystem] no registered async gen for id "${saved.id}"`,
+                    `[deserializeAsyncSystem] no registered async gen for id "${saved.id}"`
                 );
             }
         } else {
             throw new Error(
-                '[deserializeAsyncSystem] must provide genFn, genFn id, or saved.id matching a registered gen',
+                '[deserializeAsyncSystem] must provide genFn, genFn id, or saved.id matching a registered gen'
             );
         }
         return deserializeAsyncSystem(this, saved, genFn);
@@ -956,6 +956,11 @@ export class Manager<ExactComponentTypes extends defaultComponentTypes> {
         }
     }
 
+    start(delta: number) {
+        this.state.now += delta;
+        setActiveTimeTarget(this.state);
+    }
+
     /** to be called after each system */
     subTick() {
         startPerformanceMeasure(this);
@@ -1002,8 +1007,18 @@ export class Manager<ExactComponentTypes extends defaultComponentTypes> {
     // TODO evaluate and remove?
     tickHandlers = new Set<() => void>();
 
-    /** to be called after each set of systems (end of a frame) */
+    /**
+     * @deprecated Use `Manager.start(delta)` and `Manager.end()` instead.
+     * See `Sprixle Docs/tick-deprecation.md` for rationale.
+     */
     tick() {
+        throw new Error(
+            'Manager.tick is deprecated. Use Manager.start(delta) and Manager.end(). See Sprixle Docs/tick-deprecation.md.'
+        );
+    }
+
+    /** to be called after each set of systems (end of a frame) */
+    end() {
         startPerformanceMeasure(this);
         this.subTick();
 
@@ -1025,7 +1040,6 @@ export class Manager<ExactComponentTypes extends defaultComponentTypes> {
             this.tickHandlers.delete(h);
         });
 
-        memoizedGlobalNow.cache.clear?.();
         endPerformanceMeasure(this);
     }
 

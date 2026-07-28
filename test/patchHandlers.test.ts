@@ -96,7 +96,7 @@ const entity = manager.quickEntity({
     numericComponent: 3,
 });
 
-manager.tick();
+manager.end();
 
 entity.components.serverOnly = function () {};
 entity.components.genericID = '8259-2348235-2348234-23424';
@@ -119,7 +119,7 @@ entity.components.numericComponent += 3;
 assert(stateB.decode(stateB.encode(manager.state)).stagedUpdates.size === 1);
 manager.subTick();
 
-manager.tick();
+manager.end();
 
 const time = performance.now();
 const serializedState = stateB.encode(manager.state);

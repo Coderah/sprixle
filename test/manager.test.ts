@@ -26,7 +26,7 @@ positionConsumer.forNew((entity) => {
     entity.id;
 });
 
-manager.tick();
+manager.end();
 
 positionConsumer.newEntities; //=
 assert.equal(positionConsumer.updatedEntities.size, 0);
@@ -36,7 +36,7 @@ entity.components.position = vec2.create(); //?
 manager.subTick(); //?
 assert.equal(positionConsumer.updatedEntities.size, 1);
 
-manager.tick();
+manager.end();
 assert.equal(manager.state.updatedEntities.size, 0);
 assert.equal(manager.state.previouslyUpdatedEntities.size, 1);
 

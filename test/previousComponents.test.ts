@@ -17,12 +17,12 @@ const entity = manager.quickEntity({
     testBool: false,
 });
 
-manager.tick();
+manager.end();
 
 entity.willUpdate('vec2');
 entity.components.vec2.set(3, 2);
 
-manager.tick();
+manager.end();
 
 entity.components.testBool = true;
 

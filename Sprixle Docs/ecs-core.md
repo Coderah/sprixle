@@ -93,18 +93,22 @@ Bootstrapping several at once: `em.quickEntity({ sceneName, fadeToBlack }, 'scen
 
 **Caution — don't let singletons become a global bus.** Reserve them for genuinely global state (scene, match phase, self-player id, input mode). If two systems are communicating through a singleton, or the value really describes one entity, put a component on that entity or use a signal entity instead — a dozen ad-hoc singletons makes data flow untraceable (sobelow is the cautionary example).
 
-## Tick model
+## Frame lifecycle
 
+- `em.start(delta)` — advances the simulation clock (`state.now += delta`) and makes the manager the active time target for `now()`. Call once at the beginning of each frame, before any pipeline ticks.
 - `em.subTick()` — flushes `stagedUpdates` into queries/consumers and fires `patchHandlers.components`. **A `Pipeline` calls this automatically after each system** — you only call it manually when running systems outside a pipeline.
-- `em.tick()` — **once, at the end of the frame**, after all pipelines: final subTick, rotates `updatedEntities` → `previouslyUpdatedEntities`, clears new/deleted sets, ticks queries, runs one-shot `tickHandlers`, clears the memoized `now()` cache.
+- `em.end()` — **once, at the end of the frame**, after all pipelines: final subTick, rotates `updatedEntities` → `previouslyUpdatedEntities`, clears new/deleted sets, ticks queries, runs one-shot `tickHandlers`.
 
 ```ts
 function frame(delta: number) {
+    em.start(delta);
     mainPipeline.tick(delta);
-    em.tick();
+    em.end();
     requestAnimationFrame(frame); // server: setImmediate recursion
 }
 ```
+
+`em.tick()` is deprecated (throws an error). See `Sprixle Docs/tick-deprecation.md` for rationale.
 
 ## patchHandlers — the change-observation seam
 

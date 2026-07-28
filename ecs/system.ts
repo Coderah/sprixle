@@ -1,5 +1,4 @@
-import { throttleLog } from '../util/log';
-import { now, setTimeActivePipeline } from '../util/now';
+import { now, setActiveTimeTarget } from '../util/now';
 import { interval } from '../util/timing';
 import {
     EntityWithComponents,
@@ -9,12 +8,17 @@ import {
 } from './manager';
 import { endPerformanceMeasure, startPerformanceMeasure } from './performance';
 import { Consumer, Query } from './query';
-import { AsyncSystem, evaluateAsyncSystem, flushAsyncResumes, ResumeEntry } from './asyncSystem';
+import {
+    AsyncSystem,
+    evaluateAsyncSystem,
+    flushAsyncResumes,
+    ResumeEntry,
+} from './asyncSystem';
 
 export interface System<
     ExactComponentTypes extends defaultComponentTypes,
     TManager extends Manager<ExactComponentTypes>,
-    Includes extends Keys<ExactComponentTypes>[]
+    Includes extends Keys<ExactComponentTypes>[],
 > {
     /** tag is optional and utilized for logging, if the system has a source, the source Query.queryName will be utilized. */
     tag?: string;
@@ -46,7 +50,7 @@ export interface SourceSystem<
     ExactComponentTypes extends defaultComponentTypes,
     TManager extends Manager<ExactComponentTypes>,
     Includes extends Keys<ExactComponentTypes>[],
-    IndexedComponent extends Keys<ExactComponentTypes> = null
+    IndexedComponent extends Keys<ExactComponentTypes> = null,
 > extends System<ExactComponentTypes, TManager, Includes> {
     source:
         | Query<ExactComponentTypes, Includes, TManager, IndexedComponent>
@@ -66,14 +70,15 @@ export interface SourceSystem<
 export interface ConsumerSystem<
     ExactComponentTypes extends defaultComponentTypes,
     Includes extends Keys<ExactComponentTypes>[],
-    TManager extends Manager<ExactComponentTypes> = Manager<ExactComponentTypes>,
-    IndexedComponent extends Keys<ExactComponentTypes> = null
+    TManager extends Manager<ExactComponentTypes> =
+        Manager<ExactComponentTypes>,
+    IndexedComponent extends Keys<ExactComponentTypes> = null,
 > extends SourceSystem<
-        ExactComponentTypes,
-        TManager,
-        Includes,
-        IndexedComponent
-    > {
+    ExactComponentTypes,
+    TManager,
+    Includes,
+    IndexedComponent
+> {
     /** Runs for each entity that was updated each frame */
     updated?: (
         entity: EntityWithComponents<
@@ -115,14 +120,15 @@ export interface ConsumerSystem<
 export interface QuerySystem<
     ExactComponentTypes extends defaultComponentTypes,
     Includes extends Keys<ExactComponentTypes>[],
-    TManager extends Manager<ExactComponentTypes> = Manager<ExactComponentTypes>,
-    IndexedComponent extends Keys<ExactComponentTypes> = null
+    TManager extends Manager<ExactComponentTypes> =
+        Manager<ExactComponentTypes>,
+    IndexedComponent extends Keys<ExactComponentTypes> = null,
 > extends SourceSystem<
-        ExactComponentTypes,
-        TManager,
-        Includes,
-        IndexedComponent
-    > {}
+    ExactComponentTypes,
+    TManager,
+    Includes,
+    IndexedComponent
+> {}
 
 export type AnySystem<ExactComponentTypes extends defaultComponentTypes> =
     | System<ExactComponentTypes, Manager<ExactComponentTypes>, any>
@@ -159,23 +165,23 @@ export class Pipeline<ExactComponentTypes extends defaultComponentTypes> {
     }
 
     init() {
-        if (this.useInternalTime) setTimeActivePipeline(this);
+        if (this.useInternalTime) setActiveTimeTarget(this);
 
         this.systems.forEach((system) => {
             system.init?.();
         });
 
-        if (this.useInternalTime) setTimeActivePipeline(null);
+        if (this.useInternalTime) setActiveTimeTarget(this.manager.state);
     }
 
     reset() {
-        if (this.useInternalTime) setTimeActivePipeline(this);
+        if (this.useInternalTime) setActiveTimeTarget(this);
 
         this.systems.forEach((system) => {
             system.reset?.();
         });
 
-        if (this.useInternalTime) setTimeActivePipeline(null);
+        if (this.useInternalTime) setActiveTimeTarget(this.manager.state);
     }
 
     now = 0;
@@ -186,12 +192,12 @@ export class Pipeline<ExactComponentTypes extends defaultComponentTypes> {
             if (!intervalDelta) return;
             delta = intervalDelta;
         }
-        if (this.useInternalTime) setTimeActivePipeline(this);
+        if (this.useInternalTime) setActiveTimeTarget(this);
 
         if (!this.deltaPerTick) {
             this.realTick(delta);
 
-            if (this.useInternalTime) setTimeActivePipeline(null);
+            if (this.useInternalTime) setActiveTimeTarget(this.manager.state);
 
             return;
         }
@@ -202,7 +208,7 @@ export class Pipeline<ExactComponentTypes extends defaultComponentTypes> {
             this.lag -= this.deltaPerTick;
         }
 
-        if (this.useInternalTime) setTimeActivePipeline(null);
+        if (this.useInternalTime) setActiveTimeTarget(this.manager.state);
     }
 
     private realTick(delta: number) {
@@ -227,8 +233,7 @@ export class Pipeline<ExactComponentTypes extends defaultComponentTypes> {
                 const resumeEntry = evaluateAsyncSystem(
                     system as AsyncSystem<any>,
                     this.manager,
-                    this.now,
-                    systemDelta,
+                    systemDelta
                 );
                 if (resumeEntry) asyncResumes.push(resumeEntry);
                 return;

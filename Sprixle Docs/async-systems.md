@@ -101,9 +101,9 @@ try {
 
 ## Generator lifecycle
 
-### Restart vs stop
+### Restart on return
 
-When a generator returns (completes naturally), the async system restarts it from the beginning on the next tick — creating a fresh iterator from `_genFn`. This makes looping patterns natural:
+When a generator returns (completes naturally), the async system restarts it from the beginning on the next tick — creating a fresh iterator from `_genFn`. Any return value restarts. This makes looping patterns natural:
 
 ```ts
 em.createAsyncSystem(function* (em) {
@@ -114,17 +114,7 @@ em.createAsyncSystem(function* (em) {
 });
 ```
 
-To stop permanently, `return false` from the generator — the system is marked done and will not restart.
-
-```ts
-em.createAsyncSystem(function* (em) {
-    yield em.waitForEntity(sceneEntity, 'sceneName', 'changed');
-    if (sceneEntity.components.sceneName !== 'gameplay') return false;
-    em.quickEntity({ gameplayInit: true as true });
-});
-```
-
-Any other return value (`return true`, bare `return`, implicit completion) restarts.
+Use `condition` on the system or pipeline to gate whether it runs.
 
 ### Chaining resolvable yields
 
@@ -176,7 +166,6 @@ em.createAsyncSystem(function* (em) {
     em.setSingletonEntityComponent('matchPhase', 'playing');
     yield em.waitForQuery(playersQuery, e => e.components.health <= 0);
     em.setSingletonEntityComponent('matchPhase', 'gameover');
-    return false;
 });
 ```
 
@@ -219,7 +208,7 @@ em.createAsyncSystem(function* (em) {
 
 - **Promise settlement is polled, not awaited.** The `.then()` hooks set a flag; the pipeline reads the flag each tick. This adds at most one frame of latency between settlement and the pipeline seeing it.
 
-- **Cancellation.** Async systems have no built-in cancellation API. Use `condition: () => shouldRun` to gate the system, or `return false` from the generator to stop permanently.
+- **Cancellation.** Async systems have no built-in cancellation API. Use `condition: () => shouldRun` on the system or pipeline to gate whether it runs.
 
 - **Query consumers are pooled per condition.** The consumer created by `waitForQuery` lives on the `QueryWaitCondition._consumerRef` and is reused across resolution cycles of the same condition object. Do not manually destroy it.
 

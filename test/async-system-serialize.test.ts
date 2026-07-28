@@ -146,35 +146,6 @@ em.tick();
 assert.ok(queryWaitResolved, 'query wait should resolve on restored consumer');
 console.log('Test S4 PASS: query wait serialized + deserialized + resolved');
 
-// --- Test S5: return false stops, serialized system with null condition ---
-
-let runs = 0;
-
-const stopGen = function* (em: Manager<ComponentTypes>) {
-    runs++;
-    return false;
-};
-
-const sys5 = em.createAsyncSystem(stopGen, { id: 'stopSys' });
-const pipe9 = new Pipeline(em, sys5);
-
-pipe9.tick(10);
-em.tick();
-assert.strictEqual(runs, 1);
-
-pipe9.tick(10);
-em.tick();
-assert.strictEqual(runs, 1, 'should not run again after return false');
-
-const saved5 = serializeAsyncSystem(sys5);
-assert.strictEqual(saved5.currentCondition, null);
-
-const sys5Restored = deserializeAsyncSystem(em, saved5, stopGen);
-assert.strictEqual(sys5Restored._currentCondition, null);
-assert.strictEqual(sys5Restored._generator, null);
-
-console.log('Test S5 PASS: return false = stop, serialized as null condition');
-
 // --- Test S6: Manager-level deserialize with registry ---
 
 let registryResolved = false;

@@ -49,4 +49,4 @@ stateMachine.attemptChangeState(entity, STATES.movement);
 
 pipeline.tick(50);
 
-manager.tick();
+manager.end();

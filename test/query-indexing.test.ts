@@ -29,7 +29,7 @@ for (let i = 0; i < 10; i++) {
 }
 
 manager.subTick();
-manager.tick();
+manager.end();
 
 console.log('query', positionQuery);
 console.log('player-1', positionQuery.get('player-1'));
@@ -41,7 +41,7 @@ assert.equal(positionQuery.get('player-2').size, 5);
 manager.deregisterEntity(positionQuery.get('player-1').first());
 
 manager.subTick();
-manager.tick();
+manager.end();
 
 assert.equal(positionQuery.get('player-1').size, 4);
 assert.equal(positionQuery.get('player-2').size, 5);
@@ -52,7 +52,7 @@ console.log('player-2', positionQuery.get('player-2'));
 positionQuery.get('player-2').first().components.ownerId = 'player-1';
 
 manager.subTick();
-manager.tick();
+manager.end();
 
 assert.equal(positionQuery.get('player-1').size, 5);
 assert.equal(positionQuery.get('player-2').size, 4);

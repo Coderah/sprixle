@@ -40,7 +40,7 @@ const positionSystem = manager.createSystem(positionConsumer, {
 const masterPipeline = new Pipeline(manager, positionSystem);
 
 masterPipeline.tick(0);
-manager.tick();
+manager.end();
 
 manager.deregisterEntity(entity);
 

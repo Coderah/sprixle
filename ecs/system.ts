@@ -1,5 +1,4 @@
-import { throttleLog } from '../util/log';
-import { now, setTimeActivePipeline } from '../util/now';
+import { now, setActiveTimeTarget } from '../util/now';
 import { interval } from '../util/timing';
 import {
     EntityWithComponents,
@@ -159,23 +158,23 @@ export class Pipeline<ExactComponentTypes extends defaultComponentTypes> {
     }
 
     init() {
-        if (this.useInternalTime) setTimeActivePipeline(this);
+        if (this.useInternalTime) setActiveTimeTarget(this);
 
         this.systems.forEach((system) => {
             system.init?.();
         });
 
-        if (this.useInternalTime) setTimeActivePipeline(null);
+        if (this.useInternalTime) setActiveTimeTarget(this.manager.state);
     }
 
     reset() {
-        if (this.useInternalTime) setTimeActivePipeline(this);
+        if (this.useInternalTime) setActiveTimeTarget(this);
 
         this.systems.forEach((system) => {
             system.reset?.();
         });
 
-        if (this.useInternalTime) setTimeActivePipeline(null);
+        if (this.useInternalTime) setActiveTimeTarget(this.manager.state);
     }
 
     now = 0;
@@ -186,12 +185,12 @@ export class Pipeline<ExactComponentTypes extends defaultComponentTypes> {
             if (!intervalDelta) return;
             delta = intervalDelta;
         }
-        if (this.useInternalTime) setTimeActivePipeline(this);
+        if (this.useInternalTime) setActiveTimeTarget(this);
 
         if (!this.deltaPerTick) {
             this.realTick(delta);
 
-            if (this.useInternalTime) setTimeActivePipeline(null);
+            if (this.useInternalTime) setActiveTimeTarget(this.manager.state);
 
             return;
         }
@@ -202,7 +201,7 @@ export class Pipeline<ExactComponentTypes extends defaultComponentTypes> {
             this.lag -= this.deltaPerTick;
         }
 
-        if (this.useInternalTime) setTimeActivePipeline(null);
+        if (this.useInternalTime) setActiveTimeTarget(this.manager.state);
     }
 
     private realTick(delta: number) {

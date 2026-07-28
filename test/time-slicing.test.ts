@@ -45,12 +45,13 @@ for (let i = 0; i < 10; i++) {
 
 const pipeline = new Pipeline(manager, slicedSystem);
 
+manager.start(1);
 pipeline.tick(1);
 assert.equal(stats.newEntities, 10);
 assert.equal(stats.updatedEntities, 0);
 assert.equal(stats.allEntities, 5);
 
-manager.tick();
+manager.end();
 console.log('tick');
 
 for (let entity of positionQuery.IterateIgnoringSlice()) {
@@ -58,11 +59,12 @@ for (let entity of positionQuery.IterateIgnoringSlice()) {
 }
 manager.subTick(); // as if we are updating entities within a system
 
+manager.start(1);
 pipeline.tick(1);
 assert.equal(stats.updatedEntities, 5);
 assert.equal(stats.allEntities, 10);
 
-manager.tick();
+manager.end();
 console.log('tick');
 
 pipeline.tick(1);

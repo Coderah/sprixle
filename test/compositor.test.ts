@@ -65,8 +65,8 @@ const { renderer, glCanvas, rendererPipeline, configurationEntity } =
         },
         {
             // rPixelRatio: 1.5,
-            rPixelRatio: 1,
-            // rMSAASamples: 8,
+            rPixelRatio: 1.5,
+            // rMSAASamples: 4,
             rToneMapping: NoToneMapping,
             rShadowMap: {
                 enabled: false,

@@ -55,7 +55,7 @@ export interface QueryState<
     Includes extends Keys<ExactComponentTypes>[],
     M extends Manager<ExactComponentTypes> = Manager<ExactComponentTypes>,
     IndexedComponent extends Keys<ExactComponentTypes> = null,
-    E = EntityWithComponents<ExactComponentTypes, M, Includes[number]>
+    E extends M['Entity'] = EntityWithComponents<ExactComponentTypes, M, Includes[number]>
 > {
     entities: Set<EntityId>;
     consumerStates: ConsumerState<E>[];
@@ -77,7 +77,7 @@ export class Query<
     Includes extends Keys<ExactComponentTypes>[],
     M extends Manager<ExactComponentTypes> = Manager<ExactComponentTypes>,
     IndexedComponent extends Keys<ExactComponentTypes> = null,
-    E = EntityWithComponents<ExactComponentTypes, M, Includes[number]>
+    E extends M['Entity'] = EntityWithComponents<ExactComponentTypes, M, Includes[number]>
 > implements Iterable<E>
 {
     Entity: E;
@@ -552,7 +552,7 @@ export class Consumer<
     Includes extends Keys<ExactComponentTypes>[],
     M extends Manager<ExactComponentTypes> = Manager<ExactComponentTypes>,
     IndexedComponent extends Keys<ExactComponentTypes> = null,
-    E = EntityWithComponents<ExactComponentTypes, M, Includes[number]>
+    E extends M['Entity'] = EntityWithComponents<ExactComponentTypes, M, Includes[number]>
 > {
     query: Query<ExactComponentTypes, Includes, M, IndexedComponent, E>;
 
@@ -686,7 +686,7 @@ export class Consumer<
         this.updatedEntities.add(id);
     }
 
-    remove(entity: typeof this.query.manager.Entity) {
+    remove(entity: E) {
         this.updatedEntities.delete(entity.id);
         this.newEntities.delete(entity.id);
         this.deletedEntities.add(entity);

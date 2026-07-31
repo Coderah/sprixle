@@ -1,7 +1,7 @@
 import {
     bsonBinarySerializer,
-    getBSONDeserializer,
-    getBSONSerializer,
+    deserializeBSON,
+    serializeBSON,
 } from '@deepkit/bson';
 import {
     dataAnnotation,
@@ -22,16 +22,8 @@ import { keys } from './dict';
 import './object.extensions';
 import { endPerformanceMeasure, startPerformanceMeasure } from './performance';
 import { PooledMap } from './pool';
-import {
-    Consumer,
-    Query,
-    QueryName,
-    QueryParametersInput,
-    QueryState,
-} from './query';
 import { ConsumerSystem, QuerySystem, System } from './system';
 import { Annotations } from './types';
-import { deserializeBSON, serializeBSON } from '@deepkit/bson';
 import {
     AsyncSystem,
     Yieldable,
@@ -41,9 +33,20 @@ import {
     createQueryWaitCondition,
     deserializeAsyncSystem,
 } from './asyncSystem';
+import {
+    Consumer,
+    Query,
+    QueryName,
+    QueryParametersInput,
+    QueryState,
+} from './query';
 
 export type Keys<T> = keyof T;
 export type EntityId = string | bigint;
+
+/** Minimal entity shape — just the id. Used as a constraint for generic E parameters
+ * so that TypeScript knows E has .id without requiring all of Entity's properties. */
+export type HasId = { id: EntityId };
 
 export type Entity<ComponentTypes> = {
     id: EntityId;
@@ -1152,7 +1155,7 @@ export class Manager<ExactComponentTypes extends defaultComponentTypes> {
 
     getSingletonEntity<
         K extends Keys<typeof this.ComponentTypes>,
-        E = EntityWithComponents<
+        E extends HasId = EntityWithComponents<
             ExactComponentTypes,
             Manager<ExactComponentTypes>,
             K
@@ -1167,12 +1170,12 @@ export class Manager<ExactComponentTypes extends defaultComponentTypes> {
             return entity as E;
         }
 
-        return this.getEntity(componentType as string) as E;
+        return this.getEntity(componentType as string) as any as E;
     }
 
     deleteSingletonEntity<
         K extends Keys<typeof this.ComponentTypes>,
-        E = EntityWithComponents<
+        E extends HasId = EntityWithComponents<
             ExactComponentTypes,
             Manager<ExactComponentTypes>,
             K
@@ -1217,7 +1220,7 @@ export class Manager<ExactComponentTypes extends defaultComponentTypes> {
     // TODO introduce forEntities (and with and of)
     getEntities<
         K extends Keys<typeof this.ComponentTypes>,
-        E = EntityWithComponents<
+        E extends HasId = EntityWithComponents<
             ExactComponentTypes,
             Manager<ExactComponentTypes>,
             K
@@ -1225,7 +1228,7 @@ export class Manager<ExactComponentTypes extends defaultComponentTypes> {
     >(componentType: K): Set<E> {
         // TODO update this to handle removing component type mapping at point of lookup?
         return this.getEntityIds(componentType).map(
-            (id) => this.getEntity(id) as E
+            (id) => this.getEntity(id) as any as E
         );
     }
 
@@ -1242,7 +1245,7 @@ export class Manager<ExactComponentTypes extends defaultComponentTypes> {
     /** Get Entities that have these specific component types (intersection) */
     getEntitiesWith<
         K extends Keys<typeof this.ComponentTypes>,
-        E = EntityWithComponents<
+        E extends HasId = EntityWithComponents<
             ExactComponentTypes,
             Manager<ExactComponentTypes>,
             K
@@ -1257,7 +1260,7 @@ export class Manager<ExactComponentTypes extends defaultComponentTypes> {
             entityMaps.first() || new Set<string>()
         ).intersect(...entityMaps);
 
-        return intersectedEntities.map((id) => this.getEntity(id) as E);
+        return intersectedEntities.map((id) => this.getEntity(id) as any as E);
     }
 
     getEntityIdsOf(
@@ -1282,7 +1285,7 @@ export class Manager<ExactComponentTypes extends defaultComponentTypes> {
     addComponent<
         T extends typeof this.Entity,
         K extends Keys<typeof this.ComponentTypes>,
-        E = EntityWithComponents<
+        E extends HasId = EntityWithComponents<
             ExactComponentTypes,
             Manager<ExactComponentTypes>,
             K
@@ -1318,7 +1321,7 @@ export class Manager<ExactComponentTypes extends defaultComponentTypes> {
     updateComponent<
         T extends typeof this.Entity,
         K extends Keys<typeof this.ComponentTypes>,
-        E = EntityWithComponents<
+        E extends HasId = EntityWithComponents<
             ExactComponentTypes,
             Manager<ExactComponentTypes>,
             K

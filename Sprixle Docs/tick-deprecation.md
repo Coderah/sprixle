@@ -59,6 +59,40 @@ function frame(delta: number) {
 
 All references to `em.tick()` should be replaced with `em.end()`. The `em.start(delta)` call should precede all pipeline ticks for the frame.
 
+### Pacing frames with `now.real()`
+
+`start(delta)` makes the manager the active time target and **it stays active between frames** — nothing clears it until the next `start()` call. So `now()` returns simulation time everywhere after the first frame, not just inside systems. The canonical rAF loop must measure frame time off the wall clock:
+
+```ts
+// ✅ canonical
+let time = now.real();
+
+function frame() {
+    const newTime = now.real(); // wall clock — immune to the sim-clock target
+    const delta = newTime - time;
+    time = newTime;
+
+    em.start(delta);            // advance simulation clock, set as active time target
+    mainPipeline.tick(delta);
+    mainPipeline2.tick(delta);  // multiple pipelines share the same frame's delta
+    em.end();
+
+    requestAnimationFrame(frame);
+}
+```
+
+```ts
+// ❌ broken — frame 2 delta goes hugely negative
+let time = now();
+function frame() {
+    const newTime = now(); // frame 1: wall clock; frame 2+: simulation clock!
+    const delta = newTime - time; // simClock - wallClock ≈ -1.7e12
+    ...
+}
+```
+
+Frame 1 measures wall→wall and runs fine (it may fire the frame's first RPCs). Frame 2 mixes clocks: `newTime` is the small accumulated sim clock while `time` still holds the wall-clock value from frame 1, so `delta` goes hugely negative and `Pipeline.realTick` early-returns on `delta <= 0` — every pipeline stops running for the rest of the session, while any promise callbacks from frame 1 keep logging as if the app were healthy. (Whence hit exactly this: `query_clips` fired and its response logged via tauri-conduit, but the async generator was never resumed and the list stayed empty.)
+
 ## What `end()` does
 
 Carries the same cleanup work the old `tick()` did:

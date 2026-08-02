@@ -103,16 +103,43 @@ try {
 
 ### Restart on return
 
-When a generator returns (completes naturally), the async system restarts it from the beginning on the next tick — creating a fresh iterator from `_genFn`. Any return value restarts. This makes looping patterns natural:
+When a generator returns (completes naturally), the async system restarts it from the beginning on the next tick — creating a fresh iterator from `_genFn`. Any return value restarts.
+
+#### `while (true)` is not required for repeating work
+
+Because completed generators restart automatically, **do not wrap repeating work in `while (true)`** — just let the generator complete and the engine loops it for you:
 
 ```ts
+// Before: manual loop
 em.createAsyncSystem(function* (em) {
     while (true) {
         yield em.delay(1000);
         em.quickEntity({ spawnWave: true as true });
     }
 });
+
+// After: natural completion → auto-restart
+em.createAsyncSystem(function* (em) {
+    yield em.delay(1000);
+    em.quickEntity({ spawnWave: true as true });
+});
 ```
+
+Each restart cycle costs **one tick** (completion is seen at the end of a flush; the fresh generator runs on the next pipeline tick), so the cadence is identical for anything that already ends in `delay(...)`. This is the shape the Whence sync systems use: a paginator whose body drains a page and ends in a `delay(250)` backoff.
+
+#### The one exception: hoisted `waitForQuery` conditions
+
+`while (true)` IS load-bearing when the generator hoists a `waitForQuery` condition created before the loop:
+
+```ts
+const pending = em.waitForQuery(playersQuery, e => e.components.health <= 0);
+while (true) {
+    yield pending;
+    // ... drain / react ...
+}
+```
+
+The condition's pooled consumer lives on the condition object (`QueryWaitCondition._consumerRef`). A generator that completes and restarts calls `em.waitForQuery(...)` again, creating a fresh condition — and leaking one consumer per restart. Keeping the generator alive with `while (true)` means the hoisted condition (and its single consumer) persists forever. See the caveat below; once consumers are pooled per system instead of per condition, this exception disappears too.
 
 Use `condition` on the system or pipeline to gate whether it runs.
 
@@ -189,6 +216,8 @@ em.createAsyncSystem(function* (em) {
 });
 ```
 
+This is the hoisted-condition exception from "Restart on return": the `while (true)` keeps a single pooled consumer alive. If you only need to wait **once**, prefer the natural-completion form and let the restart handle repetition when it applies to your shape.
+
 ### Chain multiple waits
 
 ```ts
@@ -210,6 +239,6 @@ em.createAsyncSystem(function* (em) {
 
 - **Cancellation.** Async systems have no built-in cancellation API. Use `condition: () => shouldRun` on the system or pipeline to gate whether it runs.
 
-- **Query consumers are pooled per condition.** The consumer created by `waitForQuery` lives on the `QueryWaitCondition._consumerRef` and is reused across resolution cycles of the same condition object. Do not manually destroy it.
+- **Query consumers are pooled per condition object.** The consumer created by `waitForQuery` lives on the `QueryWaitCondition._consumerRef` and is reused across resolution cycles of the *same* condition object. Do not manually destroy it. A generator that completes and restarts creates a fresh condition (fresh consumer) each cycle — a leak — so hoist the condition and keep it alive with `while (true)` (see "Restart on return"). This is engine debt; per-system pooling would let `while (true)` disappear everywhere.
 
 - **Max chain guard.** The resume flush chains at most 100 immediately-resolvable yields per entry. An intentionally infinite chain (e.g. `while(true) yield delay(0)`) is caught instead of hanging the frame.

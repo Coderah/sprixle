@@ -44,7 +44,8 @@ export default sprixlePlugin(
             | string
             | Uint8Array
             | number
-            | (string | number | null)[]
+            | boolean
+            | (string | number | boolean | null)[]
             | bigint;
         type BufferMessage = Command | [Command, MessageData];
         type EntityWithSocket = EntityWithComponents<

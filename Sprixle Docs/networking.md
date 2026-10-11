@@ -44,7 +44,7 @@ Caveats learned in production (test-pilots):
 
 ## Wire format & encoders
 
-`MessageData = string | Uint8Array | number | (string|number|null)[] | bigint`. The rule for choosing:
+`MessageData = string | Uint8Array | number | boolean | (string|number|boolean|null)[] | bigint`. The rule for choosing:
 
 - **Flat arrays of primitives** for small command tuples (hello/status/votes). Empty string as null sentinel. Document each command's payload shape next to the enum.
 - **BSON `Uint8Array` blobs** for entity snapshots and nested structures, produced by `em.createSerializer<T>()` in a shared `encoders.ts`:

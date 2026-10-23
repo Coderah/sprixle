@@ -1,8 +1,8 @@
 # Networking — shared client/server code
 
-*Engine ref: f3f5215 (2026-07-05)*
+*Engine ref: 9e76509 (2026-07-24)*
 
-Source: `plugins/network/{networkPlugin,createServer,createClient,rpc,reconciliationPlugin,types}.ts`.
+Source: `plugins/network/{networkPlugin,createServer,createClient,rpc,reconciliationPlugin,types}.ts`; `plugins/valkey/{valkeyPlugin,types,createValkeyClient,valkeyPubSub,valkeyStore}.ts`.
 Reference implementations: **cursory-world** (full multiplayer game, patch-sync + RPC + reconciliation) and **test-pilots** (device fleet, targeted entity sync). Read those branches when in doubt.
 
 ## The model in one paragraph
@@ -101,6 +101,92 @@ export const actions = new GameActions(em, network, IS_CLIENT, IS_NETWORKED);
 3. On every incoming frame, `resolveReconcilableActions()` compares: predicted version > server's → restore the optimistic value from `previousComponents` via `quietSet` (keep prediction); else drop the prediction.
 
 Requires `ReconciliationComponentTypes` (`reconciliationVersions`) in your ComponentTypes and `TrackPrevious` on predicted components. Known limitations: one **global** version counter, `'replay'` unimplemented, tight coupling to subTick timing — keep predicted mutations simple (position-like).
+
+## Multi-instance backplane — Valkey pub/sub
+
+*Engine ref: 11e19d2 (2026-07-24)*
+
+For multi-instance deployments (multiple server processes behind a load balancer), instances sync through Valkey pub/sub rather than direct WebSocket. Each instance still serves its own WebSocket clients via the network plugin; Valkey is the backplane that broadcasts state changes across all instances.
+
+Source: `plugins/valkey/{valkeyPlugin,types,createValkeyClient,valkeyPubSub,valkeyStore}.ts`. Reference implementation: **platinum-equity-event-app**.
+
+### Channels
+
+Three channel types under a configurable prefix:
+
+| Channel | Pattern | Purpose |
+|---------|---------|---------|
+| Broadcast | `{prefix}broadcast` | Messages routed to all connected clients across all instances |
+| Client | `{prefix}client:{id}` | Messages routed to a specific client's connections across all instances |
+| Pattern | `{prefix}*` | Pattern subscription — catches all app channels (admin monitoring) |
+
+The plugin manages subscriptions dynamically: a client's channel is subscribed when the first socket entity for that identity joins, unsubscribed when the last leaves.
+
+### Basic usage
+
+```ts
+import ValKey from 'iovalkey';
+import valkeyPlugin from '../sprixle/plugins/valkey/valkeyPlugin';
+
+const valkey = valkeyPlugin(em, {
+    ValKey,
+    host: process.env.VALKEY_HOST,
+    port: 6379,
+    channelPrefix: 'myapp:',
+    clientChannels: {
+        query: socketQuery,            // query with includes: ['socket'], indexed on identity component
+        identityComponent: 'clientId', // whatever the project calls its client/player/user identity
+    },
+    entityStore: {
+        serialize: (e) => encodeEntity(e),
+        deserialize: (d) => decodeEntity(d),
+        keyPattern: (id) => `entity:${id}`,
+    },
+    onConnectHydrate: [
+        { key: 'singleton:stage' },
+        { key: 'singleton:countdownTime' },
+    ],
+});
+
+// Wire backplane messages to local WebSocket clients
+valkey.onMessage((channel, message) => {
+    // Decode and route to connected sockets on this instance
+    if (channel === 'myapp:broadcast') {
+        network.sendRaw(message);
+    }
+    // Client channels: extract id from channel name, find local socket, send
+});
+
+// Add lifecycle system to pipeline
+const pipeline = new Pipeline(em, ...valkey.systems, myOtherSystems);
+```
+
+### Architecture
+
+```
+  Instance A                    Valkey                     Instance B
+  ┌──────────┐    publish     ┌────────┐    subscribe     ┌──────────┐
+  │ WS client │──────►────────│ pub/sub │───────►─────────│ WS client │
+  │  entity   │               │  bus   │                 │  entity   │
+  └──────────┘               └────────┘                └──────────┘
+       │                          │                          │
+       │    client connection     │    client connection     │
+       ▼                          ▼                          ▼
+  [Browser]                  [Browser]                  [Browser]
+```
+
+Each instance holds transient WebSocket connections + ECS entities. Persistent state lives in Valkey (when `entityStore` is configured). Pub/sub is the inter-instance message bus — no direct server-to-server communication.
+
+### Key generalizations from platinum-equity
+
+- **Client identity, not user**: `identityComponent` is whatever your project calls it (`clientId`, `playerId`, `deviceId`) — the plugin doesn't care about the semantics.
+- **Channel prefix**: configurable per project instead of hardcoded `'events:realtime:'`.
+- **Entity store**: optional — turn it on only if you want Valkey as your persistence layer. Configurable serializer and key pattern (no hardcoded BSON codec).
+- **Connect hydration**: optional key → publish pairs instead of hardcoded command sends.
+
+### AsyncSystem integration
+
+The `syncSystem` on `interval(16.7)` from shape A can be replaced with an async system generator — see `Sprixle Docs/async-systems.md#networking-patterns` for the batch accumulator pattern, per-entity reactive publish, connection watchdog, and late-joiner state sync via serialized async systems.
 
 ## Footguns checklist
 

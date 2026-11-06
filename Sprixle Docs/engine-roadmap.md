@@ -82,6 +82,14 @@ Ranked by leverage. Each names the donor implementation.
     `src/client/system/outboxSystem.ts`. Keep the local mutation immediate; the outbox only
     carries the *server reconciliation*, never gates the local reward.
 
+17. **2D polygon kit (offsetting + ring-set sweep)** (embroidraw, 2026-07) — project-side
+    geometry worth promoting if a second project needs it: `offsetPath` (mitred joins with a
+    mitre clip, plus inverted-vertex culling so a rail never folds back on a tight curve),
+    `scanlineSegmentsRings` (one even-odd sweep across an outer boundary plus holes), and
+    `pointInRings`. All pure, no deps, ~200 lines. The culling step is the non-obvious part:
+    it keeps output 1:1 with the input array, which is what lets two offset rails be zipped
+    into satin bars without index bookkeeping. Donor: `src/game/embroidery/geometry.ts`.
+
 ## Documentation debt (beyond these docs)
 
 - Per-project `CLAUDE.md`s exist only on test-pilots; each active branch should get a thin one (@-importing the engine CLAUDE.md + project vocabulary).

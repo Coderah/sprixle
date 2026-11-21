@@ -154,9 +154,12 @@ export type ParticleAssetDynamic = {
      */
     at?: string;
     type: 'noise';
-    /** Peak displacement in metres (each axis spans ±value). Default 0.25. */
+    /**
+     * Peak displacement in metres (each axis spans ±value). Default 0.25, and clamped at
+     * `MAX_NOISE_AMPLITUDE` (1 m) by the compiler: past that it is a unit error, not a look.
+     */
     value?: number;
-    /** Base octave, in field cycles per second. Default 1. */
+    /** Base octave, in field cycles per second. Default 1, clamped at 10 (see `assets.ts`). */
     frequency?: number;
     /** Multiplier on `frequency` — a producer's "how fast the sequence walks" value. Default 1. */
     speed?: number;

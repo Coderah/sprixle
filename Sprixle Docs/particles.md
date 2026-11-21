@@ -134,7 +134,12 @@ fade(t)   = smoothstep(0, 0.15, t / life)          // born on the spawn point, t
 ```
 
 `A` is the amplitude in metres (`dynamics[].value`, the peak per axis) and `F` the base-octave rate
-in cycles per second (`frequency` × `speed`). It is *not* a true curl field (no potential, so not
+in cycles per second (`frequency` × `speed`). Both are bounded at compile time
+(`MAX_NOISE_AMPLITUDE` = 1 m, `MAX_NOISE_FREQUENCY` = 10 Hz base octave, `assets.ts`), with a
+warning: past those a particle is being teleported, not perturbed, and a producer that hands us a
+**force magnitude** (`CPSBrownianForce` intensity, m/s²) where a length belongs lands exactly there
+— so `A` is a displacement on every side of the format, and converting into it is the producer's
+job (§9.3). It is *not* a true curl field (no potential, so not
 divergence-free) and it does not sample the particle's position — at these sprite sizes the wobble
 is the whole read, and both would cost several times the noise itself. Gated behind a `NOISE`
 `#define`, so an asset without `dynamics[]` pays nothing.
@@ -296,8 +301,9 @@ layer. One located with several renderers therefore legitimately resolves to sev
 particles, several draws — all of them move); a layer fed from two different nodes cannot be scoped
 and is reported. A layer carries **one** noise (one instance `vec4`), so several noise modules on it
 are summed in amplitude and take the fastest frequency, with a warning. `value` is the peak
-displacement in metres (default 0.25) and `frequency × speed` its base-octave rate in cycles per
-second (default 1); the field itself is the formula in §4.1.
+displacement in metres (default 0.25, clamped at 1 m with a warning) and `frequency × speed` its
+base-octave rate in cycles per second (default 1, clamped at 10 Hz); the field itself is the formula
+in §4.1.
 
 ### 7.2 Why this is generic
 
@@ -449,13 +455,18 @@ usage, not by guesswork (a 20-line prototype of this already produced §2).
 
 Numbers are taken verbatim; anything unrepresentable is approximated **and logged in
 `meta.warnings`**, never silently dropped. Two declared approximations: `CPSBrownianForce` →
-`dynamics[{type: 'noise'}]` (intensity → amplitude, `parametricFactor` → frequency), and `CPSLight`
-→ `glow` quad (+ optional real light for hero casts). The brownian one is a *texture* difference,
-not a scale difference: NeL walks one random-walk table shared by every particle and indexed by age,
-so same-age particles move together (a burst translates), while our field is seeded per particle (a
-burst scatters) and is value noise rather than a smoothed table. Both are stateless, both reach the
-same amplitudes. Validation is by eye against Ryzom footage — we have no reference renderer, so `.ps`
-parameters are the ground truth, not pixels.
+`dynamics[{type: 'noise'}]`, and `CPSLight` → `glow` quad (+ optional real light for hero casts).
+The brownian one is a *unit* difference, not a look choice: NeL's intensity is an **acceleration**
+(m/s²) on the path the corpus actually uses — `parametricMotion` is false on 213 of the 214
+locateds in `sfx/magic`, so it runs `CPSBrownianForce::computeForces`, `speed += intensity * dt *
+rand[-1,1]`, an uncorrelated random acceleration — while `dynamics[].value` is a length in metres.
+`ps_bake.py` converts with one constant, `BROWNIAN_METRES_PER_INTENSITY` (½·a·t² over half a second
+= 0.125 m per unit; intensity 2 bakes as 0.25 m), and logs it. What remains a texture difference is
+the *character* of the wander: NeL random-walks the velocity, so a particle's excursion grows with
+age, while our field is a bounded displacement sampled at `(seed, age)` and faded in over the first
+15% of life — stateless and frame-rate independent on both sides, and the constant is the single
+knob for how wide it reads. Validation is by eye against Ryzom footage — we have no reference
+renderer, so `.ps` parameters are the ground truth, not pixels.
 
 ---
 

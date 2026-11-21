@@ -26,6 +26,18 @@ const IDENTITY_MATRIX = [1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1];
 /** A `dynamics[]` entry that names no numbers still means "some turbulence": 0/0 would be silent. */
 const DEFAULT_NOISE_AMPLITUDE = 0.25;
 const DEFAULT_NOISE_FREQUENCY = 1;
+/**
+ * Turbulence is a *displacement* (`value`, metres) and a *rate* (`frequency`, cycles/s), and past
+ * these orders of magnitude the author has crossed a unit rather than chosen a look: a particle that
+ * jumps 2 m or wobbles at 40 Hz reads as sparks being teleported, not as turbulence. That is exactly
+ * what a producer hands us when it puts a **force magnitude** (m/s²) into a length field, so the
+ * compiler refuses the number instead of rendering it.
+ *
+ * The frequency is the base octave; the shader's third octave runs at 2.03² ≈ 4.1× that, so 10 Hz is
+ * already a 41 Hz flicker in the finest detail — faster than any frame rate can show.
+ */
+const MAX_NOISE_AMPLITUDE = 1;
+const MAX_NOISE_FREQUENCY = 10;
 
 function fail(message: string): never {
     throw new Error(`[particles] ${message}`);
@@ -255,7 +267,18 @@ function resolveDynamics(
             );
         }
 
-        const amplitude = Math.abs(authored);
+        let amplitude = Math.abs(authored);
+
+        if (amplitude > MAX_NOISE_AMPLITUDE) {
+            warnings.push(
+                `dynamics "${dynamic.at ?? raw.id}": ${dynamic.type} amplitude ${amplitude} m ` +
+                    `is not a particle displacement (limit ${MAX_NOISE_AMPLITUDE} m); clamped. A ` +
+                    `displacement that large is a unit error — a force magnitude (m/s²) written ` +
+                    `into a length field — not a look choice.`
+            );
+            amplitude = MAX_NOISE_AMPLITUDE;
+        }
+
         let frequency = num(dynamic.frequency, DEFAULT_NOISE_FREQUENCY) * num(dynamic.speed, 1);
 
         if (!Number.isFinite(frequency)) {
@@ -264,6 +287,13 @@ function resolveDynamics(
                     `number; using ${DEFAULT_NOISE_FREQUENCY}`
             );
             frequency = DEFAULT_NOISE_FREQUENCY;
+        } else if (Math.abs(frequency) > MAX_NOISE_FREQUENCY) {
+            warnings.push(
+                `dynamics "${dynamic.at ?? raw.id}": ${dynamic.type} frequency ` +
+                    `${Math.abs(frequency)} Hz is not a particle wobble (limit ` +
+                    `${MAX_NOISE_FREQUENCY} Hz base octave); clamped.`
+            );
+            frequency = MAX_NOISE_FREQUENCY;
         }
 
         for (const index of targets) {
@@ -295,6 +325,15 @@ function resolveDynamics(
                 `${layers[index].id}: ${noiseCount[index]} noise dynamics collapse into one ` +
                     `(amplitudes summed, frequency = the fastest)`
             );
+        }
+
+        // The sum is what the instance carries, so the bound has to hold for it too.
+        if (layers[index].noiseAmplitude > MAX_NOISE_AMPLITUDE) {
+            warnings.push(
+                `${layers[index].id}: turbulence modules sum to ${layers[index].noiseAmplitude} m ` +
+                    `(limit ${MAX_NOISE_AMPLITUDE} m); clamped`
+            );
+            layers[index].noiseAmplitude = MAX_NOISE_AMPLITUDE;
         }
 
         // Noise compiles a different program, so it belongs in the pool identity (one draw call per

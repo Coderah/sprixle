@@ -35,6 +35,56 @@ Mined from the game projects (2026-07 survey of test-pilots, cursory-world, sobe
 18. **Module-scope DOM access in plugins breaks headless node imports** — ✅ FIXED (loq, 2026-07-10, verified by loading the full em+game chain under `ts-node --transpile-only`): `plugins/nodeTrees/shader/uniforms.ts` (`window.innerWidth` at module scope → `globalThis.innerWidth ?? 1`), `plugins/nodeTrees/shader/colorRamp.ts` (module-scope `document.createElement('canvas')` → lazy `getLUTContext()`), `plugins/three/rendererPlugin.ts` (defaults `window.*` → `globalThis.*`, and the `OutputPass` import needs the explicit `.js` subpath — node's exports-map resolution rejects the extensionless form webpack tolerates; node 22.12+ `require(esm)` then loads it). Context: any node process whose import chain reached these died with `ReferenceError: window is not defined`; in loq that blocked importing the entity manager headlessly (em → game components.ts → a **value** import of `RendererPluginComponents` → renderer/shader chain) and was misdiagnosed for a whole build phase as "deepkit can't load under ts-node" — a duplicate inline-mirror generation pipeline got built on that false premise. Deepkit reflection was NEVER the problem (patched typescript + `reflection: true` works fine under `ts-node --transpile-only`; tsx/esbuild can never emit reflection). Standing rule: no module-scope DOM in plugins — headless node must be able to *import* the type surface; throwing on headless *use* of a render feature is fine.
 19. **Deepkit reflection quirks around imported/derived component types** (loq, 2026-07-10, both verified) — (a) **SCAR: never convert `ComponentTypes` member imports to `import type`.** A type-only import stays erased at runtime, and deepkit then silently resolves the imported type to `any` — no crash, no warning; the Manager loses that plugin's component names AND annotations invisibly (verified: `typeOf` probe reports the member as `any`, module absent from require.cache). Value imports are load-bearing for reflection. (b) Some members are dropped from Manager reflection in ALL compile modes (verified identical under transpile-only and full type-checking, so webpack builds match): in loq's `RendererPluginComponents`, `rSize` (Vector2), `rLayers` (Layers), `rPassTextureUniform` (Uniform<…>), and all mapped-type members (`` `r${Capitalize<K>}` `` over a `Pick<WebGLRenderer,…>`). Currently harmless — `componentTypesSet`/`componentNames` have no engine consumers and the dropped members carry no annotations — but a trap: an annotation (`SingletonComponent`/`Nested`/`TrackPrevious`) on such a member would silently not register. Worth a proper diagnosis (relates to gap #16's unconfirmed serializer corruption).
 
+## Gaps found by wroth (2026-11-20 survey)
+
+First project that is a **3D, rigged, third-person, multi-instance** game; these five gaps
+did not surface in any 2D/sprite/static-prefab project.
+
+20. **Skeletal-animation runtime is missing, but the exporter half exists.** The Blender addon
+already writes every action to scene custom properties and stamps per-object
+`animation = {action_name, action_slot}` (`blender/addon/animation_clips.py`, called from
+`__init__.py:310`), yet nothing in TypeScript reads GLB animation clips — no clip
+component, no `AnimationMixer` owner, no fade/loop/blend control, no root-motion policy.
+`blender.md` lists Animation as *planned*. Any project with a rigged character hits this
+wall first. The extraction shape: a component carrying `{clip, speed, loop, fade}` plus a
+system owning one `AnimationMixer` per skinned object, reacting to component writes (never
+called from gameplay code), and clip events surfaced as signal entities so gameplay stays
+data-only.
+21. **No 3D kinematic character controller.** `boilerplate/system/velocitySystem.ts` is
+`position.add(velocity)`; there is no capsule sweep, step-up, slope/floor snap, or ground
+probe anywhere in the engine. `three-mesh-bvh` is already a direct dependency (the raw
+material for world collision), and `@dimforge/rapier3d-compat` is present transitively but
+unused — so the choice is hand-rolled BVH sweeps vs adopting rapier's
+`KinematicCharacterController`, and it should be a plugin either way, not per-project.
+22. **No instance / match registry.** `createServer` is one process, one WS port, one ECS
+world. Every multi-arena deployment re-invents "which world am I, who is in it, how does a
+client get routed here". Wanted: a thin match-directory abstraction (register/heartbeat/
+assign) that is transport-agnostic, so a Valkey/ElastiCache directory and a spawnless
+single-process dev mode are the same interface. Do NOT let it grow into entity-state
+storage — snapshots-per-tick in a KV store is a non-starter.
+23. **Percentile modifier stack** (recurring across projects: shadow-boxer damage mods,
+lanebreak stat merges, laok `combineCalculatedStats`). The ubiquitous shape is
+`base -> beneficial[] + detrimental[] -> clamp`, integer-scaled to keep float drift out of
+netcode, with hard overrides (`preventMove`/`preventTurn`-style) evaluated last. Worth one
+implementation next to `calculatedComponents`, because every networked game eventually
+needs buffs that round-trip.
+24. **No particle runtime — and Effekseer is the wrong shape for us.** ✅ P1 BUILT
+    (`plugins/particles/`): instanced-quad pools, analytic motion, curve atlas, entity-free
+    arena playback, `rParticleFx`/`rParticleBudget`/`particleSignal`, two demo assets. Remaining:
+    trails/ribbons verified in anger, sorting for alpha blend, soft depth, tier-B ping-pong,
+    bone binding (blocked on #20), and the Ryzom `.ps` converter (P2). `effekseerPlugin`
+needs `.efk` binaries + a WASM blob + its own renderer/context, and still leaves the real
+cost (authoring effects by hand) untouched. Design for a native GPU-first replacement:
+instanced quads over shared pools, stateless analytic simulation (zero per-frame upload),
+trails by evaluating the same path at `t - k·Δ`, and a pose-history texture so attached
+emitters stay correct without particle state. The asset schema and runtime are
+**producer-neutral** (a Ryzom `.ps` converter is one input, not a dependency), playback is
+**entity-free** (arena records, not entities — an entity is a uuid string, a Proxy per
+component and a full registered-query sweep on registration) and the hot path is designed for **zero JS allocation per
+frame**. Full design, corpus evidence and the NeL conversion plan: **`particles.md`**. Build
+order matters — the runtime skeleton plus one hand-authored effect should land before any
+NeL decoding work.
+
 ## Plugin extraction candidates (source: project code)
 
 Ranked by leverage. Each names the donor implementation.

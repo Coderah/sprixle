@@ -90,6 +90,9 @@ All under `src/sprixle/Sprixle Docs/`:
 - **networking.md** — the shared-code client/server model: `applyNetwork`, `createServer`/`createClient`, encoders, state sync (two proven shapes), `@RPC`/`RPCActions`, reconciliation, heartbeats. Read this before touching any networked feature.
 - **vue-bridge.md** — vuePlugin composables, shallowRef discipline, per-consumer refs, cleanup rules, known scars.
 - **blender.md** + **blender-authoring.md** — the Blender pipeline concept doc, and the practical authoring conventions (`+feature(arg)` name DSL, export-attribute modifiers, shaderTree methods, prefab collections, hot reload).
+- **particles.md** — the GPU-first particle plugin (`plugins/particles/`): neutral asset schema,
+  stateless analytic simulation, pool/atlas batching, entity-free playback, allocation rules, and
+  the Ryzom `.ps` converter plan. Read before touching particles or adding an effect format.
 - **game-patterns.md** — cross-project proven patterns: signal entities, calculatedComponents overlay, grid-cell caches, zone-by-tag, timed FSMs, hitstop, input binds, actions layer.
 - **legacy-modernization.md** — old idioms you WILL see in older branches (shadow-boxer, sobelow) and their modern replacements. `boilerplate/` is stale; see this doc before copying from it.
 - **new-project.md** — checklist for standing up a new project on the engine.

@@ -17,6 +17,7 @@ import {
     Texture,
     TextureLoader,
     Vector2,
+    Vector3,
 } from 'three';
 import type { CompiledLayer, ParticleBlend } from './schema';
 import type { PoseTable } from './pose';
@@ -123,6 +124,10 @@ export class ParticlePool {
         curveAtlas: CurveAtlas,
         pose: PoseTable,
         timeUniform: { value: number },
+        /** Shared `uPoseLive` switch: 0 = pose at birth (shipping), 1 = pose now (debug). */
+        poseLive: { value: number },
+        /** Shared soft-depth uniforms, or `undefined` for the plain depth-tested path. */
+        softDepth: SoftDepthUniforms | undefined,
         capacity = 2048
     ) {
         this.key = layer.poolKey;
@@ -140,7 +145,18 @@ export class ParticlePool {
         this.curves = new Float32Array(this.capacity * 4);
         this.color = new Uint8Array(this.capacity * 4);
 
-        // Base quad as a triangle strip; three injects the `position` declaration for ShaderMaterial.
+        // Base quad: four corners, **two indexed triangles**.
+        //
+        // The index is not optional. Three dropped the strip draw modes (`TriangleStripDrawMode` is
+        // ignored, `WebGLRenderer` always draws `TRIANGLES`), so four un-indexed vertices render as
+        // **one triangle** — vertices 0, 1, 2 — and every particle was silently drawing half a quad
+        // with a hard diagonal edge through the sprite. That is the "big line through every particle"
+        // that read as clipping: nothing to do with depth, and no amount of soft-depth work touches it.
+        // Six indices, counter-clockwise, so both triangles face the same way (`DoubleSide` anyway).
+        //
+        // `position` stays in [-0.5, 0.5] on both axes: the vertex shader uses it both as the corner
+        // offset and as the sprite-cell UV (`position.xy + 0.5`), so the winding only matters for the
+        // corner order below.
         this.geometry.setAttribute(
             'position',
             new BufferAttribute(
@@ -148,6 +164,7 @@ export class ParticlePool {
                 3
             )
         );
+        this.geometry.setIndex([0, 1, 2, 2, 1, 3]);
 
         this.attrs = [
             this.addAttribute('aSim', this.sim),
@@ -167,9 +184,18 @@ export class ParticlePool {
         if (layer.kind === 'quad') defines.KIND_QUAD = '';
         else defines[layer.trailStyle === 'strip' ? 'KIND_TRAIL_STRIP' : 'KIND_TRAIL_BILLBOARD'] = '';
         if (layer.orient === 'velocity') defines.ORIENT_VELOCITY = '';
+        // A *fixed* quad lies in its authored plane instead of turning toward the camera (`CPSFace`
+        // in Ryzom). The plane is a layer constant, so it rides in as two uniforms, not per instance.
+        if (layer.orient === 'fixed') defines.ORIENT_BASIS = '';
         // Turbulence is a program specialization, not a uniform: a quiet asset never runs the noise
         // path (see `poolKey` in assets.ts — noise is part of the pool identity for this reason).
         if (layer.noiseAmplitude > 0) defines.NOISE = '';
+        // Soft depth is a project-level render capability, not an asset property: either the app
+        // renders a depth pass this frame (so the fade is possible) or it does not. Enabled per pool
+        // program so a build without the pass compiles exactly the shader it had before.
+        // Per layer, not per plugin: a project supplies the depth *pass*, each layer says whether it
+        // wants the fade. A layer that asks for it without a pass renders plain (no unbound sampler).
+        if (softDepth && layer.softDepth) defines.SOFT_DEPTH = '';
 
         this.material = new ShaderMaterial({
             defines,
@@ -188,12 +214,20 @@ export class ParticlePool {
                 // Per-pool:
                 uMap: { value: texture },
                 uGrid: { value: new Vector2(layer.grid[0], layer.grid[1]) },
+                uZBias: { value: layer.zBias },
+                uBasisX: { value: new Vector3(...(layer.basis?.[0] ?? [1, 0, 0])) },
+                uBasisY: { value: new Vector3(...(layer.basis?.[1] ?? [0, 0, -1])) },
                 uAlphaTest: { value: layer.blend === 'alphaTest' ? 0.5 : 0 },
                 // Shared: the whole app has one pose ring.
                 uPose: { value: pose.texture },
+                uPoseLive: poseLive,
+                uPoseWindow: { value: pose.window },
                 uPoseFrames: { value: pose.frames },
                 uPoseHz: { value: pose.hz },
                 uPoseRows: { value: pose.rows },
+                uPoseCols: { value: pose.cols },
+                // Shared soft-depth state (declared and read only when SOFT_DEPTH is defined).
+                ...(softDepth ? softDepth : {}),
             },
         });
 
@@ -382,6 +416,47 @@ function blendToThree(blend: ParticleBlend) {
  * gets a 1×1 white texture instead of throwing — importing the plugin must stay safe outside the
  * browser (engine rule, roadmap #18).
  */
+/**
+ * The built-in sprite for a layer with no texture: a white radial falloff dot.
+ *
+ * Ryzom has genuinely untextured renderers (mesh shapes, plain dots) and the corpus has effects whose
+ * only layer is one of those. Rather than block the whole asset — or invent a texture file — the pool
+ * draws this, which is what a "dot" means in any particle system. 64² and 4 KB, built once.
+ */
+let defaultTexture: Texture | undefined;
+
+export function defaultParticleTexture(): Texture {
+    if (defaultTexture) return defaultTexture;
+
+    const size = 64;
+    const data = new Uint8Array(size * size * 4);
+    const centre = (size - 1) / 2;
+
+    for (let y = 0; y < size; y++) {
+        for (let x = 0; x < size; x++) {
+            const dx = (x - centre) / centre;
+            const dy = (y - centre) / centre;
+            const distance = Math.min(1, Math.sqrt(dx * dx + dy * dy));
+            // Smoothstep edge: a linear ramp reads as a diamond at these sizes.
+            const alpha = Math.round(255 * (1 - distance) ** 2 * (3 - 2 * (1 - distance)));
+
+            const offset = (y * size + x) * 4;
+            data[offset] = 255;
+            data[offset + 1] = 255;
+            data[offset + 2] = 255;
+            data[offset + 3] = alpha;
+        }
+    }
+
+    defaultTexture = new DataTexture(data, size, size, RGBAFormat);
+    defaultTexture.colorSpace = SRGBColorSpace;
+    defaultTexture.minFilter = LinearFilter;
+    defaultTexture.magFilter = LinearFilter;
+    defaultTexture.needsUpdate = true;
+
+    return defaultTexture;
+}
+
 export function loadPoolTexture(url: string, onReady: () => void): Texture {
     if (typeof document === 'undefined') {
         const data = new Uint8Array([255, 255, 255, 255]);
@@ -410,18 +485,52 @@ export { BLOCK_SIZE };
  * reallocating attribute buffers in place — growing a live `InstancedBufferGeometry` would invalidate
  * in-flight update ranges for no visual gain, and this path is rare by construction.
  */
+/**
+ * The shared uniforms a soft-depth fade needs. One object per plugin instance, spread into every
+ * pool's material, so the project updates four values per frame and every pool follows.
+ */
+export type SoftDepthUniforms = {
+    uSceneDepth: { value: Texture | null };
+    uResolution: { value: Vector2 };
+    uCameraNear: { value: number };
+    uCameraFar: { value: number };
+    uSoftDistance: { value: number };
+};
+
 export class ParticlePoolRegistry {
     /** Called once per created pool so the plugin can mount its mesh (and re-mount late scenes). */
     onPoolCreated?: (pool: ParticlePool) => void;
 
     private poolsByKey = new Map<string, ParticlePool[]>();
 
+    /**
+     * Fields are assigned in the body rather than declared as constructor parameter properties:
+     * node's strip-only TypeScript loader rejects parameter properties, and
+     * `scratchpad/particles-sanity.mjs` constructs a real pool to check its quad geometry. Same
+     * constraint `PoseTable` documents — a module a headless test imports must be plain TS.
+     */
+    private readonly curveAtlas: CurveAtlas;
+    private readonly pose: PoseTable;
+    private readonly timeUniform: { value: number };
+    private readonly poseLive: { value: number };
+    private readonly softDepth: SoftDepthUniforms | undefined;
+    private readonly defaultCapacity: number;
+
     constructor(
-        private readonly curveAtlas: CurveAtlas,
-        private readonly pose: PoseTable,
-        private readonly timeUniform: { value: number },
-        private readonly defaultCapacity = 2048
-    ) {}
+        curveAtlas: CurveAtlas,
+        pose: PoseTable,
+        timeUniform: { value: number },
+        poseLive: { value: number },
+        softDepth: SoftDepthUniforms | undefined,
+        defaultCapacity = 2048
+    ) {
+        this.curveAtlas = curveAtlas;
+        this.pose = pose;
+        this.timeUniform = timeUniform;
+        this.poseLive = poseLive;
+        this.softDepth = softDepth;
+        this.defaultCapacity = defaultCapacity;
+    }
 
     /** All pools for a draw identity (used by the budget system and for diagnostics). */
     poolsForKey(key: string) {
@@ -466,6 +575,8 @@ export class ParticlePoolRegistry {
             this.curveAtlas,
             this.pose,
             this.timeUniform,
+            this.poseLive,
+            this.softDepth,
             capacity
         );
 

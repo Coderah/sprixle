@@ -1,4 +1,4 @@
-import { Matrix4, Scene, Texture } from 'three';
+import { Matrix4, Scene, Texture, Vector2 } from 'three';
 import { defaultComponentTypes, EntityId, Manager } from '../../ecs/manager';
 import { sprixlePlugin } from '../../ecs/plugin';
 import { now } from '../../util/now';
@@ -9,9 +9,17 @@ import {
     loadParticleAsset,
     ParticleAssetRegistry,
 } from './assets';
-import { loadPoolTexture, ParticlePool, ParticlePoolRegistry } from './pools';
+import { defaultParticleTexture, loadPoolTexture, ParticlePool, ParticlePoolRegistry } from './pools';
 import { ParticleArena, type ParticleNodeResolver, type PlaybackInfo } from './arena';
 import { PoseTable } from './pose';
+import {
+    markPlaybackFinished,
+    planPlaybackChanges,
+    startPlayback,
+    stopPlaybacks,
+    stopPlaybacksWhere,
+    type ParticlePlayback,
+} from './playbacks';
 import type { ParticleAsset } from './schema';
 
 export * from './components';
@@ -35,6 +43,25 @@ export type {
 export { MAX_LAYERS } from './schema';
 export { CurveAtlas } from './curves';
 export {
+    MAX_PLAYBACKS_PER_ENTITY,
+    markPlaybackFinished,
+    nextCycleEnd,
+    nextPlaybackId,
+    playbackKey,
+    playbackSeconds,
+    playbackWindow,
+    planPlaybackChanges,
+    samePlaybackRequest,
+    startPlayback,
+    stopPlaybacks,
+    stopPlaybacksWhere,
+    type ParticlePlayback,
+    type PlaybackAction,
+    type PlaybackChange,
+    type PlaybackRequest,
+    type PlaybackWindow,
+} from './playbacks';
+export {
     compileParticleAsset,
     loadParticleAsset,
     ParticleAssetRegistry,
@@ -50,8 +77,30 @@ const DEFAULT_MAX_INSTANCES = 30000;
 export type ParticlePlayOptions = {
     loop?: boolean;
     seed?: number;
+    /**
+     * Bind every node the asset itself binds to this bone instead of its own (`ParticlePlayback.bone`).
+     *
+     * The asset's bones are art; which hand plays an effect is gameplay, and one baked cast effect
+     * should serve either hand. Free nodes are untouched, and an asset with no bound node ignores it.
+     */
     bone?: string;
+    /**
+     * `'pose'` (default) samples the bone at each particle's birth through the pose ring; `'bake'`
+     * multiplies the bone's world matrix in at spawn time and marks the particles free. See
+     * `ParticlePlayback.attachMode` — bake is the mode that cannot, even in principle, move with the
+     * emitter.
+     */
+    attachMode?: 'pose' | 'bake';
     tint?: [number, number, number];
+    /**
+     * Lifetime in seconds; 0/absent = the asset's own `duration + maxLife`.
+     *
+     * The gameplay window is authoritative, not the art: several baked effects are held states that
+     * naturally run ~31 s, and a 0.6 s press must not leave one glowing for half a minute. This
+     * replaces the client-side expiry ledger projects had to keep (wroth's
+     * `particleAbilityFxSystem` did exactly that before this field existed).
+     */
+    seconds?: number;
 };
 
 export type ParticlePluginOptions = {
@@ -67,6 +116,13 @@ export type ParticlePluginOptions = {
      */
     getTransform?: (entity: any, out: Matrix4) => boolean;
     maxPlaybacks?: number;
+    /**
+     * Draw layers one playback can own (default 4). The Ryzom corpus stacks up to 13 renderers on one
+     * located, so a converter for it sets this higher; the arena's run bookkeeping grows with it.
+     */
+    maxLayers?: number;
+    /** Bound nodes one asset may carry (default 8) — the pose ring allocates a slot per node. */
+    maxNodes?: number;
     poolCapacity?: number;
     /** Bones/sockets the pose ring can track simultaneously across all live effects. */
     poseNodes?: number;
@@ -77,18 +133,29 @@ export type ParticlePluginOptions = {
     onEvent?: (event: { kind: string; asset: string; name: string }) => void;
     /** Assets bundled with the app — registered at init, no fetch needed. */
     assets?: ParticleAsset[];
+    /**
+     * Enable the soft-depth fade (see `shaders.ts`). The *pass* is the project's: this only makes
+     * every pool material sample a depth texture the project supplies through `softDepthUniforms`.
+     * Off by default, because a project with no depth pass would compile a shader that samples an
+     * unbound texture and fade everything out.
+     */
+    softDepth?: boolean;
+    /** Feathering width in metres for that fade (default 0.35). */
+    softDistance?: number;
 };
 
 /**
  * GPU-first particle plugin.
  *
- * The whole flow is data: gameplay writes `rParticleFx`, `particleSpawnSystem` turns that into an
- * arena record + one instance-run upload per layer, `particleRenderSystem` advances the clock, and
- * three draws one instanced quad mesh per `(kind, blend, texture)` pool. No entities, no per-particle
- * state in the ECS, no per-frame attribute traffic.
+ * The whole flow is data: gameplay writes `rParticleFx` (a bounded **list** of playbacks per entity,
+ * each with its own asset and lifetime), `particleSpawnSystem` turns the list's changes into arena
+ * records + one instance-run upload per layer per playback, `particleRenderSystem` advances the clock,
+ * and three draws one instanced quad mesh per `(kind, blend, texture)` pool. No entities, no
+ * per-particle state in the ECS, no per-frame attribute traffic.
  *
  * Headless-safe: importing this module touches no DOM, and using it without a scene or a renderer
- * simply spawns into pools nothing draws.
+ * simply spawns into pools nothing draws. The lifecycle *rules* live in `playbacks.ts`, which imports
+ * neither three nor the ECS, so a node script can prove them (`particles-lifecycle-sanity.mjs`).
  */
 export default sprixlePlugin(function particlePlugin<
     C extends defaultComponentTypes & ParticlePluginComponents
@@ -96,16 +163,35 @@ export default sprixlePlugin(function particlePlugin<
     const curves = new CurveAtlas();
     const registry = new ParticleAssetRegistry();
     const timeUniform = { value: 0 };
+    /** `uPoseLive`: 0 = pose at birth (shipping), 1 = pose now (debug, see the shader). */
+    const poseLiveUniform = { value: 0 };
     const textures = new Map<string, Texture>();
     const pose = new PoseTable(
         options.poseNodes ?? 16,
         options.poseFrames ?? 64,
         options.poseHz ?? 30
     );
+    /**
+     * The shared soft-depth uniforms, or `undefined` when the option is off. The project owns the
+     * values — it is the only layer that can render a depth pass and knows the camera — so they are
+     * created here and written from outside each frame.
+     */
+    const softDepthUniforms = options.softDepth
+        ? {
+              uSceneDepth: { value: null as Texture | null },
+              uResolution: { value: new Vector2(1, 1) },
+              uCameraNear: { value: 0.1 },
+              uCameraFar: { value: 100 },
+              uSoftDistance: { value: options.softDistance ?? 0.35 },
+          }
+        : undefined;
+
     const poolRegistry = new ParticlePoolRegistry(
         curves,
         pose,
         timeUniform,
+        poseLiveUniform,
+        softDepthUniforms,
         options.poolCapacity ?? 2048
     );
 
@@ -116,7 +202,17 @@ export default sprixlePlugin(function particlePlugin<
     const pendingMount: ParticlePool[] = [];
     const warned = new Set<string>();
 
-    const seconds = () => now() * 0.001;
+    /**
+     * Inspection aid: the particle clock can run slower than wall time.
+     *
+     * Every time-shaped value in the plugin comes from `seconds()` — `bornAt` when a playback starts,
+     * `uTime` in the shader, the playback deadlines — so scaling it here keeps all of them mutually
+     * consistent, which is the only version of slow motion that is not a lie about the animation. What
+     * it cannot do is rescale particles *already* in flight: change it and they jump. Set it while
+     * nothing is playing (the studio stops the effect, changes the scale, then replays).
+     */
+    let timeScale = 1;
+    const seconds = () => now() * 0.001 * timeScale;
 
     /** Reads a singleton without `getSingletonEntityComponent`, which *creates* a missing one. */
     function readSingleton<K extends keyof C & string>(name: K): C[K] | undefined {
@@ -146,6 +242,9 @@ export default sprixlePlugin(function particlePlugin<
     }
 
     function textureFor(source: { textureUrl: string }): Texture {
+        // An untextured layer draws the built-in dot; nothing to fetch, nothing to cache.
+        if (!source.textureUrl) return defaultParticleTexture();
+
         let texture = textures.get(source.textureUrl);
 
         if (!texture) {
@@ -165,8 +264,8 @@ export default sprixlePlugin(function particlePlugin<
         else pendingMount.push(pool);
     };
 
-    function transformOf(key: string): Matrix4 | null {
-        const entity = em.getEntity(key as EntityId);
+    function transformOf(entityKey: string): Matrix4 | null {
+        const entity = em.getEntity(entityKey as EntityId);
 
         if (!entity) return null;
         if (options.getTransform && options.getTransform(entity, outMatrix)) {
@@ -183,7 +282,9 @@ export default sprixlePlugin(function particlePlugin<
         pose,
         (key, nodeName, out) =>
             nodeResolver ? nodeResolver(key, nodeName, out) : false,
-        options.maxPlaybacks ?? 256
+        options.maxPlaybacks ?? 256,
+        options.maxLayers ?? 4,
+        options.maxNodes ?? 8
     );
 
     function emitEvent(kind: 'sound' | 'signal' | 'end', asset: string, name: string) {
@@ -198,7 +299,28 @@ export default sprixlePlugin(function particlePlugin<
         } as any);
     }
 
-    arena.onFinished = (info: PlaybackInfo) => emitEvent('end', info.asset.id, info.key);
+    arena.onFinished = (info: PlaybackInfo) => finishPlayback(info);
+
+    /**
+     * Retires a playback in the ECS as well as in the arena.
+     *
+     * The component write is not cosmetic: without it the entry stays `playing: true`, and any later
+     * component write on that entity (a new effect, a stop of a sibling) reconciles the unchanged entry
+     * as a start request — so a playback that ended on its own would replay forever. One `playing:
+     * false` per end, and `markPlaybackFinished` returns `null` if it was already written.
+     */
+    function finishPlayback(info: PlaybackInfo) {
+        const entity = em.getEntity(info.entityKey as EntityId);
+        const state = entity?.components.rParticleFx as { playbacks: ParticlePlayback[] } | undefined;
+
+        if (state) {
+            const playbacks = markPlaybackFinished(state.playbacks, info.handle);
+
+            if (playbacks) entity.components.rParticleFx = { playbacks };
+        }
+
+        emitEvent('end', info.asset.id, info.key);
+    }
 
     arena.onMissingNode = (entityKey, bone) =>
         warnOnce(
@@ -227,9 +349,15 @@ export default sprixlePlugin(function particlePlugin<
 
     const fxQuery = em.createQuery({ includes: ['rParticleFx'] });
 
+    /** Scratch for the live handles the reconcile pass asks the arena for; never escapes a call. */
+    const liveHandles: number[] = [];
+
     /**
      * Turns component writes into playback. Deliberately the only system that knows about
-     * `rParticleFx`, and the only place the arena is started/stopped.
+     * `rParticleFx`'s reconcile rules, and the only place the arena is started/stopped.
+     *
+     * `playbacks.planPlaybackChanges` decides (pure and testable in node); this only executes: the
+     * arena call per decision, plus the warnings a silent failure would turn into a mystery.
      */
     const particleSpawnSystem = em.createSystem(fxQuery.createConsumer(), {
         newOrUpdated(entity) {
@@ -239,64 +367,77 @@ export default sprixlePlugin(function particlePlugin<
 
             if (!fx) return;
 
-            if (!fx.playing) {
-                arena.stopKey(key);
+            // Reused scratch: the reconcile runs on every component write, which is play/stop
+            // frequency, but "the handle list is empty" is also the common case.
+            const live = arena.handlesOf(key, liveHandles);
+            const changes = planPlaybackChanges(key, previous?.playbacks, fx.playbacks, live);
 
-                return;
-            }
+            for (const change of changes) {
+                if (change.action === 'stop') {
+                    arena.stopKey(change.key);
 
-            const restart =
-                !previous ||
-                !previous.playing ||
-                previous.asset !== fx.asset ||
-                previous.loop !== fx.loop ||
-                previous.seed !== fx.seed;
+                    continue;
+                }
 
-            if (!restart) return;
+                const playback = change.playback;
+                const asset = registry.get(playback.asset);
 
-            const asset = registry.get(fx.asset);
+                if (!asset) {
+                    warnOnce(
+                        `asset "${playback.asset}" is not registered (entity ${key}); the effect was not ` +
+                            `played. Registered: ${registeredIds()}`
+                    );
 
-            if (!asset) {
-                warnOnce(
-                    `asset "${fx.asset}" is not registered (entity ${key}); the effect was not played. ` +
-                        `Registered: ${registeredIds()}`
+                    continue;
+                }
+
+                const boundNodes = asset.nodes.some((node) => node.bone);
+                // A playback-level bone override attaches *every* node, so the ring-window check has to
+                // run for it as well — an unbound asset played on a bone is the case that used to slip
+                // through and then appear to follow the hand once the ring recycled its birth frame.
+                if ((boundNodes || playback.bone) && asset.poseWindow > pose.window) {
+                    warnOnce(
+                        `"${asset.id}" needs ${asset.poseWindow.toFixed(2)}s of pose history but the ring ` +
+                            `holds ${pose.window.toFixed(2)}s (raise poseFrames/poseHz, or shorten the effect)`
+                    );
+                }
+                if (playback.bone && !boundNodes) {
+                    warnOnce(
+                        `"${asset.id}" binds no bone; the override "${playback.bone}" moves every node into ` +
+                            `that bone's frame, so the whole effect is displaced by the hand`
+                    );
+                }
+
+                const started = arena.play(
+                    key,
+                    playback.id,
+                    asset,
+                    seconds(),
+                    playback.seed ?? 0,
+                    !!playback.loop,
+                    playback.seconds ?? 0,
+                    playback.bone,
+                    playback.attachMode
                 );
 
-                return;
-            }
+                if (!started) {
+                    warnOnce(
+                        `could not start "${asset.id}": no pool capacity or no free playback slot ` +
+                            `(raise poolCapacity / maxPlaybacks, or lower the effect's particle count)`
+                    );
 
-            if (asset.nodes.some((node) => node.bone) && asset.poseWindow > pose.window) {
-                warnOnce(
-                    `"${asset.id}" needs ${asset.poseWindow.toFixed(2)}s of pose history but the ring ` +
-                        `holds ${pose.window.toFixed(2)}s (raise poseFrames/poseHz, or shorten the effect)`
-                );
-            }
+                    continue;
+                }
 
-            const started = arena.play(
-                key,
-                asset,
-                seconds(),
-                fx.seed ?? 0,
-                !!fx.loop
-            );
-
-            if (!started) {
-                warnOnce(
-                    `could not start "${asset.id}": no pool capacity or no free playback slot ` +
-                        `(raise poolCapacity / maxPlaybacks, or lower the effect's particle count)`
-                );
-
-                return;
-            }
-
-            for (const event of asset.events) {
-                if (event.type === 'sound') emitEvent('sound', asset.id, event.name);
-                else emitEvent('signal', asset.id, event.name);
+                for (const event of asset.events) {
+                    if (event.type === 'sound') emitEvent('sound', asset.id, event.name);
+                    else emitEvent('signal', asset.id, event.name);
+                }
             }
         },
 
         removed(entity) {
-            arena.stopKey(String(entity.id));
+            arena.stopEntity(String(entity.id));
         },
 
         tick() {
@@ -319,7 +460,12 @@ export default sprixlePlugin(function particlePlugin<
             while (arena.totalInstances > maxInstances && guard++ < 32) {
                 const victim = arena.oldestSlot();
                 if (victim < 0) break;
+
+                // A budget eviction is an end like any other: the component entry is retired too, or
+                // the next unrelated write on that entity would reconcile it as a start request.
+                const info = arena.infoOf(victim);
                 arena.stop(victim);
+                if (info) finishPlayback(info);
             }
         },
     });
@@ -341,13 +487,46 @@ export default sprixlePlugin(function particlePlugin<
         pools: poolRegistry,
         arena,
         timeUniform,
+        softDepthUniforms,
+
+        /**
+         * Run the particle clock at `scale`× wall time (1 = real time). Inspection only: see the
+         * `timeScale` note near `seconds()`.
+         */
+        setTimeScale(scale: number) {
+            timeScale = Number.isFinite(scale) && scale > 0.01 ? scale : 1;
+        },
+
+        /** The current clock scale, so a panel can show it without keeping its own copy. */
+        getTimeScale() {
+            return timeScale;
+        },
+
+        /**
+         * Debug: sample a bone-bound emitter's pose **now** instead of at each particle's birth.
+         *
+         * Shipping behaviour is birth-sampling (`shaders.ts`): the bone gives a particle its origin and
+         * the particle is free afterwards. Turning this on glues every live particle to the bone, which
+         * is what "the emitter is parenting the particles" looks like — so a report of that can be
+         * checked with one click instead of an argument. Never enable it in gameplay.
+         */
+        setPoseLive(live: boolean) {
+            poseLiveUniform.value = live ? 1 : 0;
+        },
+
+        getPoseLive() {
+            return poseLiveUniform.value === 1;
+        },
         fxQuery,
         particleSpawnSystem,
         particleRenderSystem,
 
         /** Compile + register an in-memory asset (bundled JSON, tests, code-authored effects). */
         registerAsset(raw: ParticleAsset) {
-            const { asset, warnings } = compileParticleAsset(raw, curves);
+            const { asset, warnings } = compileParticleAsset(raw, curves, {
+                maxLayers: options.maxLayers,
+                maxNodes: options.maxNodes,
+            });
 
             if (warnings.length) {
                 console.warn(`[particles] ${asset.id}:\n  - ${warnings.join('\n  - ')}`);
@@ -388,23 +567,67 @@ export default sprixlePlugin(function particlePlugin<
             return loadParticleAsset(url, registry, curves);
         },
 
-        /** Start (or restart) an effect on an entity. Replaces the component, so it fires queries. */
+        /**
+         * Append a playback to this entity and return its handle (`ParticlePlayback.id`).
+         *
+         * Never replaces: two assets on one pawn are two slots with two lifetimes. The oldest entry is
+         * evicted past `MAX_PLAYBACKS_PER_ENTITY`, and its arena slot is freed by the reconcile pass —
+         * this method only writes the component, so a caller can compose a sequence of plays in one
+         * frame and have them all start on the same beat.
+         *
+         * `play`-with-`seconds` is the replacement for a project-side expiry map: the plugin retires the
+         * playback on its own deadline (see `playbacks.ts`).
+         */
         play(entity: any, asset: string, playOptions: ParticlePlayOptions = {}) {
-            entity.components.rParticleFx = {
+            const state = entity.components.rParticleFx as
+                | { playbacks: ParticlePlayback[] }
+                | undefined;
+
+            const { playbacks, playback } = startPlayback(state?.playbacks ?? [], {
                 asset,
-                playing: true,
-                loop: playOptions.loop ?? false,
+                loop: playOptions.loop,
                 seed: playOptions.seed ?? ((Math.random() * 0xffffffff) | 0),
                 bone: playOptions.bone,
+                attachMode: playOptions.attachMode,
                 tint: playOptions.tint,
-            };
+                seconds: playOptions.seconds,
+            });
+
+            entity.components.rParticleFx = { playbacks };
+
+            return playback.id;
         },
 
-        stop(entity: any) {
-            const fx = entity.components.rParticleFx;
-            if (!fx) return;
+        /** Mark one playback (`id`) or every playback on the entity not-playing. */
+        stop(entity: any, id?: number) {
+            const state = entity.components.rParticleFx as
+                | { playbacks: ParticlePlayback[] }
+                | undefined;
 
-            entity.components.rParticleFx = { ...fx, playing: false };
+            if (!state) return;
+
+            const playbacks = stopPlaybacks(state.playbacks, id);
+
+            if (playbacks) entity.components.rParticleFx = { playbacks };
+        },
+
+        /**
+         * Stop the playbacks a predicate selects, leaving their siblings alive.
+         *
+         * The caller that needs it is wroth's FX adaptor: its ability layer sends "stop" for a pawn
+         * with no way to name one playback, so the only way to end a cast *channel* without killing the
+         * impact it just fired is "stop the looping ones". `stop(entity)` would take both.
+         */
+        stopWhere(entity: any, predicate: (playback: ParticlePlayback) => boolean) {
+            const state = entity.components.rParticleFx as
+                | { playbacks: ParticlePlayback[] }
+                | undefined;
+
+            if (!state) return;
+
+            const playbacks = stopPlaybacksWhere(state.playbacks, predicate);
+
+            if (playbacks) entity.components.rParticleFx = { playbacks };
         },
 
         dispose() {

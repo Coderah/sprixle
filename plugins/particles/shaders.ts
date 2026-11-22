@@ -39,13 +39,31 @@ export const particleVertexShader = glsl`
 
     uniform float uTime;
     uniform float uCurveRows;
+    // The authored plane of a fixed layer (two unit vectors in world axes).
+    uniform vec3 uBasisX;
+    uniform vec3 uBasisY;
+    /** View-space depth nudge in metres: lifts a coplanar effect off the surface it sits on. */
+    uniform float uZBias;
+
     uniform sampler2D uCurves;
     uniform vec2 uGrid;
 
     uniform sampler2D uPose;
+    /**
+     * 0 = sample the pose **at each particle's birth** (the shipping behaviour: an emitter gives
+     * birth, the particle is then free); 1 = sample it **now**, which glues every live particle to
+     * the bone and is what "attached" looks like when it is wrong. A debug switch, so the difference
+     * is a click instead of an argument.
+     */
+    uniform float uPoseLive;
+    // Seconds of pose history the ring actually holds (PoseTable.window).
+    uniform float uPoseWindow;
     uniform float uPoseFrames;
     uniform float uPoseHz;
+    /** Pose texture height: one texel per node slot. */
     uniform float uPoseRows;
+    /** Pose texture width: four matrix columns per frame (frames * 4). */
+    uniform float uPoseCols;
 
     varying vec2 vUv;
     varying vec4 vColor;
@@ -123,12 +141,13 @@ export const particleVertexShader = glsl`
         }
     #endif
 
-    // The pose ring stores four vec4 *columns* per (node, frame) — mat4 constructor order, so no
-    // transpose. Frame index must match the CPU (PoseTable.beginFrame): floor(time * hz) mod frames.
+    // The pose ring is 2D: rows are node slots, columns are frame * 4 + matrixColumn texels, so
+    // four vec4 *columns* per (node, frame) in mat4 constructor order with no transpose. Frame index
+    // must match the CPU (PoseTable.beginFrame): floor(time * hz) mod frames.
     vec4 poseColumn(float node, float frame, float column) {
-        float base = (node * uPoseFrames + frame) * 4.0;
-        // Half-texel offset: the ring is NearestFilter, so each sample must land on a texel centre.
-        return texture2D(uPose, vec2(0.5, (base + column + 0.5) / uPoseRows));
+        float x = frame * 4.0 + column;
+        // Half-texel offsets: the ring is NearestFilter, so each sample must land on a texel centre.
+        return texture2D(uPose, vec2((x + 0.5) / uPoseCols, (node + 0.5) / uPoseRows));
     }
 
     // Two-frame blend. Sampling single frames quantises the pose at uPoseHz, and on a fast swing
@@ -236,7 +255,12 @@ export const particleVertexShader = glsl`
         // A free particle keeps the pose it was emitted with; a trail segment asks for the pose at
         // its own offset back in time, which is what turns a bone's swing into a ribbon.
         #ifdef KIND_QUAD
-            float poseTime = aVel.w;
+            // A particle older than the pose ring would ask for a frame the ring has already
+            // overwritten — and would then be posed by a *recent* matrix, i.e. it would appear to
+            // follow the bone. Clamping to the oldest surviving frame keeps such a particle frozen
+            // (slightly stale) instead of gluing it to the emitter. uPoseLive is the debug switch.
+            float birthTime = max(aVel.w, uTime - uPoseWindow);
+            float poseTime = mix(birthTime, uTime, clamp(uPoseLive, 0.0, 1.0));
         #else
             float poseTime = uTime - segment * aTrail.y;
         #endif
@@ -262,8 +286,23 @@ export const particleVertexShader = glsl`
         #else
             vec3 world = worldAt(t, poseTime);
             vec4 mv = modelViewMatrix * vec4(world, 1.0);
+            // zBias in view space: negative is toward the camera, which is how Ryzom used it.
+            mv.z -= uZBias;
 
-            #ifdef ORIENT_VELOCITY
+            #ifdef ORIENT_BASIS
+                // A fixed quad expands along its authored plane, not toward the camera: a floor sigil
+                // lies flat and foreshortens with the view, a wall decal stands upright. angle spins
+                // it *within* the plane, which is how Ryzom animates a rotating ground ring.
+                float bc = cos(angle);
+                float bs = sin(angle);
+                vec2 basisCorner = vec2(
+                    position.x * bc - position.y * bs,
+                    position.x * bs + position.y * bc
+                );
+                vec3 worldCorner =
+                    uBasisX * (basisCorner.x * sizeX) + uBasisY * (basisCorner.y * sizeY);
+                mv += modelViewMatrix * vec4(worldCorner, 0.0);
+            #elif defined(ORIENT_VELOCITY)
                 // Screen-space stretch along the direction of travel: sparks and streaks. A short
                 // step forward along the very same path (which includes the noise displacement)
                 // rather than the analytic velocity, so a turbulent spark stretches along the arc
@@ -293,12 +332,50 @@ export const particleFragmentShader = glsl`
     uniform sampler2D uMap;
     uniform float uAlphaTest;
 
+    #ifdef SOFT_DEPTH
+        // Soft particles: fade a fragment out as it approaches the opaque surface behind it, so a
+        // quad intersecting the character reads as a soft edge instead of a hard slice.
+        //
+        // This is the difference between "the sparks are inside the mesh" and "the sparks wash over
+        // the sleeve": with depth testing alone, a quad whose centre is behind the skin is gone, and
+        // a quad straddling the surface is cut in half along a pixel-exact line. Reading the scene's
+        // own depth and feathering over uSoftDistance metres turns that cut into a fade.
+        //
+        // The depth texture is a pass the project renders (the engine cannot own a render pass); it
+        // is the same camera, so the comparison is exact. Both values are converted to view distance
+        // (three's perspectiveDepthToViewZ, inverted) rather than compared in window space, because
+        // the conversion is what makes the fade width constant in metres instead of vanishing at
+        // distance.
+        uniform sampler2D uSceneDepth;
+        uniform vec2 uResolution;
+        uniform float uCameraNear;
+        uniform float uCameraFar;
+        uniform float uSoftDistance;
+
+        // Positive distance from the camera. three's perspectiveDepthToViewZ returns a *negative*
+        // view-space Z, so the result is negated here; comparing distances is what keeps the maths
+        // readable (and what the first version got wrong: the subtraction had the sign reversed,
+        // which faded out every particle instead of the ones near a surface).
+        float viewDistance(float depth) {
+            return -(uCameraNear * uCameraFar) / ((uCameraFar - uCameraNear) * depth - uCameraFar);
+        }
+    #endif
+
     varying vec2 vUv;
     varying vec4 vColor;
 
     void main() {
         vec4 texel = texture2D(uMap, vUv);
         vec4 colour = texel * vColor;
+
+        #ifdef SOFT_DEPTH
+            float sceneDistance = viewDistance(
+                texture2D(uSceneDepth, gl_FragCoord.xy / uResolution).x
+            );
+            float fragmentDistance = viewDistance(gl_FragCoord.z);
+            // 0 at the surface, 1 at uSoftDistance in front of it; behind it is depth-test-culled.
+            colour.a *= smoothstep(0.0, uSoftDistance, sceneDistance - fragmentDistance);
+        #endif
 
         // Explicit threshold rather than three's USE_ALPHATEST injection: one uniform instead of a
         // define, and it keeps this shader independent of three's ShaderMaterial parameter set.

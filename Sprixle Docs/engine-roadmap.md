@@ -85,6 +85,24 @@ frame**. Full design, corpus evidence and the NeL conversion plan: **`particles.
 order matters — the runtime skeleton plus one hand-authored effect should land before any
 NeL decoding work.
 
+25. **One particle playback per entity, and no per-playback lifetime** — ✅ **FIXED** (wroth E1, 2026-11-21: `rParticleFx.playbacks[]`, per-playback `seconds`, `playbacks.ts`). Kept for the reasoning and the shape it settled on.
+    `rParticleFx` is a **single component**, and `particles.play` starts by replacing it
+    (`plugins/particles/index.ts:392-403`), so an entity can show exactly one effect at a time.
+    That is fine for a projectile or a hit spark and wrong for anything layered: a caster that
+    channels a glow while a weapon trail sweeps, a character with a persistent aura *and* a hit
+    burst, a shield bubble plus its own impact flash. Wroth works around it by sequencing one asset
+    per beat (channel → release → hit) and by composing multi-layer *assets* (the compiler already
+    supports up to 4 layers per asset), which is the right authoring answer but not a substitute for
+    two independently-lifetimed effects.
+    Wanted shape: `rParticleFx` becomes an **array of playbacks** (`[{asset, startedAt, seconds, bone,
+    tint, loop}]`, capped at 4 like layers), `play` appends and returns a handle/id, `stop(entity,
+    handle?)` removes one or all, and the arena keys its runs by `(entity, handle)` instead of
+    `entity`. Second half: an authored **lifetime in seconds** per playback (`seconds`), so a held
+    state (a 31 s loop) can be started for a 0.6 s window without the project re-implementing an
+    expiry ledger — wroth keeps its own map for exactly this today
+    (`src/client/system/particleAbilityFxSystem.ts`), and that map is the thing that should not exist.
+    Do not grow this into a general VFX graph; the budget/zero-allocation contract must survive.
+
 ## Plugin extraction candidates (source: project code)
 
 Ranked by leverage. Each names the donor implementation.

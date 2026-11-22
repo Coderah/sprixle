@@ -12,11 +12,23 @@
 export const PARTICLE_ASSET_FORMAT = 'sprixle.particles';
 
 /**
- * Draw layers one playback can own. Fixed because a playback's run bookkeeping is typed arrays
- * indexed by layer (see `ParticleArena`), and because a corpus effect with more than a handful of
- * sprite groups is rare enough to re-author rather than size for.
+ * Draw layers one playback can own, by default.
+ *
+ * A playback's run bookkeeping is typed arrays indexed by layer (`ParticleArena`), so the ceiling is
+ * a *sizing* decision: raise it with the plugin option `maxLayers` and the arrays grow with it. The
+ * Ryzom corpus routinely stacks 5–13 renderers on one located, which is why the option exists — 4 is
+ * a sane default for hand-authored effects, not a law.
  */
-export const MAX_LAYERS = 4;
+export const DEFAULT_MAX_LAYERS = 4;
+
+/** @deprecated use the `maxLayers` plugin option; kept so existing importers keep compiling. */
+export const MAX_LAYERS = DEFAULT_MAX_LAYERS;
+
+/**
+ * Bound (bone-attached) nodes one asset may carry, by default. Also a sizing decision — the pose ring
+ * allocates a slot per node — and tunable through the plugin option `maxNodes`.
+ */
+export const DEFAULT_MAX_NODES = 8;
 
 export type Vec2 = [number, number];
 export type Vec3 = [number, number, number];
@@ -119,6 +131,19 @@ export type ParticleAssetLayer = {
     texture?: string;
     grid?: Vec2;
     spriteCount?: number;
+    /**
+     * The authored **plane** of an `orient: 'fixed'` quad: two unit vectors in asset space that the
+     * particle is expanded along instead of turning toward the camera. Ryzom's `CPSFace` carries this
+     * (`CPSRotated3DPlaneParticle::serialPlaneBasisScheme`) — a floor sigil is a basis spanning the
+     * ground, a wall decal a vertical one.
+     */
+    basis?: [Vec3, Vec3];
+    /**
+     * Per-layer overrides of the asset-wide draw flags (see `ParticleAssetRender`): a smoke layer can
+     * opt out of the soft-depth fade while a spark layer stays in, or a decal can ask for a depth nudge.
+     */
+    softDepth?: boolean;
+    zBias?: number;
     /** Curve references, evaluated over normalised life. */
     curves?: {
         sizeX?: CurveRef;
@@ -130,8 +155,12 @@ export type ParticleAssetLayer = {
 
 export type ParticleAssetRender = {
     blend?: ParticleBlend;
-    /** Texture URL. Cells are addressed by `grid` + `sprites`. */
-    texture: string;
+    /**
+     * Texture URL. Cells are addressed by `grid` + `sprites`. **Optional**: a layer with no texture
+     * draws the runtime's built-in soft dot, which is what Ryzom's untextured renderers (`CPSMesh`
+     * shapes, plain `CPSDot`) mean. Omitting it is not an error; a *broken* URL still is.
+     */
+    texture?: string;
     /** [columns, rows] sprite grid inside `texture`. Omit for a single sprite. */
     grid?: Vec2;
     /** Number of usable cells (defaults to the whole grid); `emitters[].sprites` picks among them. */
@@ -217,6 +246,16 @@ export type CompiledLayer = {
     trailStyle: TrailStyle;
     orient: ParticleOrient;
     segments: number;
+    /** Authored plane for `orient: 'fixed'`; `null` for the billboard/trail cases. */
+    basis: [Vec3, Vec3] | null;
+    /**
+     * Resolved soft-depth opt-in for this layer: the layer's own flag, else the asset's, else the
+     * project capability. The fade needs a depth pass, so `true` here means "fade me *if* the project
+     * supplied one" — a plugin without the pass renders the layer plain instead of failing.
+     */
+    softDepth: boolean;
+    /** Depth nudge along view Z, in metres (Ryzom's `zBias`); lifts a coplanar effect off the floor. */
+    zBias: number;
     tailFade: boolean;
     textureUrl: string;
     grid: Vec2;
@@ -297,6 +336,7 @@ export function isParticleAsset(value: unknown): value is ParticleAsset {
         typeof value === 'object' &&
         typeof (value as ParticleAsset).id === 'string' &&
         !!(value as ParticleAsset).render &&
-        typeof (value as ParticleAsset).render.texture === 'string'
+        ((value as ParticleAsset).render.texture === undefined ||
+            typeof (value as ParticleAsset).render.texture === 'string')
     );
 }

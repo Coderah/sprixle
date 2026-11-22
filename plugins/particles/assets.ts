@@ -14,14 +14,15 @@ import type {
     Vec2,
     Vec3,
 } from './schema';
-import { isParticleAsset, MAX_LAYERS } from './schema';
+import { DEFAULT_MAX_LAYERS, DEFAULT_MAX_NODES, isParticleAsset } from './schema';
 import { colorOf, CurveAtlas } from './curves';
 
 const TWO_PI = Math.PI * 2;
 
 const DEFAULT_MAX_PARTICLES = 4096;
 /** Node slots a single asset may bind (each costs a pose-ring slot per playback). */
-const MAX_NODES_PER_ASSET = 8;
+/** Default bound-node ceiling for a *registration* that does not pass limits (see `CompileLimits`). */
+const DEFAULT_NODE_LIMIT = DEFAULT_MAX_NODES;
 const IDENTITY_MATRIX = [1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1];
 /** A `dynamics[]` entry that names no numbers still means "some turbulence": 0/0 would be silent. */
 const DEFAULT_NOISE_AMPLITUDE = 0.25;
@@ -88,6 +89,18 @@ export type CompileResult = {
  * One `particles[]` entry → its draw state, curves and pool identity. Runtime-sized fields
  * (`maxInstances`/`maxParticles`/emitter range) are filled in once the emitters have been counted.
  */
+/**
+ * A fixed layer's plane is part of its draw identity: two ground layers with different planes must not
+ * share a pool, because the basis is a uniform. Rounded to 3 decimals — a basis is a direction, not a
+ * measurement.
+ */
+function basisKeyFor(basis: [Vec3, Vec3] | null): string {
+    if (!basis) return '';
+
+    const round = (vector: Vec3) => vector.map((component) => component.toFixed(3)).join(',');
+    return `|b${round(basis[0])}|${round(basis[1])}`;
+}
+
 function compileLayer(
     raw: ParticleAsset,
     layer: ParticleAssetLayer,
@@ -114,13 +127,44 @@ function compileLayer(
         fail(`${where} has unsupported orient "${orient}"`);
     }
 
+    /**
+     * The authored plane for a fixed quad. Validated as two non-degenerate vectors: a zero basis would
+     * collapse every particle to a point, which is a producer bug worth failing on rather than
+     * rendering as nothing.
+     */
+    let basis: [Vec3, Vec3] | null = null;
+
+    if (orient === 'fixed') {
+        if (!layer.basis) {
+            // No basis authored: Ryzom's identity plane is the ground (Z-up), i.e. the engine's XZ.
+            basis = [
+                [1, 0, 0],
+                [0, 0, -1],
+            ];
+        } else {
+            const [x, y] = layer.basis;
+            const lengthX = Math.hypot(x[0], x[1], x[2]);
+            const lengthY = Math.hypot(y[0], y[1], y[2]);
+
+            if (lengthX < 1e-4 || lengthY < 1e-4) {
+                fail(`${where} has a degenerate fixed-orientation basis`);
+            }
+
+            basis = [
+                [x[0] / lengthX, x[1] / lengthX, x[2] / lengthX],
+                [y[0] / lengthY, y[1] / lengthY, y[2] / lengthY],
+            ];
+        }
+    }
+
     const blend: ParticleBlend = layer.blend ?? raw.render.blend ?? 'add';
 
     if (!['add', 'multiply', 'alphaBlend', 'alphaTest'].includes(blend)) {
         fail(`${where} has unsupported blend "${blend}"`);
     }
 
-    const textureUrl = layer.texture ?? raw.render.texture;
+    // No texture is legal: the pool falls back to the built-in soft dot (see `pools.ts`).
+    const textureUrl = layer.texture ?? raw.render.texture ?? '';
     const rawGrid = range(layer.grid ?? raw.render.grid, [1, 1]);
     const grid: Vec2 = [
         Math.max(1, Math.round(num(rawGrid[0], 1))),
@@ -160,12 +204,21 @@ function compileLayer(
         id: index === 0 ? raw.id : `${raw.id}#${index}`,
         // Everything that changes the compiled program or the draw state is part of the identity,
         // so two layers with the same look share one pool (one draw call).
-        poolKey: `${kind}|${trailStyle}|${orient}|${blend}|${textureUrl}|${grid[0]}x${grid[1]}`,
+        poolKey:
+            `${kind}|${trailStyle}|${orient}|${blend}|${textureUrl}|${grid[0]}x${grid[1]}` +
+            `${basisKeyFor(basis)}${(layer.softDepth ?? raw.render.softDepth) ? '|soft' : ''}` +
+            `${num(layer.zBias ?? raw.render.zBias, 0) !== 0 ? '|z' : ''}`,
         blend,
         kind,
         trailStyle,
         orient,
         segments: kind === 'trail' ? Math.max(2, Math.round(num(layer.segments, 6))) : 1,
+        basis,
+        // Default ON: absent means "fade me if the project supplied a depth pass" (the pool only
+        // compiles the define when both the capability and this flag are true). An asset that must not
+        // fade says `softDepth: false`.
+        softDepth: layer.softDepth ?? raw.render.softDepth ?? true,
+        zBias: num(layer.zBias ?? raw.render.zBias, 0),
         tailFade: layer.tailFade ?? true,
         textureUrl,
         grid,
@@ -345,29 +398,40 @@ function resolveDynamics(
 /**
  * Turn an authored asset into exactly what the runtime needs, or throw.
  *
- * Supported in this version: up to `MAX_LAYERS` layers (`quad` or `trail`), each with its own
+ * Supported in this version: up to `maxLayers` layers (`quad` or `trail`), each with its own
  * texture, sprite grid and blend; emitters attributed to a layer by `emitters[].layer`; shaped
  * spawns, analytic motion (constant acceleration + exponential drag), `dynamics[]` noise turbulence,
  * and life curves. Anything else is an explicit error, not a silent downgrade — a converter that
  * meets an unsupported feature must record it in `meta.warnings` (which we surface here too) rather
  * than shipping a broken effect.
  */
+export type CompileLimits = {
+    /** Draw layers one asset may declare. Defaults to `DEFAULT_MAX_LAYERS`. */
+    maxLayers?: number;
+    /** Bound nodes one asset may carry. Defaults to `DEFAULT_MAX_NODES`. */
+    maxNodes?: number;
+};
+
 export function compileParticleAsset(
     raw: ParticleAsset,
-    curves: CurveAtlas
+    curves: CurveAtlas,
+    limits: CompileLimits = {}
 ): CompileResult {
     if (!isParticleAsset(raw)) {
         fail('asset is not a sprixle.particles document (needs `id` and `render.texture`)');
     }
 
+    const maxLayers = Math.max(1, Math.floor(limits.maxLayers ?? DEFAULT_MAX_LAYERS));
+    const maxNodes = Math.max(1, Math.floor(limits.maxNodes ?? DEFAULT_MAX_NODES));
+
     const warnings: string[] = [...(raw.meta?.warnings ?? [])];
     const layersRaw = raw.particles ?? [];
 
     if (layersRaw.length === 0) fail(`asset "${raw.id}" declares no particles[] layer`);
-    if (layersRaw.length > MAX_LAYERS) {
+    if (layersRaw.length > maxLayers) {
         fail(
             `asset "${raw.id}" declares ${layersRaw.length} particle layers but the runtime plays ` +
-                `${MAX_LAYERS}: a playback owns one instance run per layer (see arena.ts). ` +
+                `${maxLayers} (raise the plugin's maxLayers): a playback owns one instance run per layer. ` +
                 `Split the effect into several assets.`
         );
     }
@@ -381,14 +445,14 @@ export function compileParticleAsset(
 
     const nodesRaw = raw.nodes?.length ? raw.nodes : [{ id: 'root' }];
 
-    if (nodesRaw.length > MAX_NODES_PER_ASSET) {
+    if (nodesRaw.length > maxNodes) {
         warnings.push(
-            `asset declares ${nodesRaw.length} nodes but only ${MAX_NODES_PER_ASSET} are supported; ` +
+            `asset declares ${nodesRaw.length} nodes but only ${maxNodes} are supported; ` +
                 `nodes beyond that are ignored`
         );
     }
 
-    const nodes: CompiledNode[] = nodesRaw.slice(0, MAX_NODES_PER_ASSET).map((node) => ({
+    const nodes: CompiledNode[] = nodesRaw.slice(0, maxNodes).map((node) => ({
         id: node.id,
         bone: node.bone ?? null,
         matrix:

@@ -2,30 +2,30 @@
 // type-only import erases the module binding it needs (engine roadmap #19a). Same form as
 // `plugins/three/shaderTreePlugin.ts`.
 import { SingletonComponent, TrackPrevious } from '../../ecs/types';
+import { type ParticlePlayback } from './playbacks';
 
 /**
  * The entire gameplay-facing surface of the particle plugin.
  *
- * One component, written on play/stop only. There is deliberately no per-frame particle state in
- * the ECS: a playback is a slot in the plugin's arena (see `arena.ts`), and the reason is measured
- * — an entity costs a uuid string, a Proxy per component and a registered-query sweep, and a busy
- * fight would pay that hundreds of times a second for data no other system reads.
+ * `rParticleFx` is a **list of playbacks on one entity** — not one effect. An entity can show several
+ * at once, each with its own lifetime: a cast channel on the hand while the missile it launched is
+ * still in the air, a held aura under a hit burst, a shield bubble and its own impact flash. The list
+ * is bounded at `MAX_PLAYBACKS_PER_ENTITY` (6) and the oldest entry is evicted on overflow
+ * (`playbacks.ts` owns every one of those rules; this file is the shape).
+ *
+ * Written on play/stop only — never per frame. There is deliberately no per-frame particle state in
+ * the ECS: an entry is an *instruction* (`asset`, `playing`, `seconds`), the playback itself is a
+ * slot in the plugin's arena (`arena.ts`), and the reason is measured — an entity costs a uuid
+ * string, a Proxy per component and a registered-query sweep, and a busy fight would pay that
+ * hundreds of times a second for data no other system reads. A list does not weaken that: it is
+ * still play/stop state, and the only writes the plugin itself makes are one `playing: false` per
+ * playback *end* (so a finished entry does not reconcile as a new start request).
  */
 export type ParticlePluginComponents = {
-    /** Play/stop an effect asset on this entity. Writing `playing` is the whole API. */
+    /** Play/stop particle effects on this entity. Appending an entry is the whole API. */
     rParticleFx: {
-        /** Registered asset id (`ParticleAssetRegistry`). */
-        asset: string;
-        /** Toggling this true restarts the effect; false frees its slots. */
-        playing: boolean;
-        /** Loop the playback (re-spawns each emission cycle in place). */
-        loop?: boolean;
-        /** Deterministic spawn seed; identical seeds render identical effects. */
-        seed?: number;
-        /** Reserved: bind the effect root to a skeleton bone (needs the animation runtime). */
-        bone?: string;
-        /** Reserved: per-effect colour multiply for gameplay readability (polarity, school). */
-        tint?: [number, number, number];
+        /** Live-or-finished playbacks, oldest first. `play` appends; `stop` flips `playing`. */
+        playbacks: ParticlePlayback[];
     } & TrackPrevious;
 
     /** Fill-rate budget. Optional; defaults apply when the singleton is absent. */

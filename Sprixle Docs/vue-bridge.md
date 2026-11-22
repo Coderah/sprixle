@@ -1,6 +1,6 @@
 # Vue / ECS Bridge
 
-*Engine ref: f3f5215 (2026-07-05)*
+*Engine ref: 5fd6b1b (2026-11-20)*
 
 Source: `plugins/vuePlugin.ts`. Reference implementation: test-pilots (`src/client/system/vuePipeline.ts` + ~70 components).
 
@@ -57,6 +57,27 @@ Module-level refs are also shared across teleported child windows that share the
 - A shared component library referencing app-specific refs needs those refs **stubbed** (empty `shallowRef`s) in the secondary build's bridge module, or shared components crash.
 - Node-only modules (fs, project managers, history) must not be transitively importable from the browser build's root component; use the mirror-bridge + webpack `resolve.alias` stubs (`{ ws: false }`) pattern.
 - Build-specific installs (history recording) should be explicit function calls in the entry, not import side effects.
+
+## Pointer-events (SCAR, recurring — every new project)
+
+**A transparent Vue overlay intercepts the pointer unless the app deliberately opts elements in.** Nothing in the engine or `vuePlugin` sets `pointer-events`, so a full-screen Vue root (or any absolutely-positioned layer) sits over the three.js canvas and quietly eats `mousemove`/`click`/hover — and if you "fix" it by setting `pointer-events: none` on `*` without opting the canvas back in, the canvas receives nothing and mouse look dies instead. Same symptom, opposite cause; both look like "input is broken".
+
+**House policy** (`src/client/index.scss`, set it before any UI exists — see `new-project.md` day-one item 6):
+
+```scss
+* {
+    user-select: none;
+    pointer-events: none;   // nothing interactive by default
+}
+
+canvas {
+    pointer-events: all;    // the play surface opts back in
+}
+```
+
+…then `pointer-events: all` on each interactive element. `*` is zero-specificity, so element and class rules override it without `!important` — that is why the pattern works, and why an `!important` anywhere in the chain is a smell.
+
+**Diagnosing it fast:** if a click does nothing, check the element under the cursor in devtools (`document.elementFromPoint`) — if it is not the element you expect, this is the cause, not the event handler. Note that `InputPlugin` binds mouse listeners to `document.body`, so *drag* look can keep working while element-level hover/click on the canvas is dead; do not read that as "pointer events are fine".
 
 ## InputPlugin + Vue touch coexistence (SCAR, 2026-07-09)
 

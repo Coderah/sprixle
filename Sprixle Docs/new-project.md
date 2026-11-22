@@ -1,6 +1,6 @@
 # Starting a New Project
 
-*Engine ref: f3f5215 (2026-07-05)*
+*Engine ref: 5fd6b1b (2026-11-20)*
 
 Checklist for standing up a game on sprixle. Copy the *shape* below (the committed `boilerplate/` is stale — see legacy-modernization.md). When in doubt about a piece, read the reference branch named for it.
 
@@ -71,3 +71,23 @@ Bootstrap world/scene state as singleton entities in the entry (`em.quickEntity(
 3. **Heartbeats** for any fleet of passive browser clients (displays/kiosks): app-level Ping/Pong + reconnect from day one.
 4. **Persisted-vs-ephemeral component discipline** if saving: maintain the exclusion sets (save/history/wire) alongside `components.ts`, and add every new ephemeral key to them in the same commit.
 5. **Blender naming conventions**: pick and document the feature vocabulary + prefab id scheme before content accumulates; add load-time validation.
+6. **The `pointer-events` policy** — decide it in `src/client/index.scss` before any UI exists, because it bites every new project exactly once and is invisible until a click does nothing. The house style is *nothing is interactive by default*:
+
+    ```scss
+    * {
+        user-select: none;
+        // no text selection, no accidental hover/click on decorative layers
+        pointer-events: none;
+    }
+
+    canvas {
+        // the play surface must opt back IN, or the game receives no pointer input at all
+        pointer-events: all;
+    }
+    ```
+
+    then re-enable per element (`pointer-events: all`) on every button, panel, drag handle and absolutely-positioned hit layer. Two failure modes, both silent until clicked:
+    - **`*` set to `none` and the canvas forgot to opt in** → mouse look, drag and any canvas-level picking never fire. This is the classic one: the game "runs" but ignores the mouse.
+    - **A full-screen Vue root left interactive** → it swallows clicks/hovers meant for the 3D surface; the reverse symptom, and a hint that the policy was never set (no `*` rule at all).
+
+    Keep the policy global and the opt-ins local, one line per interactive element. `user-select: none` belongs in the same rule: an app is not a document, and text selection on a dragging game surface is always a bug. Related: `InputPlugin` + Vue touch coexistence, below and in `vue-bridge.md`.

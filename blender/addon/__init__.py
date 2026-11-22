@@ -33,10 +33,17 @@ DEBOUNCE_MS = 300  # ms to wait before sending after last update for a given id
 
 pending_realtime_objects = set()
 realtime_export_scheduled = False
+realtime_export_in_progress = False
 
 
 def schedule_realtime_export(object_name):
-    global pending_realtime_objects, realtime_export_scheduled
+    global pending_realtime_objects, realtime_export_scheduled, realtime_export_in_progress
+
+    # The gltf export evaluates the depsgraph, which fires handleDepsGraphUpdate
+    # again — ignore the updates it causes or we export forever.
+    if realtime_export_in_progress:
+        return
+
     pending_realtime_objects.add(object_name)
 
     if not realtime_export_scheduled:
@@ -45,7 +52,7 @@ def schedule_realtime_export(object_name):
 
 
 def do_realtime_export():
-    global pending_realtime_objects, realtime_export_scheduled
+    global pending_realtime_objects, realtime_export_scheduled, realtime_export_in_progress
     realtime_export_scheduled = False
 
     if not pending_realtime_objects:
@@ -61,7 +68,11 @@ def do_realtime_export():
     blend_name = os.path.splitext(os.path.basename(blend_path))[0]
     realtime_path = f'//{blend_name}.realtime.glb'
 
-    successful = exporter.realtime_export(batch, realtime_path)
+    realtime_export_in_progress = True
+    try:
+        successful = exporter.realtime_export(batch, realtime_path)
+    finally:
+        realtime_export_in_progress = False
 
     if successful:
         global server
@@ -179,12 +190,19 @@ def handleDepsGraphUpdate(scene, graph):
                 # print(DeepDiff(last_serialized_trees[update.id.name], data))
 
             # last_serialized_trees[update.id.name] = data
+    # graph.objects is *every* object in the graph (always the whole scene), so
+    # scheduling from it means any depsgraph update re-exports the whole scene.
+    # Schedule only for objects the depsgraph reports as actually having new
+    # geometry or a moved transform.
+    for update in graph.updates:
+        if not isinstance(update.id, bpy.types.Object): continue
+        if update.id.type != 'MESH': continue
+        if not (update.is_updated_geometry or update.is_updated_transform): continue
+        schedule_realtime_export(update.id.name)
+
     for object in graph.objects:
         object = bpy.data.objects[object.name]
         if not hasattr(object, 'modifiers'): continue
-
-        if object.type == 'MESH':
-            schedule_realtime_export(object.name)
 
         modifier = next((m for m in object.modifiers if m.type == 'NODES' and m.node_group and '+logic' in m.node_group.name), None)
         if modifier is None:

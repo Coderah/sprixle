@@ -1,6 +1,6 @@
 # Blender Authoring — practical conventions
 
-*Engine ref: f3f5215 (2026-07-13)*
+*Engine ref: b407322 (2026-09-26)*
 
 Companion to `blender.md` (concepts/roadmap). This is the working knowledge needed to author `.blend` content and wire it at runtime. Reference implementations: **lanebreak-tactics** (shaderTree + prefabs + batching, the deepest usage) and **sobelow** (feature-tag-driven scene loading).
 
@@ -13,6 +13,8 @@ Companion to `blender.md` (concepts/roadmap). This is the working knowledge need
 The same shader tree can arrive both baked-in-GLB and live-over-ws. Gate live events behind initial load with `setBlenderRealtimePromise(loadPromise)` or hot-reload races startup.
 
 **Realtime geometry caveats:** Only MESH objects trigger exports; each export is a full GLB of the changed objects — the TS side matches by object name and replaces geometry + transform in place. Materials are re-exported with each change (a future version should wire through `materialManagerPlugin` for dedup). If you edit a material without touching geometry, only the shader tree ws message fires (not a geometry export).
+
+**SCAR (export loop, fixed 2026-09-26):** the depsgraph handler used to schedule a realtime export for *every* mesh in `graph.objects` on *any* update — but `graph.objects` is the whole scene, and the gltf export evaluates the depsgraph, which re-fires the handler → an endless 300ms GLB export loop. Two guards are required: schedule only for objects the depsgraph names in `graph.updates` with `is_updated_geometry`/`is_updated_transform`, and set `realtime_export_in_progress` around `exporter.realtime_export` so the export's own depsgraph updates are ignored. Don't reintroduce scene-wide scheduling in `schedule_realtime_export`'s callers.
 
 **Known gaps (see `realtimeGeometryPlugin.ts` header):** (1) `materialManagerPlugin` integration so compiled shaderTree materials survive geometry swaps. (2) A generalized `sceneLoader` plugin suite so every project doesn't roll its own GLB loading + feature-tag dispatch; this plugin should write to an `object3D` component, not the scene graph directly. (3) `object3D` should be an ECS component and scene-graph sync should be a separate reaction — this plugin shortcuts that for now.
 

@@ -12,17 +12,33 @@ import { DataTexture, FloatType, Matrix4, NearestFilter, RGBAFormat } from 'thre
  * - a *trail* needs the pose at `t - k·Δ` for each segment, because the ribbon **is** the path the
  *   blade swept — that is what makes an attack trail follow the skin animation.
  *
- * One 1-texel-wide RGBA32F texture holds `maxNodes × frames × 4` rows — four vec4 *columns*, which
- * is exactly a `mat4` in GLSL's constructor order and avoids any transpose. Upload is
- * whole-texture per frame, which is deliberate: at the defaults that is 16 × 64 × 4 × 16 B = 64 KB,
- * small enough that partial-update bookkeeping would cost more than it saves.
+ * The ring is a **2D** RGBA32F texture: `frames × 4` texels wide (four vec4 *columns* per frame,
+ * which is exactly a `mat4` in GLSL's constructor order and avoids any transpose) and `maxNodes`
+ * texels tall. Upload is whole-texture per frame, which is deliberate: at 32 nodes × 256 frames that
+ * is 512 KB, small enough that partial-update bookkeeping would cost more than it saves.
+ *
+ * **Why 2D and not one tall 1-texel-wide strip** (the first shape, and a real regression): a GPU's
+ * `MAX_TEXTURE_SIZE` is 16384 on essentially every desktop driver, and `maxNodes × frames × 4` texels
+ * of *height* hits that at 128 frames (32 nodes). Raising the ring to 256 frames for 8.5 s of history
+ * silently produced an unloadable texture — every sample returned zero, so every bone-bound particle
+ * collapsed to the world origin. Width pays the same limit but has room to spare: 256 frames is 1024
+ * texels across.
  *
  * Frame indexing must match the shader exactly: `floor(time * hz) % frames`. Both sides take the
  * same clock (seconds) from the plugin, so they agree by construction.
  */
 export class PoseTable {
     readonly texture: DataTexture;
+    /** Node slots this ring can track. */
+    readonly maxNodes: number;
+    /** Frames of history per node. */
+    readonly frames: number;
+    /** Pose samples per second. */
+    readonly hz: number;
+    /** Texture height in texels — one per node slot. */
     readonly rows: number;
+    /** Texture width in texels — four matrix columns per frame. */
+    readonly cols: number;
     readonly window: number;
 
     private readonly data: Float32Array;
@@ -33,20 +49,38 @@ export class PoseTable {
     private currentFrame = 0;
     private written = false;
 
-    constructor(
-        readonly maxNodes = 16,
-        readonly frames = 64,
-        readonly hz = 30
-    ) {
-        this.rows = maxNodes * frames * 4;
-        this.data = new Float32Array(this.rows * 4);
+    /**
+     * How many times a node's whole history has been overwritten ("primed").
+     *
+     * Priming is correct exactly once per allocation: it fills the warm-up window so a birth frame
+     * never reads zeros. If it happens *every frame* instead, every birth frame holds the current
+     * pose — which looks precisely like "the particles are parented to the emitter", and is the
+     * second way this symptom appears. Counted so that possibility is measurable rather than argued
+     * (`arena.diagnostics()` reports it).
+     */
+    primes = 0;
+
+    /**
+     * Fields are assigned in the body rather than declared as constructor parameter properties:
+     * node's strip-only TypeScript loader rejects parameter properties, and
+     * `scratchpad/particles-sanity.mjs` has to be able to import this class to test the ring layout.
+     * That is the same constraint `combat/abilityFx.ts` documents for the game layer — a module a
+     * headless test imports must be parseable by plain node.
+     */
+    constructor(maxNodes = 16, frames = 64, hz = 30) {
+        this.maxNodes = maxNodes;
+        this.frames = frames;
+        this.hz = hz;
+        this.rows = maxNodes;
+        this.cols = frames * 4;
+        this.data = new Float32Array(this.cols * this.rows * 4);
         this.window = frames / hz;
         this.currentFrameOf = new Int32Array(maxNodes).fill(-1);
         this.seen = new Uint8Array(maxNodes);
 
         for (let node = maxNodes - 1; node >= 0; node--) this.free.push(node);
 
-        this.texture = new DataTexture(this.data, 1, this.rows, RGBAFormat, FloatType);
+        this.texture = new DataTexture(this.data, this.cols, this.rows, RGBAFormat, FloatType);
         this.texture.minFilter = NearestFilter;
         this.texture.magFilter = NearestFilter;
         this.texture.generateMipmaps = false;
@@ -95,6 +129,7 @@ export class PoseTable {
         // is a warm-up window where "pose at birth" reads zeros and attached particles collapse to
         // the origin for the first `window` seconds of a playback.
         if (first) {
+            this.primes++;
             this.seen[node] = 1;
             for (let frame = 0; frame < this.frames; frame++) {
                 this.writeFrame(node, frame, matrix);
@@ -109,6 +144,22 @@ export class PoseTable {
         // rather than leaving a hole that the shader would read as a stale/blank matrix.
         let frame = this.currentFrameOf[node];
 
+        // **A second write inside the same `hz` bucket only restamps that bucket's frame.**
+        //
+        // The fill loop below stops when it *reaches* `currentFrame`, so when the frame index has not
+        // advanced it has nowhere to stop and runs a full lap, stamping the current pose into every
+        // historical frame. That state is indistinguishable from a parent relationship at sampling
+        // time — "the pose at birth" and "the pose now" become the same matrix — so every bone-bound
+        // particle rides the bone and the `uPoseLive` debug switch changes nothing. It is the normal
+        // case, not an edge case: any render loop faster than `hz` (60 fps against 30 Hz) and any
+        // frame that primes a playback *and* calls `updatePoses` writes twice per bucket.
+        if (frame === this.currentFrame) {
+            this.writeFrame(node, frame, matrix);
+            this.written = true;
+
+            return;
+        }
+
         for (let step = 0; step < this.frames; step++) {
             frame = (frame + 1) % this.frames;
             this.writeFrame(node, frame, matrix);
@@ -121,7 +172,7 @@ export class PoseTable {
 
     /** Used by tests/tools: read back one texel (a matrix column) without touching GPU state. */
     readColumn(node: number, frame: number, row: number, out: Float32Array) {
-        const base = ((node * this.frames + frame) * 4 + row) * 4;
+        const base = (node * this.cols + frame * 4 + row) * 4;
         for (let i = 0; i < 4; i++) out[i] = this.data[base + i];
         return out;
     }
@@ -129,6 +180,8 @@ export class PoseTable {
     private writeFrame(node: number, frame: number, matrix: Matrix4) {
         // three's Matrix4.elements is already column-major and GLSL's `mat4(c0, c1, c2, c3)` takes
         // columns, so the 16 floats copy straight through — no transpose on either side.
-        this.data.set(matrix.elements, (node * this.frames + frame) * 16);
+        // Column `c` of frame `f` of node `n` starts at texel `n * cols + f * 4 + c`, and a texel is
+        // four floats, so the 16 matrix floats land as one contiguous run.
+        this.data.set(matrix.elements, (node * this.cols + frame * 4) * 4);
     }
 }

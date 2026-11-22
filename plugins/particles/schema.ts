@@ -143,6 +143,24 @@ export type ParticleAssetLayer = {
      * opt out of the soft-depth fade while a spark layer stays in, or a decal can ask for a depth nudge.
      */
     softDepth?: boolean;
+    /**
+     * `false` draws this layer **through** geometry: the depth test is off for its fragments. That is
+     * Ryzom's `enableZTest(false)` (`CMaterial::always`, `ps_particle_basic.cpp:556`), the state a
+     * Ryzom effect uses to stay visible while it sits inside a body or a wall. Absent ⇒ `true`, so
+     * every asset written before this field existed keeps exactly the draw state it had.
+     */
+    zTest?: boolean;
+    /**
+     * Depth nudge toward the camera, in **NeL's own unit**: the material value is divided by the
+     * camera's depth extent (`far - near`) and applied as a window-depth translation, exactly as
+     * `CMaterial::setZBias` reaches the driver (`getZBias() * 1/(zfar−znear)`, then `glDepthRange`;
+     * `driver_opengl3_material.cpp:533`, `driver_opengl3_states.cpp:653-658`). Negative is toward the
+     * camera. The magnitudes are small by construction — NeL's own landscape z-fight nudge is −0.02
+     * (`nel/src/3d/landscape.cpp:4005`) — so the corpus's −1 and −2 are large by *its* scale: with a
+     * 0.1–500 camera they pull the layer ~4 cm toward the camera at 1 m and ~0.6 m at 4 m. A nudge,
+     * not an override, and no substitute for `zTest`: it lifts a layer off a surface it shares a depth
+     * with, it does not stop a body occluding it. Absent ⇒ 0.
+     */
     zBias?: number;
     /** Curve references, evaluated over normalised life. */
     curves?: {
@@ -166,6 +184,8 @@ export type ParticleAssetRender = {
     /** Number of usable cells (defaults to the whole grid); `emitters[].sprites` picks among them. */
     spriteCount?: number;
     softDepth?: boolean;
+    /** Asset-wide default for `ParticleAssetLayer.zTest` (absent ⇒ depth test on). */
+    zTest?: boolean;
     zBias?: number;
 };
 
@@ -254,7 +274,16 @@ export type CompiledLayer = {
      * supplied one" — a plugin without the pass renders the layer plain instead of failing.
      */
     softDepth: boolean;
-    /** Depth nudge along view Z, in metres (Ryzom's `zBias`); lifts a coplanar effect off the floor. */
+    /**
+     * The layer's depth test. `false` means "draw through geometry" and, because the soft-depth fade
+     * *is* a per-fragment depth test, it also means the fade is not compiled for this layer — honouring
+     * both would honour neither.
+     */
+    zTest: boolean;
+    /**
+     * Depth nudge toward the camera, in NeL's unit (the material value over the camera's depth extent;
+     * see `ParticleAssetLayer.zBias`). Lifts a coplanar effect off the floor.
+     */
     zBias: number;
     tailFade: boolean;
     textureUrl: string;
@@ -280,6 +309,7 @@ export type CompiledLayer = {
 export type CompiledParticleAsset = {
     id: string;
     softDepth: boolean;
+    /** Asset-wide default; each layer resolves its own (see `layers[].zBias`). */
     zBias: number;
     /** Playback length in seconds (emission window, or 0 for a pure burst). */
     duration: number;

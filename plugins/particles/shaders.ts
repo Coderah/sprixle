@@ -36,14 +36,29 @@ export const particleVertexShader = glsl`
     attribute vec4 aNoise;  // turbulence amplitude (m), base-octave frequency (cycles/s), unused ×2
     attribute vec4 aCurves; // sizeX row, alpha row, colour row, unused
     attribute vec4 aColor;  // base colour (linear RGBA)
+    /**
+     * Per-instance uniform size multiplier — Ryzom's ScaleFX (ParticlePlayback.scale), 1 = as
+     * authored. An attribute rather than a uniform because a pool is shared by every playback of a
+     * draw identity and two of them can ask for different sizes in the same frame. It multiplies the
+     * sprite's world size only: the z-bias below is a clip-space depth translation and the soft fade
+     * is per-fragment, so neither depends on how big the quad is.
+     */
+    attribute float aScale;
 
     uniform float uTime;
     uniform float uCurveRows;
     // The authored plane of a fixed layer (two unit vectors in world axes).
     uniform vec3 uBasisX;
     uniform vec3 uBasisY;
-    /** View-space depth nudge in metres: lifts a coplanar effect off the surface it sits on. */
+    /**
+     * Depth nudge toward the camera, in NeL's unit: the material value divided by the camera's depth
+     * extent and applied as a window-depth translation (see main()). Lifts a coplanar effect off the
+     * surface it sits on.
+     */
     uniform float uZBias;
+    /** The camera's depth extent, which is what turns uZBias into that translation (see main()). */
+    uniform float uCameraNear;
+    uniform float uCameraFar;
 
     uniform sampler2D uCurves;
     uniform vec2 uGrid;
@@ -228,8 +243,8 @@ export const particleVertexShader = glsl`
         float t = min(sampleAge, life);
         float lifeRatio = clamp(t / life, 0.0, 1.0);
 
-        float sizeX = aSize.x * curveFetch(aCurves.x, lifeRatio).r;
-        float sizeY = aSize.y * curveFetch(aCurves.y, lifeRatio).r;
+        float sizeX = aSize.x * aScale * curveFetch(aCurves.x, lifeRatio).r;
+        float sizeY = aSize.y * aScale * curveFetch(aCurves.y, lifeRatio).r;
 
         vec4 colour = aColor * curveFetch(aCurves.z, lifeRatio);
         colour.a *= curveFetch(aCurves.w, lifeRatio).r;
@@ -286,8 +301,6 @@ export const particleVertexShader = glsl`
         #else
             vec3 world = worldAt(t, poseTime);
             vec4 mv = modelViewMatrix * vec4(world, 1.0);
-            // zBias in view space: negative is toward the camera, which is how Ryzom used it.
-            mv.z -= uZBias;
 
             #ifdef ORIENT_BASIS
                 // A fixed quad expands along its authored plane, not toward the camera: a floor sigil
@@ -325,6 +338,32 @@ export const particleVertexShader = glsl`
 
             gl_Position = projectionMatrix * mv;
         #endif
+
+        // Ryzom's z-bias, in Ryzom's own unit. CMaterial::setZBias does not reach the driver as a
+        // distance: it is multiplied by 1/(zfar-znear) and then added to the whole window depth range
+        // (getZBias() * _OODeltaZ at driver_opengl3_material.cpp:533, _OODeltaZ = 1/(zfar-znear) at
+        // driver_opengl3_matrix.cpp:37, spent as glDepthRange(near + d, far + d) with
+        // d = zbias*(far-near) at driver_opengl3_states.cpp:653-658). Net: the window-depth shift is
+        // uZBias / (cameraFar - cameraNear) — one number for the whole scene, whatever the fragment's
+        // distance, which is what a depth-range translation is. Window depth translates by d => NDC z
+        // by 2d, hence the factor. So a corpus value of -2 is NOT "draw over everything": with a
+        // 0.1..500 camera it is a 0.8% NDC nudge, about 4 cm of pull at 1 m and 0.6 m at 4 m.
+        //
+        // Applied after the branch, so a trail gets it too (it used to be a mv.z shift on the
+        // billboard path only). Negative is toward the camera.
+        //
+        // The lower clamp is the near plane, and it only bites when the shift pushed the fragment in
+        // front of it: glDepthRange clamps window depth rather than culling geometry, so a large
+        // authored bias must draw over everything instead of being clipped by the near plane. A vertex
+        // already in front of the near plane keeps its own z, so genuine near-clipping is untouched.
+        if (uZBias != 0.0) {
+            float range = max(uCameraFar - uCameraNear, 1e-4);
+            float biased = gl_Position.z + 2.0 * (uZBias / range) * gl_Position.w;
+
+            if (gl_Position.z >= -gl_Position.w) {
+                gl_Position.z = max(biased, -gl_Position.w);
+            }
+        }
     }
 `;
 

@@ -1,7 +1,9 @@
 # Particles — GPU-first particle plugin (design)
 
 *Engine ref: working tree @ 2026-11-21 (W-E1: multi-playback `rParticleFx`, per-playback `seconds`,
-per-playback `bone` override — W32; then `softDepth` option + `setTimeScale`, W-E2)*
+per-playback `bone` override — W32; then `softDepth` option + `setTimeScale`, W-E2; then
+`ParticlePlayback.travel` — a travelling emitter, W43, §6.3; then per-layer `zTest` + Ryzom's `zBias`
+unit, wroth; then `ParticlePlayback.offset` / `.scale` — placement and size, W44, §6.4)*
 
 Status: **P1 landed** (runtime + demo effect, `src/sprixle/plugins/particles/`), P2+ design only.
 This doc replaces the Effekseer plan (`effekseerPlugin` stays in
@@ -220,9 +222,11 @@ Blend modes: `add`, `multiply`, `alphaBlend`, `alphaTest` — a fragment-shader 
 picks a specialized program (3–4 per kind, cached at load).
 
 Extras: **soft-particle depth fade** against the existing `DepthPass` target (not in NeL, but hard
-intersections read as bugs at 3rd-person distances), per-material z-bias, optional global ambient
-tint, and an **overdraw clamp** (sprite pixel-area cap) — the single most effective GPU knob for
-additive effects.
+intersections read as bugs at 3rd-person distances), **per-layer z-test** (`zTest: false` draws
+through geometry — NeL's `CMaterial::always`, and the only state that keeps a body-anchored effect
+visible; §7.1), per-material z-bias (a fraction of the depth range, not metres; §7.1), optional
+global ambient tint, and an **overdraw clamp** (sprite pixel-area cap) — the single most effective
+GPU knob for additive effects.
 
 ---
 
@@ -254,8 +258,18 @@ type ParticlePlayback = {
     loop?: boolean;
     seed?: number;              // determinism
     bone?: string;              // overrides every node the asset binds, per playback (§6.2)
+    attachMode?: 'pose' | 'bake';   // how a bone-bound particle gets its origin (§6.2)
     tint?: [number, number, number];   // carried; not applied in the shader yet (§13)
+    offset?: readonly [number, number, number];   // metres, in the anchor's own axes (§6.4)
+    scale?: number;             // uniform, 1 = as authored — Ryzom's ScaleFX (§6.4)
+    travel?: ParticleTravel;    // a travelling emitter — see §6.3
     seconds?: number;           // lifetime; 0/absent = the asset's duration + maxLife
+};
+
+type ParticleTravel = {
+    from: readonly [number, number, number];   // world space, at the moment the playback starts
+    to: readonly [number, number, number];     // world space, the arrival point
+    seconds: number;                           // flight time; the origin then holds at `to`
 };
 ```
 
@@ -321,6 +335,9 @@ properties), so a rule that lives there is a rule no cheap test can reach.
 | `playbackWindow` / `nextCycleEnd` | `seconds` → `endsAt` and the loop's `deadline` |
 | `planPlaybackChanges` | per playback: **start / restart / stop / nothing** |
 | `resolvedNodeBone` | which bone a bound node resolves against: the playback's `bone`, else the asset's |
+| `normalizeTravel` / `travelProgress` / `sameTravel` | a redundant line is dropped, a birth time → its point on the line (0…1), and a changed line restarts (§6.3) |
+| `normalizeOffset` / `sameOffset` | a `NaN` offset is dropped (it would displace every particle to `NaN`), and a changed one restarts (§6.4) |
+| `normalizeScale` | a non-finite or non-positive scale becomes 1 — never "collapse the sprite to nothing" (§6.4) |
 
 Three rules in there are easy to get wrong, and each is proven by name in the sanity script:
 
@@ -368,6 +385,116 @@ Changing `bone` on a live playback is a **restart**, not a silent re-bind: `same
 compares it, so an effect that is already spawning particles is never half-moved to the other hand.
 `scratchpad/particles-lifecycle-sanity.mjs` §8 proves the override, the free-node rule and the restart.
 
+### 6.3 `travel` — the playback that moves
+
+`ParticlePlayback.travel` (`{ from, to, seconds }`, world space) makes the **origin of the asset's
+nodes** interpolate linearly from `from` to `to` over `seconds`. It is what turns a cast's `release`
+beat from "a jet of flame in the palm" into "a missile crossing the gap": without it the release and
+the impact burst read on the same frame and nothing travels (engine roadmap gap 28).
+
+**Where the interpolation lives: the spawn table, not the frame loop.** A particle's birth time is
+already a spawn-table column (`aVel.w`), and the emitter's world matrix is already baked into `p0` at
+spawn — so `arena.ts` adds one term there: `travelProgress(travel, startedAt, birthAt)` (a pure
+function in `playbacks.ts`) selects a point on the line, and that point *replaces* the effect
+transform's origin for that particle, with the asset's own node offsets added on top. Consequences,
+all of them the ones we want:
+
+- **a stream leaves a trail.** The particles of one burst are spread over the emitter's `duration`, so
+  a particle born 0.4 s into a 1.0 s flight starts 40 % along the line and then lives its own life.
+  The whole cloud never slides, because there is no cloud — there is a spawn table.
+- **zero per-frame cost.** Nothing is written between spawn and retirement: no uniform, no ring row,
+  no per-particle channel. The line is evaluated `O(particles)` **once**, in the same loop that
+  already writes 33 floats per particle, and `O(1)` per frame.
+  (The pose-ring route — one row per moving playback, sampled at birth — was the alternative and was
+  rejected: a ring row is scarce (`poseNodes`, one per bound node per playback), it needs a second
+  per-instance channel to carry the row index, and it quantises the line at `poseHz` for nothing.)
+- **exact, and frame-rate independent.** `travel.seconds` is the source's own `distance / 20 m/s`
+  (Ryzom: `MAGICFX::PROJECTILE_SPEED`, `magic_fx.h:70`; `projectile_manager.cpp:211-222`), not a
+  per-frame step, so the bolt is in the same place at 30 and 144 fps.
+- **after `seconds` the origin holds at `to`** (`travelProgress` clamps): it never snaps back. The
+  playback retires on its own `seconds` as always, so a caller that wants the stream to *stop on
+  arrival* sets the playback `seconds` to the flight time — that is the intended pairing, and
+  wroth's missile does exactly that (the flight can be twice the beat's gameplay window, so the
+  client takes the larger of the two).
+- **a travelling playback supersedes the bone binding.** The origin is the line, so the arena bakes
+  the nodes in world space and allocates no pose slots — but the caller still resolves `from` *from*
+  the caster's bone, which is what the bone was naming in the first place.
+- **a looping travelling playback replays the flight** on each cycle (`startedAt` restarts with the
+  respawn). No caller loops one; stated so it is not a surprise.
+- **`travel` absent = exactly the previous behaviour**, down to the same branches in `writeLayer`.
+
+What it deliberately does **not** do: rotate the emitter onto the line (Ryzom builds a basis from the
+speed direction, `projectile_manager.cpp:240-247`), bend the line (a `Bomb` parabola, same file
+`:245-250`), or chain/spray (`MAGICFX::TSpellMode`, `magic_fx.h:29-35`). The first is a two-line
+follow-up if a caster ever casts far off their facing; the other two are modes nobody calls for yet.
+The effect's own transform rotation is kept, so a forward-firing asset still fires along the caster's
+facing.
+
+A malformed line is dropped, not honoured: `normalizeTravel` refuses a `NaN`/`Infinity` endpoint,
+because a `NaN` reaching the spawn table is silent and total — every particle of the effect lands at
+`(NaN, NaN, NaN)` and nothing draws.
+
+### 6.4 `offset` and `scale` — where on the body, and how big
+
+Two sheet-level knobs of Ryzom's that a body-anchored effect needs, and the reason this section exists
+is that **the engine cannot guess either**: a bone at the centre of a torso is *inside the mesh*, so an
+effect placed at it renders inside the character, which is exactly what a playtest reported (W44).
+
+- **`offset`** — the instance is placed at an authored offset from its bone, not at the bone:
+  `CFXStickMode` + `StickOffset`, spent as `mat.setPos(buildInfo.StickOffset)`
+  (`ryzom/client/src/attached_fx.cpp:154-168`). The *mechanism* is what is ported here; the offsets
+  themselves live in the `.animation_fx_set` sheet family, which is **not in our corpus**, so every
+  value a project passes is authored, not read.
+- **`scale`** — `CAnimationFXSheet::ScaleFX`, the uniform half of Ryzom's per-instance parameters
+  (`CCharacterCL::playCastFX` switches four `userParam` floats on progressively per power tier). The
+  other three quarters — a named `userParam` system — are still engine roadmap gap 26.
+
+**`offset` is in the anchor's own axes, applied after the anchor matrix.** It is not a world vector:
+`(0.34, 0, 0)` on a spine bone is 0.34 m along *that bone's* local +X, so it turns when the character
+turns and bends when the spine bends. Which local axis is "forward" is the rig's business and the
+caller's to measure — for the shipped homin, `Bip01 Spine1`'s local +X is the character's forward and
++Y is up (`src/game/combat/abilities.ts` → `fxChestOffset` has the measurement).
+
+**Cost: one matrix write per playback per frame, never per particle.** The offset folds into a matrix
+the engine already composes, and only when there *is* one:
+
+| path | where `T(offset)` is folded | cost |
+|---|---|---|
+| `'pose'`-attached bone | `pose.write(nodeSlot, anchor * T(offset))` | one extra 4×4 multiply per bound node per frame (the ring write already existed) |
+| `'bake'` attachment | the spawn matrix (`bone * T(offset) * node`) | one multiply per emitter per spawn, no per-frame cost |
+| free node | the effect transform, same shape | one multiply per emitter per spawn |
+| travelling | **both endpoints** of the line shift (the whole flight is displaced, rotated by the effect transform — the only anchor a travel playback has) | one add per emitter per spawn |
+
+A travelling playback moving the whole line rather than one end is the sane reading: the flight is one
+displaced emitter travelling between two points.
+
+**`scale` multiplies the asset's node offsets and its sprite sizes** — Ryzom's `ScaleFX`, not a
+per-particle size edit, and it does **not** touch the particle motion (velocity, acceleration, drag),
+so a bigger burst does not also fly further. It is spent in two places and neither is a per-particle
+CPU loop:
+
+- the **node offset** is scaled once per emitter in the spawn matrix the arena already composes;
+- the **sprite size** rides a **per-instance attribute** (`aScale`, one float beside the other spawn
+  columns) that the vertex shader multiplies into `sizeX`/`sizeY`. It cannot be a per-material uniform:
+  a pool is shared by every playback of a draw identity, and two playbacks of one asset can ask for
+  different sizes in the same frame.
+
+Neither the `zBias` nor the soft-depth fade is affected: the bias is a clip-space depth translation and
+the fade is per-fragment, so a world-space size change cannot reach either. `+4 B/instance` (132 → 136)
+for the attribute is the whole memory cost.
+
+**Absent means the old behaviour, exactly**: no offset = the identical matrix the engine wrote before
+(same object, no extra multiply), and the spawn-table paths branch on `scale !== 1`. Both are compared
+by `samePlaybackRequest`, so changing either on a live playback is a **restart** — they are baked into
+the spawn table and a per-instance column, so particles already alive cannot be re-placed or re-sized
+honestly.
+
+`scratchpad/w44-fx-placement-sanity.mjs` is the rule for wroth: an effect anchored inside the body
+must clear the capsule (`|offset| + sprite·scale/2 > pawnRadius`), computed per step and failing by
+name. The engine cannot enforce that — a caller may legitimately want an effect inside a body — so the
+check lives with the content that decides the anchor (`content/particles/ability-fx.md`
+§"Why a body effect needs an offset (W44)").
+
 ---
 
 ## 7. Generic asset format
@@ -382,7 +509,7 @@ producer-specific — a node graph with emitters, dynamics, colliders and events
   "format": "sprixle.particles", "version": 1,
   "id": "spell.fire.missile", "tags": ["spell", "fire"],
   "budget": { "maxParticles": 220, "maxViewDist": 40, "lodRamp": [0.6, 0.2] },
-  "render":  { "blend": "add", "softDepth": true, "zBias": -0.01, "sort": "none",
+  "render":  { "blend": "add", "softDepth": true, "zTest": true, "zBias": 0, "sort": "none",
                "atlases": ["spell-a"] },
 
   "nodes": [                                    // transform graph = attachment points
@@ -429,10 +556,49 @@ angle) — 128 KB total, sampled in the vertex shader by life ratio.
 **Layers.** `particles[]` is a list of draw *layers*, not alternatives: each one owns its draw state
 and a playback reserves one instance run per layer that has emitters (capped at `MAX_LAYERS = 4`).
 `render` carries the asset-wide draw defaults and a layer may override `texture` / `blend` / `grid` /
-`spriteCount`; `emitters[].layer` (default 0) assigns an emitter to a layer. That is what keeps a
-two-texture, two-blend effect (additive sparks + alpha-blended smoke) one asset, one playback and one
-arena slot instead of two assets that have to be kept in sync. `budget.maxParticles` still covers the
-whole playback, so an oversized asset is thinned by one ratio across all its layers.
+`spriteCount` / `zTest` / `zBias` / `softDepth`; `emitters[].layer` (default 0) assigns an emitter to
+a layer. That is what keeps a two-texture, two-blend effect (additive sparks + alpha-blended smoke)
+one asset, one playback and one arena slot instead of two assets that have to be kept in sync.
+`budget.maxParticles` still covers the whole playback, so an oversized asset is thinned by one ratio
+across all its layers.
+
+**`zTest` — the depth test, per layer.** `zTest: true` (the default, and what every asset written
+before the field existed means) depth-tests the layer against the scene; `zTest: false` draws it
+**through** geometry. It is the draw state a body-anchored effect needs: an impact burst hung on
+`Bip01 Spine1`, or a glow in the palm, is *inside* the mesh it decorates, and with the depth test on
+the body erases everything within its own silhouette — only the part of the sprite that sticks out
+past the limb is left. NeL states it per material: `CPSMaterial::serialMaterial` writes a flags byte
+whose **bit 0 is the z-test** and bit 1 says "a z-bias follows"
+(`nel/src/3d/ps_particle_basic.cpp:523-552`), and `enableZTest` is `CMaterial::less` versus
+`CMaterial::always` (`:556`). One fact, and the two bits are independent: a zero bias says nothing
+about the z-test.
+
+Two rules ride with it:
+
+- **It is part of the pool identity.** A no-z-test layer compiles a different material state, so it
+  never shares a draw call with a depth-tested layer (`compileLayer`'s `poolKey`).
+- **A no-z-test layer takes no soft fade.** The fade is itself a per-fragment depth test against the
+  same scene depth (`shaders.ts`, `SOFT_DEPTH`), so compiling both would honour neither: the layer
+  would be unculled and then faded to nothing by the geometry it just stopped testing against. The
+  pool only defines `SOFT_DEPTH` when the project supplied a depth pass **and** the layer asked for
+  the fade **and** the layer still depth-tests.
+
+**`zBias` — a depth nudge, in NeL's unit.** The value is the material's own, and NeL divides it by the
+camera's depth extent before using it: `getZBias() * 1/(zfar−znear)`
+(`driver_opengl3_material.cpp:533`, `_OODeltaZ` at `driver_opengl3_matrix.cpp:37`) is spent as a
+window-depth translation (`glDepthRange(near + d, far + d)`, `driver_opengl3_states.cpp:653-658`). So
+the runtime shifts window depth by **`zBias / (cameraFar − cameraNear)`**, equal to an NDC-z shift of
+twice that, applied in clip space (`gl_Position.z += 2·(zBias/range)·w`, clamped at the near plane
+because `glDepthRange` clamps window depth rather than culling geometry). The camera range is the one
+the project already publishes for soft depth (`softDepthUniforms.uCameraNear/uCameraFar`), with a
+documented 0.1–100 fallback for a build with no depth pass — the one place this port cannot be exact,
+because Ryzom's camera is not ours.
+
+The numbers are small by construction: NeL's own landscape z-fight nudge is −0.02
+(`nel/src/3d/landscape.cpp:4005`). The corpus's −1 and −2 (both on one hand glow in `cast-hand-life`)
+are large by *that* scale and still just a nudge — with the wroth camera (0.1–500) about 4 cm of pull
+at 1 m and 0.6 m at 4 m. It is not a stand-in for `zTest`: it lifts an effect *off* a surface it shares
+a depth with (a floor decal, a decal on a wall), it does not make the body stop occluding it.
 
 **Dynamics.** `emitters[].into` names the node the emitted particles *live on* (`at` is only where
 they come out), which is the one link from a node to the layers that draw it: `dynamics[].at`
@@ -733,9 +899,9 @@ Deliberate limits, each a named follow-up rather than a hidden gap:
   `duration + maxLife`); a loop's window does bound its repetition. The rejected alternative —
   extending a one-shot to a longer `seconds` — would hold a dead slot's instance run against the
   frame budget for no picture;
-- **`bone` and `tint` are carried per playback but not applied**: the arena binds the asset's own
-  `nodes[].bone`, and the shader has no tint uniform yet. Both are on the entry so a caller can state
-  them once and a later shader/binder pass does not need a component change;
+- **`tint` is carried per playback but not applied**: the shader has no tint uniform yet. It is on
+  the entry so a caller can state it once and a later shader pass does not need a component change.
+  `bone` and the W44 pair `offset`/`scale` **are** applied (§6.2, §6.4);
 - **at most 4 layers per asset** (`MAX_LAYERS`) — more is a load error, not a clamp, because a
   playback's run bookkeeping (`runStart`/`runCount`/`poolOf`) is fixed at `MAX_LAYERS` per slot. A
   layer with no emitters costs nothing (no run is reserved); layers with identical draw state share
@@ -762,8 +928,8 @@ Deliberate limits, each a named follow-up rather than a hidden gap:
 - **no noise on the Ryzom `parametricFactor` walk shape**: the baker maps the intensity to the
   amplitude and the factor to the frequency, so the *character* of the wobble is noise rather than
   NeL's smoothed random-walk table (§9.3 declares it);
-- `tint` is carried per playback (and per asset) but not yet applied in the shader; the same for
-  `bone` — a playback cannot override the asset's node bindings yet.
+- `tint` is carried per playback (and per asset) but not yet applied in the shader. `bone`,
+  `offset` and `scale` are applied (§6.2, §6.4).
 
 ## 14. What this buys
 

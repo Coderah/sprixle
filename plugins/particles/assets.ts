@@ -163,6 +163,19 @@ function compileLayer(
         fail(`${where} has unsupported blend "${blend}"`);
     }
 
+    /**
+     * Depth test on unless the asset says otherwise — `true` is what every asset written before the
+     * field existed means, and it is also the source default (`CMaterial::_ZFunction = lessequal`,
+     * `nel/src/3d/material.cpp:47`). A non-boolean is a producer bug, not a truthy value.
+     */
+    const rawZTest = layer.zTest ?? raw.render.zTest;
+
+    if (rawZTest !== undefined && typeof rawZTest !== 'boolean') {
+        fail(`${where} has a non-boolean zTest (${JSON.stringify(rawZTest)})`);
+    }
+
+    const zTest = rawZTest ?? true;
+
     // No texture is legal: the pool falls back to the built-in soft dot (see `pools.ts`).
     const textureUrl = layer.texture ?? raw.render.texture ?? '';
     const rawGrid = range(layer.grid ?? raw.render.grid, [1, 1]);
@@ -207,7 +220,10 @@ function compileLayer(
         poolKey:
             `${kind}|${trailStyle}|${orient}|${blend}|${textureUrl}|${grid[0]}x${grid[1]}` +
             `${basisKeyFor(basis)}${(layer.softDepth ?? raw.render.softDepth) ? '|soft' : ''}` +
-            `${num(layer.zBias ?? raw.render.zBias, 0) !== 0 ? '|z' : ''}`,
+            `${num(layer.zBias ?? raw.render.zBias, 0) !== 0 ? '|z' : ''}` +
+            // A no-z-test layer compiles a different material state (and takes no soft fade), so it
+            // must not share a draw call with a depth-tested layer of the same look.
+            `${zTest ? '' : '|noztest'}`,
         blend,
         kind,
         trailStyle,
@@ -218,6 +234,7 @@ function compileLayer(
         // compiles the define when both the capability and this flag are true). An asset that must not
         // fade says `softDepth: false`.
         softDepth: layer.softDepth ?? raw.render.softDepth ?? true,
+        zTest,
         zBias: num(layer.zBias ?? raw.render.zBias, 0),
         tailFade: layer.tailFade ?? true,
         textureUrl,

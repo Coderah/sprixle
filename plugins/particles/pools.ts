@@ -64,6 +64,13 @@ export type InstanceScratch = {
     g: number;
     b: number;
     a: number;
+    /**
+     * Uniform size multiplier for this instance (`ParticlePlayback.scale`, Ryzom's `ScaleFX`).
+     * Default 1 = as authored. It rides a **per-instance attribute** rather than a uniform because a
+     * pool is shared by every playback of one draw identity, and two playbacks of the same asset can
+     * ask for different sizes at the same moment.
+     */
+    scale: number;
 };
 
 export function createInstanceScratch(): InstanceScratch {
@@ -76,11 +83,25 @@ export function createInstanceScratch(): InstanceScratch {
         noiseAmplitude: 0, noiseFrequency: 1, noiseSeed: 0,
         curveSizeX: 0, curveAlpha: 0, curveColor: 0,
         r: 1, g: 1, b: 1, a: 1,
+        scale: 1,
     };
 }
 
-/** Per-instance bytes: 8 × vec4 float + 1 × vec4 u8 = 132. */
-const INSTANCE_BYTES = 4 * 4 * 8 + 4;
+/** Per-instance bytes: 8 × vec4 float + 1 × float + 1 × vec4 u8 = 136. */
+const INSTANCE_BYTES = 4 * 4 * 8 + 4 + 4;
+
+/**
+ * The camera depth range a `zBias` is resolved against when the project supplies no depth pass (and
+ * therefore no `uCameraNear` / `uCameraFar`).
+ *
+ * NeL's z-bias is the material value divided by the camera's depth extent (see `shaders.ts`), so the
+ * range is not decoration: it is the unit conversion. A project that renders a depth pass for soft
+ * particles already publishes the real one every frame (`ParticlePlugin.softDepthUniforms`), and that
+ * is what a `zBias` uses there; these are only the fallback, and they are the same pair the plugin's
+ * soft-depth defaults use, so a build that turns the fade on does not change a bias.
+ */
+const DEFAULT_CAMERA_NEAR = 0.1;
+const DEFAULT_CAMERA_FAR = 100;
 
 function roundUpToBlock(value: number) {
     return Math.max(BLOCK_SIZE, Math.ceil(value / BLOCK_SIZE) * BLOCK_SIZE);
@@ -111,8 +132,11 @@ export class ParticlePool {
     readonly noise: Float32Array;
     readonly curves: Float32Array;
     readonly color: Uint8Array;
+    /** One float per instance: the uniform size multiplier (`ParticlePlayback.scale`). */
+    readonly scale: Float32Array;
 
-    private readonly attrs: InstancedBufferAttribute[];
+    /** Each attribute with the item size its update ranges are computed from. */
+    private readonly attrs: { attribute: InstancedBufferAttribute; itemSize: number }[] = [];
     private readonly blockCount: number;
     private readonly bitmap: Uint32Array;
     private usedBlocks = 0;
@@ -144,6 +168,7 @@ export class ParticlePool {
         this.noise = new Float32Array(this.capacity * 4);
         this.curves = new Float32Array(this.capacity * 4);
         this.color = new Uint8Array(this.capacity * 4);
+        this.scale = new Float32Array(this.capacity).fill(1);
 
         // Base quad: four corners, **two indexed triangles**.
         //
@@ -166,17 +191,19 @@ export class ParticlePool {
         );
         this.geometry.setIndex([0, 1, 2, 2, 1, 3]);
 
-        this.attrs = [
-            this.addAttribute('aSim', this.sim),
-            this.addAttribute('aVel', this.vel),
-            this.addAttribute('aSize', this.size),
-            this.addAttribute('aMeta', this.meta),
-            this.addAttribute('aTrail', this.trail),
-            this.addAttribute('aDyn', this.dyn),
-            this.addAttribute('aNoise', this.noise),
-            this.addAttribute('aCurves', this.curves),
-            this.addAttribute('aColor', this.color, true),
-        ];
+        this.addAttribute('aSim', this.sim);
+        this.addAttribute('aVel', this.vel);
+        this.addAttribute('aSize', this.size);
+        this.addAttribute('aMeta', this.meta);
+        this.addAttribute('aTrail', this.trail);
+        this.addAttribute('aDyn', this.dyn);
+        this.addAttribute('aNoise', this.noise);
+        this.addAttribute('aCurves', this.curves);
+        this.addAttribute('aColor', this.color, true);
+        // Ryzom's `ScaleFX` as one float per instance: a pool is shared by every playback of a draw
+        // identity, so the size cannot be a per-material uniform. Item size 1 — `flush` computes each
+        // attribute's update range from the size recorded beside it.
+        this.addAttribute('aScale', this.scale, false, 1);
 
         this.geometry.instanceCount = 0;
 
@@ -195,7 +222,11 @@ export class ParticlePool {
         // program so a build without the pass compiles exactly the shader it had before.
         // Per layer, not per plugin: a project supplies the depth *pass*, each layer says whether it
         // wants the fade. A layer that asks for it without a pass renders plain (no unbound sampler).
-        if (softDepth && layer.softDepth) defines.SOFT_DEPTH = '';
+        // A layer that gave up its depth test gives up the fade too: the fade is a per-fragment depth
+        // test against the same scene depth, so honouring both flags would honour neither (a
+        // `zTest: false` layer would be depth-unculled and then faded to nothing by the geometry it
+        // just stopped testing against — the exact invisibility the flag exists to end).
+        if (softDepth && layer.softDepth && layer.zTest) defines.SOFT_DEPTH = '';
 
         this.material = new ShaderMaterial({
             defines,
@@ -203,7 +234,9 @@ export class ParticlePool {
             fragmentShader: particleFragmentShader,
             transparent: layer.blend !== 'alphaTest',
             depthWrite: layer.blend === 'alphaTest',
-            depthTest: true,
+            // The layer's own z-test (Ryzom `CPSMaterial::enableZTest`): `always` for a layer that has
+            // to draw through the body it is anchored in, `less` (three's default) for everything else.
+            depthTest: layer.zTest,
             side: DoubleSide,
             blending: blendToThree(layer.blend),
             uniforms: {
@@ -226,8 +259,12 @@ export class ParticlePool {
                 uPoseHz: { value: pose.hz },
                 uPoseRows: { value: pose.rows },
                 uPoseCols: { value: pose.cols },
-                // Shared soft-depth state (declared and read only when SOFT_DEPTH is defined).
-                ...(softDepth ? softDepth : {}),
+                // Shared soft-depth state (declared and read only when SOFT_DEPTH is defined), plus
+                // the camera depth range that `uZBias` needs whether or not the fade is on.
+                ...(softDepth ?? {
+                    uCameraNear: { value: DEFAULT_CAMERA_NEAR },
+                    uCameraFar: { value: DEFAULT_CAMERA_FAR },
+                }),
             },
         });
 
@@ -245,11 +282,14 @@ export class ParticlePool {
     private addAttribute(
         name: string,
         array: Float32Array | Uint8Array,
-        normalized = false
+        normalized = false,
+        itemSize = 4
     ) {
-        const attribute = new InstancedBufferAttribute(array, 4, normalized);
+        const attribute = new InstancedBufferAttribute(array, itemSize, normalized);
         attribute.setUsage(DynamicDrawUsage);
         this.geometry.setAttribute(name, attribute);
+        this.attrs.push({ attribute, itemSize });
+
         return attribute;
     }
 
@@ -363,6 +403,8 @@ export class ParticlePool {
         this.color[i4 + 1] = (r.g * 255) | 0;
         this.color[i4 + 2] = (r.b * 255) | 0;
         this.color[i4 + 3] = (r.a * 255) | 0;
+
+        this.scale[index] = r.scale;
     }
 
     /**
@@ -370,15 +412,15 @@ export class ParticlePool {
      * changed instead of re-sending the whole pool (megabytes per spawn).
      *
      * Units: three's `WebGLAttributes` treats a range as *array element* indices
-     * (`bufferSubData(type, range.start * BYTES_PER_ELEMENT, array, range.start, range.count)`), and
-     * every instance attribute here has itemSize 4 — hence the ×4. Getting this wrong silently
-     * uploads from the wrong offset.
+     * (`bufferSubData(type, range.start * BYTES_PER_ELEMENT, array, range.start, range.count)`), so a
+     * run of `count` instances is `count * itemSize` elements — hence the stored item size rather
+     * than a constant 4. Getting this wrong silently uploads from the wrong offset.
      */
     flush(instanceStart: number, count: number) {
         if (count <= 0) return;
 
-        for (const attribute of this.attrs) {
-            attribute.addUpdateRange(instanceStart * 4, count * 4);
+        for (const { attribute, itemSize } of this.attrs) {
+            attribute.addUpdateRange(instanceStart * itemSize, count * itemSize);
             attribute.needsUpdate = true;
         }
     }

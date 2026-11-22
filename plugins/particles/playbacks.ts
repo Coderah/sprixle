@@ -31,6 +31,50 @@
  */
 export const MAX_PLAYBACKS_PER_ENTITY = 6;
 
+/**
+ * A playback whose emitter **travels**, in world space: the origin of every node the asset places
+ * interpolates linearly from `from` to `to` over `seconds`.
+ *
+ * ### Why the interpolation rides the spawn table and not the frame loop
+ *
+ * "A missile flies" is one origin moving over time, and the whole plugin already has a mechanism for
+ * "a per-particle value that is a function of when the particle was born": the spawn table. Each
+ * particle's `birthAt` is a spawn-table column (`aVel.w`), the emitter's world matrix is baked into
+ * `p0` at spawn, and a stream is a *spread of birth times* rather than a cloud. So travel is applied
+ * there, per particle, once: a particle born 0.4 s into a 1.0 s flight starts 40 % along the line and
+ * then lives its own life — the trail, with no history, no second attribute channel and **no
+ * per-frame work at all**. The pose ring does the same thing for a bone (sample the emitter at the
+ * particle's own birth); this is the analytic version of it, exact rather than 30 Hz-quantised,
+ * because the birth time is known when the row is written.
+ *
+ * The alternative — a per-playback row in the pose ring written once per frame — was rejected: it
+ * costs a ring row per moving playback (a scarce resource: every bone-bound node holds one), adds a
+ * per-instance `rowIndex` channel, and quantises the line at `poseHz` for no gain.
+ *
+ * ### The rules
+ *
+ * - `travel` absent = the playback behaves exactly as it did before this field existed.
+ * - The asset's own node offsets are **added on top** of the travelled origin (`node.matrix` is kept):
+ *   travel moves the emitter, it does not rescale or re-author the effect.
+ * - After `seconds` the origin **stays at `to`**; it never snaps back to `from`. The playback
+ *   retires on its own `seconds` as always, so a caller that wants the stream to *stop on arrival*
+ *   sets the playback `seconds` to the flight time — that is the intended pairing (wroth's missile
+ *   does exactly that, `particleAbilityFxSystem`).
+ * - **Travel supersedes node binding**: the origin is the line, not a bone, so a travelling playback
+ *   bakes its nodes in world space and ignores `bone`/`attachMode` (`arena.play`). The client still
+ *   resolves `from` *from* the caster's bone, which is where the bone names the missile's start point.
+ * - A **looping** travelling playback replays the flight on each cycle (`startedAt` is restarted by
+ *   the respawn). No caller loops one today; it is stated so the behaviour is not a surprise.
+ */
+export type ParticleTravel = {
+    /** Launch point in world space — the caster's bone, resolved by the client when the cast fires. */
+    from: readonly [number, number, number];
+    /** Arrival point in world space — the target's aiming bone. */
+    to: readonly [number, number, number];
+    /** Flight time. The line is traversed linearly over it, then the origin holds at `to`. */
+    seconds: number;
+};
+
 /** One live-or-finished playback on an entity. */
 export type ParticlePlayback = {
     /** Handle, unique per entity, allocated by the plugin. The arena keys a slot by (entity, id). */
@@ -78,6 +122,65 @@ export type ParticlePlayback = {
     attachMode?: 'pose' | 'bake';
     /** Reserved: per-playback colour multiply (carried, not yet applied in the shader). */
     tint?: [number, number, number];
+    /**
+     * Displace the effect's origin from its anchor, in metres **in the anchor's own space**.
+     *
+     * Applied *after* the anchor matrix, so the vector is not a world direction: `(0.35, 0, 0)`
+     * played on a bone is 0.35 m along **that bone's local +X**, which for the homin rig's spine is
+     * the character's own forward — it turns when the character turns and follows the spine when the
+     * spine bends. Which local axis is "forward" is the rig's business, not the engine's; the
+     * caller that fills this in states where it measured it (`abilities.ts` → `fxChestOffset`).
+     *
+     * Why a playback needs one at all: a bone at the centre of a body (a spine, a pelvis) is *inside*
+     * the mesh, so an effect placed at it renders inside the character. Ryzom's answer is the same
+     * one and is where the shape comes from: `CFXStickMode` places the instance at an authored
+     * `StickOffset` from the bone, not at the bone (`mat.setPos(buildInfo.StickOffset)`,
+     * `ryzom/client/src/attached_fx.cpp:154-168`). The offsets themselves live in the
+     * `.animation_fx_set` sheet family, which is not in our corpus — so the *mechanism* is ported and
+     * every value on top of it is authored by the game layer, not read.
+     *
+     * **Cost: one matrix write per playback per frame, never per particle.** The position is baked
+     * into the anchor matrix the engine already produces:
+     *
+     * - a `'pose'`-attached bone folds into the pose ring's write (`anchor * T(offset)`), which is one
+     *   extra 4×4 multiply per bound node per frame and nothing at all when `offset` is absent;
+     * - a `'bake'` playback, a free node and the effect transform fold it in at spawn, in the same
+     *   per-emitter matrix that already composes the anchor — no per-frame cost, no extra attribute.
+     *
+     * **A travelling playback displaces the whole line**: `offset` shifts `from` *and* `to`, because
+     * the flight is one displaced emitter moving between two points, not a line with one end nudged.
+     * It is rotated by the effect transform there, since a travelling playback supersedes the bone
+     * binding and that transform is the only anchor it has.
+     *
+     * Absent = exactly the behaviour before the field existed. A malformed value (a non-finite
+     * component) is dropped rather than trusted, for the reason `normalizeTravel` documents: one NaN
+     * in the spawn table is silent and total.
+     */
+    offset?: readonly [number, number, number];
+    /**
+     * Uniform scale of the effect, 1 = as authored. This is Ryzom's `ScaleFX`
+     * (`CAnimationFXSheet::ScaleFX`), not a per-particle size edit: it multiplies the asset's **node
+     * offsets** and its **sprite sizes**, so a 0.30 m burst becomes a 0.78 m burst whose sprites sit
+     * the same *relative* distance from the anchor. Particle motion (velocity, acceleration, drag)
+     * is deliberately untouched — a bigger burst must not also fly further.
+     *
+     * It is spent in two places, neither of them a per-particle CPU loop: the node offset is scaled
+     * once per emitter in the spawn matrix the arena already composes, and the sprite size is a
+     * per-instance attribute (`aScale`, written once at spawn beside every other spawn column) that
+     * the vertex shader multiplies into `sizeX`/`sizeY`. The z-bias and the soft-depth fade are
+     * clip-space and per-fragment respectively, so neither is affected by a world-space size change.
+     *
+     * Why it exists: Ryzom instances every cast and impact sheet once per power tier with four
+     * `userParam` floats progressively switched on (`CCharacterCL::playCastFX`) — that parameter
+     * system is still absent (engine roadmap gap 26), but the *uniform scale* half of it is what a
+     * body-anchored burst needs to read at all, and it is one number rather than four.
+     *
+     * Absent = 1 = exactly the behaviour before the field existed. A non-finite or non-positive
+     * value is dropped to 1 (`normalizeScale`).
+     */
+    scale?: number;
+    /** A travelling emitter — see `ParticleTravel` (a missile from a hand to a target). */
+    travel?: ParticleTravel;
     /**
      * Lifetime in seconds; 0 or absent = the asset's own `duration + maxLife`.
      *
@@ -149,6 +252,101 @@ export function resolvedNodeBone(
     return override || nodeBone || null;
 }
 
+/**
+ * A travel request as the arena stores it, or `undefined` when it cannot be honoured.
+ *
+ * A `NaN` reaching the spawn table is silent and total — every particle of the effect lands at
+ * `(NaN, NaN, NaN)` and nothing draws — so the engine drops a malformed line instead of trusting the
+ * caller. `seconds <= 0` is kept (it means "already arrived": `travelProgress` answers 1) and a
+ * non-finite one is not.
+ */
+export function normalizeTravel(travel: ParticleTravel | undefined): ParticleTravel | undefined {
+    if (!travel) return undefined;
+
+    const { from, to, seconds } = travel;
+    const values = [from[0], from[1], from[2], to[0], to[1], to[2], seconds];
+
+    for (const value of values) if (!Number.isFinite(value)) return undefined;
+
+    return travel;
+}
+
+/**
+ * An offset as the arena stores it, or `undefined` when it cannot be honoured.
+ *
+ * The same rule `normalizeTravel` applies and for the same reason: a `NaN` component displaces every
+ * particle of the effect to `(NaN, NaN, NaN)` — silent, total, and impossible to see as anything but
+ * "nothing drew". `undefined` means "no offset", which is exactly the old behaviour.
+ */
+export function normalizeOffset(
+    offset: readonly [number, number, number] | undefined
+): readonly [number, number, number] | undefined {
+    if (!offset) return undefined;
+
+    for (const component of offset) if (!Number.isFinite(component)) return undefined;
+
+    return offset;
+}
+
+/**
+ * A scale as the arena stores it: the caller's number when it is usable, else 1 ("as authored").
+ *
+ * `0` and negatives are not "make it invisible": a zero scale collapses the sprite quad to a point
+ * and the node offsets to the anchor, which is a malformed request wearing a legal-looking value.
+ * Dropping to 1 keeps a bad number from silently deleting an effect.
+ */
+export function normalizeScale(scale: number | undefined): number {
+    return typeof scale === 'number' && Number.isFinite(scale) && scale > 0 ? scale : 1;
+}
+
+/**
+ * How far along its line a particle **born** at `birthAt` starts, in [0, 1] — the one rule travel
+ * rests on.
+ *
+ * Clamped at both ends: a playback cannot emit before it started (`0`) and, once `seconds` has
+ * elapsed, the origin holds at `to` (`1`) rather than snapping back. `seconds <= 0` is "already
+ * there", which is what a degenerate zero-length flight means; the caller decides whether to ask for
+ * a travel at all (`combat/abilityFx.ts` → `projectileFlightSeconds` answers 0 for a 0 m gap).
+ */
+export function travelProgress(
+    travel: ParticleTravel,
+    startedAt: number,
+    birthAt: number
+): number {
+    if (!(travel.seconds > 0)) return 1;
+
+    const progress = (birthAt - startedAt) / travel.seconds;
+
+    return progress <= 0 ? 0 : progress >= 1 ? 1 : progress;
+}
+
+/** Two travel requests that would render identically — the restart rule in `samePlaybackRequest`. */
+export function sameOffset(
+    before: readonly [number, number, number] | undefined,
+    after: readonly [number, number, number] | undefined
+): boolean {
+    if (!before || !after) return before === after;
+
+    return before[0] === after[0] && before[1] === after[1] && before[2] === after[2];
+}
+
+export function sameTravel(
+    before: ParticleTravel | undefined,
+    after: ParticleTravel | undefined
+): boolean {
+    if (!before || !after) return before === after;
+
+    return (
+        before.seconds === after.seconds &&
+        before.from[0] === after.from[0] &&
+        before.from[1] === after.from[1] &&
+        before.from[2] === after.from[2] &&
+        before.to[0] === after.to[0] &&
+        before.to[1] === after.to[1] &&
+        before.to[2] === after.to[2]
+    );
+}
+
 /** Lifetime of a playback in seconds: its own `seconds` when set, the asset's run otherwise. */
 export function playbackSeconds(playback: ParticlePlayback, naturalSeconds: number): number {
     const seconds = playback.seconds ?? 0;
@@ -213,6 +411,9 @@ export function startPlayback(
         bone: request.bone,
         attachMode: request.attachMode,
         tint: request.tint,
+        offset: normalizeOffset(request.offset),
+        scale: normalizeScale(request.scale),
+        travel: normalizeTravel(request.travel),
         seconds: request.seconds ?? 0,
     };
 
@@ -270,10 +471,14 @@ export function markPlaybackFinished(
 
 /**
  * True when `after` asks for exactly the playback `before` already got: same asset, same emission
- * parameters, same lifetime.
+ * parameters, same lifetime, same travel line.
  *
  * `tint` is deliberately not compared — it is a look override that should reach a *live* playback, and
- * restarting an effect because a colour changed would drop every particle in flight.
+ * restarting an effect because a colour changed would drop every particle in flight. `travel` **is**
+ * compared: the line is baked into the spawn table, so a new `to` cannot reach particles already
+ * emitted — the only honest answer is a restart. `offset` and `scale` are compared for the same
+ * reason: both are spent in the spawn matrix (and the scale in a per-instance column), so a particle
+ * already alive cannot be re-placed or re-sized — it would have to be respawned, which is a restart.
  */
 export function samePlaybackRequest(before: ParticlePlayback, after: ParticlePlayback): boolean {
     return (
@@ -282,7 +487,10 @@ export function samePlaybackRequest(before: ParticlePlayback, after: ParticlePla
         !!before.loop === !!after.loop &&
         (before.seed ?? 0) === (after.seed ?? 0) &&
         (before.seconds ?? 0) === (after.seconds ?? 0) &&
-        before.bone === after.bone
+        before.bone === after.bone &&
+        normalizeScale(before.scale) === normalizeScale(after.scale) &&
+        sameOffset(normalizeOffset(before.offset), normalizeOffset(after.offset)) &&
+        sameTravel(before.travel, after.travel)
     );
 }
 

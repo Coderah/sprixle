@@ -19,6 +19,7 @@ import {
     stopPlaybacks,
     stopPlaybacksWhere,
     type ParticlePlayback,
+    type ParticleTravel,
 } from './playbacks';
 import type { ParticleAsset } from './schema';
 
@@ -47,15 +48,22 @@ export {
     markPlaybackFinished,
     nextCycleEnd,
     nextPlaybackId,
+    normalizeOffset,
+    normalizeScale,
+    normalizeTravel,
     playbackKey,
     playbackSeconds,
     playbackWindow,
     planPlaybackChanges,
+    sameOffset,
     samePlaybackRequest,
+    sameTravel,
     startPlayback,
     stopPlaybacks,
     stopPlaybacksWhere,
+    travelProgress,
     type ParticlePlayback,
+    type ParticleTravel,
     type PlaybackAction,
     type PlaybackChange,
     type PlaybackRequest,
@@ -93,6 +101,25 @@ export type ParticlePlayOptions = {
     attachMode?: 'pose' | 'bake';
     tint?: [number, number, number];
     /**
+     * Displace the effect's origin from its anchor, in metres **in the anchor's own axes**
+     * (`ParticlePlayback.offset`).
+     *
+     * This is the field that stops a body-anchored effect from rendering inside the character: a
+     * spine bone is in the middle of the torso, so an effect placed *at* it is buried in the mesh, and
+     * Ryzom's own answer is an authored offset from the bone (`CFXStickMode` + `StickOffset`,
+     * `attached_fx.cpp:154-168`). The vector goes through the anchor's matrix, so it is not a world
+     * direction: `(0.34, 0, 0)` on a spine bone is 0.34 m along that bone's local +X, which turns
+     * with the character. Absent = at the anchor, exactly as before.
+     */
+    offset?: readonly [number, number, number];
+    /**
+     * Uniform scale of the effect, 1 = as authored (`ParticlePlayback.scale`).
+     *
+     * Multiplies the asset's node offsets and its sprite sizes — Ryzom's `ScaleFX` — so a body-sized
+     * burst can be made to read at body size. Emitter motion is not scaled. Absent or malformed = 1.
+     */
+    scale?: number;
+    /**
      * Lifetime in seconds; 0/absent = the asset's own `duration + maxLife`.
      *
      * The gameplay window is authoritative, not the art: several baked effects are held states that
@@ -101,6 +128,16 @@ export type ParticlePlayOptions = {
      * `particleAbilityFxSystem` did exactly that before this field existed).
      */
     seconds?: number;
+    /**
+     * Make the emitter travel in world space — a missile from a hand to a target (`ParticleTravel`).
+     *
+     * The origin of the asset's nodes interpolates from `from` to `to` over `seconds`, evaluated at
+     * each particle's own **birth time** and baked into the spawn table, so a stream leaves a trail
+     * and the frame path is unchanged. The caller that wants the stream to stop on arrival sets this
+     * playback's `seconds` to the flight time (wroth's missile does). Absent = the playback is
+     * exactly what it was before the field existed.
+     */
+    travel?: ParticleTravel;
 };
 
 export type ParticlePluginOptions = {
@@ -392,16 +429,20 @@ export default sprixlePlugin(function particlePlugin<
                 }
 
                 const boundNodes = asset.nodes.some((node) => node.bone);
+                // Both warnings below are about *bone* attachment, which a travelling playback does
+                // not use: its origin is the line, and the bone in the request only told the caller
+                // where the line starts. Warning there would be noise about a mechanism that is off.
+                //
                 // A playback-level bone override attaches *every* node, so the ring-window check has to
                 // run for it as well — an unbound asset played on a bone is the case that used to slip
                 // through and then appear to follow the hand once the ring recycled its birth frame.
-                if ((boundNodes || playback.bone) && asset.poseWindow > pose.window) {
+                if (!playback.travel && (boundNodes || playback.bone) && asset.poseWindow > pose.window) {
                     warnOnce(
                         `"${asset.id}" needs ${asset.poseWindow.toFixed(2)}s of pose history but the ring ` +
                             `holds ${pose.window.toFixed(2)}s (raise poseFrames/poseHz, or shorten the effect)`
                     );
                 }
-                if (playback.bone && !boundNodes) {
+                if (!playback.travel && playback.bone && !boundNodes) {
                     warnOnce(
                         `"${asset.id}" binds no bone; the override "${playback.bone}" moves every node into ` +
                             `that bone's frame, so the whole effect is displaced by the hand`
@@ -417,7 +458,10 @@ export default sprixlePlugin(function particlePlugin<
                     !!playback.loop,
                     playback.seconds ?? 0,
                     playback.bone,
-                    playback.attachMode
+                    playback.attachMode,
+                    playback.travel,
+                    playback.offset,
+                    playback.scale
                 );
 
                 if (!started) {
@@ -590,7 +634,10 @@ export default sprixlePlugin(function particlePlugin<
                 bone: playOptions.bone,
                 attachMode: playOptions.attachMode,
                 tint: playOptions.tint,
+                offset: playOptions.offset,
+                scale: playOptions.scale,
                 seconds: playOptions.seconds,
+                travel: playOptions.travel,
             });
 
             entity.components.rParticleFx = { playbacks };

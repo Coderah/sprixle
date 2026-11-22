@@ -5,9 +5,14 @@ import type { PoseTable } from './pose';
 import {
     bakesAttachment,
     nextCycleEnd,
+    normalizeOffset,
+    normalizeScale,
+    normalizeTravel,
     playbackKey,
     playbackWindow,
     resolvedNodeBone,
+    travelProgress,
+    type ParticleTravel,
 } from './playbacks';
 import {
     createInstanceScratch,
@@ -19,8 +24,18 @@ import {
 const IDENTITY = new Matrix4();
 /** Effect transform × the asset's authored root node, composed per spawn (never per particle). */
 const nodeMatrix = new Matrix4();
+/** The effect transform's rotation alone — the static half of a travelling emitter's matrix. */
+const effectRotation = new Matrix4();
 /** Resolved bone matrix, reused for every pose write. */
 const resolvedNode = new Matrix4();
+/** `T(offset)` for the playback being spawned or posed — one write per playback, never per particle. */
+const offsetMatrix = new Matrix4();
+/** `anchor * T(offset)`: what the pose ring or the spawn matrix is actually given. */
+const displacedNode = new Matrix4();
+/** A travelling playback's two endpoints after the offset displaces the whole line. */
+const travelFrom = new Vector3();
+const travelTo = new Vector3();
+const travelOffset = new Vector3();
 
 /** Default cap on bound nodes per effect — a sizing decision, tunable via the plugin's `maxNodes`. */
 const DEFAULT_NODES_PER_ASSET = DEFAULT_MAX_NODES;
@@ -175,6 +190,20 @@ export class ParticleArena {
     private boneOf: (string | undefined)[] = [];
     /** Per slot: bake the bone matrix into the spawn table instead of sampling the pose ring. */
     private bakeOf: boolean[] = [];
+    /**
+     * Per slot: the playback's `offset`, flat as `[x, y, z]` per slot, in the anchor's local space.
+     * `hasOffsetOf` says whether there is one, so the absent case keeps today's code path exactly
+     * (no matrix multiply, no matrix write beyond the one already there).
+     */
+    private offsetOf: Float32Array;
+    private hasOffsetOf: Uint8Array;
+    /** Per slot: the playback's uniform `scale`, 1 = as authored. */
+    private scaleOf: Float32Array;
+    /**
+     * Per slot: a travelling emitter (`ParticleTravel`), or `undefined` for a stationary one. The
+     * line is baked into the spawn table, so this is read at spawn time only — never per frame.
+     */
+    private travelOf: (ParticleTravel | undefined)[] = [];
     private startedAt: Float64Array;
     private endsAt: Float64Array;
     /** Absolute end of a looping playback's `seconds` window; 0 = unbounded (loops forever). */
@@ -256,6 +285,9 @@ export class ParticleArena {
         this.spawnWrites = new Int32Array(maxPlaybacks);
         this.birthOldest = new Float32Array(maxPlaybacks);
         this.birthNewest = new Float32Array(maxPlaybacks);
+        this.offsetOf = new Float32Array(maxPlaybacks * 3);
+        this.hasOffsetOf = new Uint8Array(maxPlaybacks);
+        this.scaleOf = new Float32Array(maxPlaybacks).fill(1);
 
         for (let i = 0; i < maxPlaybacks; i++) this.free[i] = maxPlaybacks - 1 - i;
         this.freeTop = maxPlaybacks;
@@ -282,6 +314,20 @@ export class ParticleArena {
      * resolves against it instead of its own bone, so one baked right-hand cast effect can play on
      * the left hand. Nothing in the asset changes — the arena simply asks
      * `playbacks.resolvedNodeBone` instead of reading `node.bone` directly.
+     *
+     * `travel` makes the emitter move (`ParticleTravel`): the origin of the asset's nodes is
+     * interpolated per particle from its own birth time, in the spawn table, so it costs nothing per
+     * frame. A travelling playback **supersedes the bone binding** — the origin is the line, not a
+     * bone — so it allocates no pose slot and primes no ring history.
+     *
+     * `offset` and `scale` are the per-playback placement (`ParticlePlayback.offset` / `.scale`): the
+     * offset displaces the anchor's frame (in the anchor's own axes) so an effect bound to a bone
+     * inside the body renders outside it, and the scale multiplies the asset's node offsets and its
+     * sprite sizes. Both are normalised here (a malformed value is dropped, not trusted), and both
+     * are spent in matrices the arena already builds: the offset folds into the pose-ring write
+     * (`primePose` / `updatePoses`) or into the spawn matrix, the scale into that same spawn matrix
+     * plus the per-instance `aScale` column. Neither costs anything per particle, and neither exists
+     * at all when the caller says nothing.
      */
     play(
         entityKey: string,
@@ -292,7 +338,10 @@ export class ParticleArena {
         loop = false,
         seconds = 0,
         bone?: string,
-        attachMode?: 'pose' | 'bake'
+        attachMode?: 'pose' | 'bake',
+        travel?: ParticleTravel,
+        offset?: readonly [number, number, number],
+        scale?: number
     ): boolean {
         const key = playbackKey(entityKey, handle);
 
@@ -346,28 +395,36 @@ export class ParticleArena {
         this.endsAt[slot] = window.endsAt;
         this.boneOf[slot] = bone;
         this.bakeOf[slot] = bakesAttachment(attachMode);
+        this.travelOf[slot] = normalizeTravel(travel);
+        this.setOffset(slot, normalizeOffset(offset));
+        this.scaleOf[slot] = normalizeScale(scale);
 
         this.slotOfKey.set(key, slot);
         this.totalPlaybacks++;
 
-        this.allocatePoseSlots(slot, asset);
+        // A travelling playback resolves nothing from a bone: its origin is the line, baked per
+        // particle from `travelProgress`. Allocating ring rows for it would be a row per bound node
+        // spent on a pose nobody samples.
+        if (!this.travelOf[slot]) {
+            this.allocatePoseSlots(slot, asset);
 
-        /**
-         * **Resolve the attached nodes once, before the first spawn.**
-         *
-         * An attached emitter authors in *node* space and lets the vertex shader apply the pose at
-         * each particle's own birth time. The spawn table written below therefore does not carry the
-         * bone matrix itself — it carries the birth time, and the shader samples the pose ring for
-         * it. On the frame a playback starts, that ring has **no entry for these slots yet** (the
-         * first `updatePoses` runs on the next tick), so the sample reads the zeroed texture and the
-         * whole burst lands at the world origin instead of in the hand. That is the bug the first
-         * playtest reported as "everything is in the crotch": a one-shot never gets a second chance,
-         * because its only spawn is this one.
-         *
-         * `PoseTable.write`'s first write fills the node's whole history, so priming here makes the
-         * sample valid for every particle of the first cycle, not just its first frame.
-         */
-        this.primePose(slot, now);
+            /**
+             * **Resolve the attached nodes once, before the first spawn.**
+             *
+             * An attached emitter authors in *node* space and lets the vertex shader apply the pose at
+             * each particle's own birth time. The spawn table written below therefore does not carry the
+             * bone matrix itself — it carries the birth time, and the shader samples the pose ring for
+             * it. On the frame a playback starts, that ring has **no entry for these slots yet** (the
+             * first `updatePoses` runs on the next tick), so the sample reads the zeroed texture and the
+             * whole burst lands at the world origin instead of in the hand. That is the bug the first
+             * playtest reported as "everything is in the crotch": a one-shot never gets a second chance,
+             * because its only spawn is this one.
+             *
+             * `PoseTable.write`'s first write fills the node's whole history, so priming here makes the
+             * sample valid for every particle of the first cycle, not just its first frame.
+             */
+            this.primePose(slot, now);
+        }
 
         this.writeRun(slot, now);
 
@@ -396,10 +453,46 @@ export class ParticleArena {
             const nodeSlot = this.poseSlots[base + i];
             const bone = this.nodeBone(slot, i);
             if (nodeSlot < 0 || !bone) continue;
-            if (this.resolveNode(key, bone, resolvedNode)) this.pose.write(nodeSlot, resolvedNode);
+
+            if (this.resolveNode(key, bone, resolvedNode)) {
+                this.pose.write(nodeSlot, this.displacedAnchor(slot, resolvedNode));
+            }
         }
 
         this.pose.endFrame();
+    }
+
+    /** Store (or clear) one slot's anchor-local offset. */
+    private setOffset(slot: number, offset: readonly [number, number, number] | undefined) {
+        const base = slot * 3;
+
+        this.hasOffsetOf[slot] = offset ? 1 : 0;
+        this.offsetOf[base] = offset?.[0] ?? 0;
+        this.offsetOf[base + 1] = offset?.[1] ?? 0;
+        this.offsetOf[base + 2] = offset?.[2] ?? 0;
+    }
+
+    /**
+     * The matrix a particle's node-local position is multiplied by: `anchor * T(offset)`.
+     *
+     * This is where the offset is "applied after the anchor matrix, in the anchor's own space" — the
+     * translation is expressed in the anchor's axes, so a bone-anchored effect turns with the bone
+     * and a body-anchored one turns with the body. With no offset it returns the anchor itself, which
+     * is what keeps an unplaced playback byte-identical to the pre-W44 engine: same matrix object,
+     * same write, no extra multiply.
+     */
+    private displacedAnchor(slot: number, anchor: Matrix4): Matrix4 {
+        if (!this.hasOffsetOf[slot]) return anchor;
+
+        const base = slot * 3;
+
+        offsetMatrix.makeTranslation(
+            this.offsetOf[base],
+            this.offsetOf[base + 1],
+            this.offsetOf[base + 2]
+        );
+
+        return displacedNode.multiplyMatrices(anchor, offsetMatrix);
     }
 
     stop(slot: number) {
@@ -418,6 +511,9 @@ export class ParticleArena {
         this.entityOf[slot] = '';
         this.deadline[slot] = 0;
         this.boneOf[slot] = undefined;
+        this.travelOf[slot] = undefined;
+        this.hasOffsetOf[slot] = 0;
+        this.scaleOf[slot] = 1;
 
         this.releaseSlot(slot);
     }
@@ -581,7 +677,7 @@ export class ParticleArena {
                 // A failed resolve keeps the previous pose instead of snapping to the origin: a
                 // bone that briefly disappears should freeze its trail, not teleport it.
                 if (this.resolveNode(key, bone, resolvedNode)) {
-                    this.pose.write(nodeSlot, resolvedNode);
+                    this.pose.write(nodeSlot, this.displacedAnchor(slot, resolvedNode));
                     continue;
                 }
 
@@ -738,6 +834,10 @@ export class ParticleArena {
         const key = this.entityOf[slot];
         const effectMatrix = this.transformOf(key) ?? IDENTITY;
         const poseBase = slot * this.maxNodesPerAsset;
+        /** A travelling emitter: the origin is interpolated per particle, not taken from a transform. */
+        const travel = this.travelOf[slot];
+        const travelStartedAt = this.startedAt[slot];
+        const scale = this.scaleOf[slot];
 
         const runStart = this.runStart[run];
         const runEnd = runStart + this.runCount[run];
@@ -759,24 +859,59 @@ export class ParticleArena {
             const bone = this.nodeBone(slot, emitter.nodeIndex);
             let nodeSlot = bone ? this.poseSlots[poseBase + emitter.nodeIndex] : -1;
 
-            // Attached emitters author in *node* space and let the shader apply the pose ring at each
-            // particle's own time. Free emitters bake world space once, here.
-            if (nodeSlot >= 0 && this.bakeOf[slot]) {
+            nodeMatrix.fromArray(node.matrix);
+
+            // Ryzom's `ScaleFX` half of `scale`: the asset's own node offset, scaled about its anchor.
+            // Emitter motion (velocity, acceleration) is deliberately not scaled — a bigger burst must
+            // not also fly further. One multiply-three per emitter, not per particle.
+            if (scale !== 1) {
+                nodeMatrix.elements[12] *= scale;
+                nodeMatrix.elements[13] *= scale;
+                nodeMatrix.elements[14] *= scale;
+            }
+
+            if (travel) {
+                // **A travelling emitter keeps only the effect's rotation here.** The origin is added
+                // per particle below (`travelProgress` on that particle's own birth time), so this
+                // matrix must contribute no translation of its own: the asset's node offsets are
+                // added on top of the travelled origin, never rotated around a stale one. The bone
+                // is bypassed for the same reason — `from` already came from the caster's hand.
+                effectRotation.copy(effectMatrix).setPosition(0, 0, 0);
+                nodeMatrix.premultiply(effectRotation);
+                nodeSlot = -1;
+
+                // An offset **displaces the whole line**: both endpoints are shifted, because the
+                // flight is one displaced emitter moving between two points rather than a line with
+                // one end nudged. It is rotated into world space by the effect transform, the only
+                // anchor a travelling playback has (`playbacks.ts` → `ParticlePlayback.offset`).
+                travelFrom.set(travel.from[0], travel.from[1], travel.from[2]);
+                travelTo.set(travel.to[0], travel.to[1], travel.to[2]);
+
+                if (this.hasOffsetOf[slot]) {
+                    const base = slot * 3;
+
+                    travelOffset
+                        .set(this.offsetOf[base], this.offsetOf[base + 1], this.offsetOf[base + 2])
+                        .applyMatrix4(effectRotation);
+                    travelFrom.add(travelOffset);
+                    travelTo.add(travelOffset);
+                }
+            } else if (nodeSlot >= 0 && this.bakeOf[slot]) {
                 // Bake mode: resolve the bone **now** and store the particle as free. No ring, no
                 // per-particle pose sampling — the emitter gives birth and the particle is then an
                 // independent world-space thing, which is the only shape that cannot follow the bone.
                 if (this.resolveNode && this.resolveNode(key, bone!, resolvedNode)) {
-                    nodeMatrix.fromArray(node.matrix).premultiply(resolvedNode);
+                    nodeMatrix.premultiply(this.displacedAnchor(slot, resolvedNode));
                     nodeSlot = -1;
-                } else {
-                    // Unresolvable bone: fall back to the pose path rather than to the effect origin.
-                    nodeMatrix.fromArray(node.matrix);
                 }
-            } else if (nodeSlot >= 0) {
-                nodeMatrix.fromArray(node.matrix);
-            } else {
-                nodeMatrix.fromArray(node.matrix).premultiply(effectMatrix);
+            } else if (nodeSlot < 0) {
+                // A free node rides the effect transform, and the offset displaces that transform the
+                // same way it displaces a bone.
+                nodeMatrix.premultiply(this.displacedAnchor(slot, effectMatrix));
             }
+            // (`nodeSlot >= 0` in pose mode leaves `nodeMatrix` node-local: the shader applies the
+            // pose at each particle's birth, and *that* is where this path's offset lives —
+            // `primePose` / `updatePoses` write `pose * T(offset)` into the ring.)
             tmpExtent.set(emitter.extent[0], emitter.extent[1], emitter.extent[2]);
 
             for (let i = 0; i < count; i++) {
@@ -832,6 +967,18 @@ export class ParticleArena {
 
                 // Local → world, baked once: particles already alive must not follow the emitter.
                 tmpPos.applyMatrix4(nodeMatrix);
+
+                // ...and a travelling emitter's origin is a function of *this particle's* birth
+                // time, which is what turns one moving origin into a stream that trails behind it
+                // instead of a cloud that slides. No allocation, no per-frame work: the line is
+                // spent here, once, exactly like the rest of the spawn table.
+                if (travel) {
+                    const progress = travelProgress(travel, travelStartedAt, birthAt);
+                    tmpPos.x += travelFrom.x + (travelTo.x - travelFrom.x) * progress;
+                    tmpPos.y += travelFrom.y + (travelTo.y - travelFrom.y) * progress;
+                    tmpPos.z += travelFrom.z + (travelTo.z - travelFrom.z) * progress;
+                }
+
                 tmpDir.transformDirection(nodeMatrix);
                 tmpAccel.transformDirection(nodeMatrix);
 
@@ -866,6 +1013,7 @@ export class ParticleArena {
                 scratch.g = emitter.color[1];
                 scratch.b = emitter.color[2];
                 scratch.a = 1;
+                scratch.scale = scale;
 
                 for (let segment = 0; segment < segments; segment++) {
                     if (index >= runEnd) break;

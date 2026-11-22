@@ -104,6 +104,74 @@ NeL decoding work.
     (`src/client/system/particleAbilityFxSystem.ts`), and that map is the thing that should not exist.
     Do not grow this into a general VFX graph; the budget/zero-allocation contract must survive.
 
+26. **Particle playback takes no per-instance parameters, and `tint` is not applied.** ⚠️
+    **PARTIALLY FIXED** (wroth W44, 2026-11-22: `ParticlePlayback.offset` and `.scale` on
+    `plugins/particles/playbacks.ts`; the four-float `userParam` system is still absent). Kept for
+    the reasoning and for the half that is still missing. What was built: `scale` — Ryzom's
+    `CAnimationFXSheet::ScaleFX` — as a per-instance `aScale` attribute the vertex shader multiplies
+    into `sizeX`/`sizeY` (never a per-particle CPU loop, and never a per-material uniform, because a
+    pool is shared by every playback of a draw identity), plus the asset's node offsets scaled once
+    per emitter in the spawn matrix; and `offset` — Ryzom's `CFXStickMode` + `StickOffset`
+    (`attached_fx.cpp:154-168`) — folded into `anchor * T(offset)`, i.e. one extra 4×4 multiply per
+    bound node per frame on the pose path and nothing per particle, with both endpoints of a
+    travelling playback displaced as one. Both are absent = the old behaviour exactly, documented in
+    `particles.md` §6.4 and proved by `scratchpad/w44-fx-placement-sanity.mjs`. **Still missing:**
+    `ParticlePlayback.params?: readonly number[4]` (the four `userParam` floats Ryzom's power tiers
+    drive, and Fury's `property1..5Value` per track), the importers that would bind a param to a
+    float maker or property slot, and `tint` actually reaching the shader. Wroth's `ParticlePlayback`
+    still carries `tint` with the note *"reserved: per-playback colour multiply (carried, not yet
+    applied in the shader)"*, and has no parameter array at all. Two unrelated corpora ask for
+    exactly that: Ryzom instances every cast and impact `.ps` once per **power tier** (5 tiers, 4
+    `userParam` floats progressively switched on — `CCharacterCL::playCastFX`, `CCharacterCL::impact()`),
+    and Fury's per-ability track table carries `property1..5Value` **per track on every row**
+    (`VFX_AbilityTracks.bin`, 3,230 rows in wroth's `content/fury/derived/ability-tracks.json`). So
+    an effect's look is a *runtime argument* in both sources and a compile-time constant here.
+    Wanted shape for the rest: `ParticlePlayback.params?: readonly number[4]`, with the `.ps`/track
+    importers binding a param to whichever float maker or property slot the source used, plus the
+    shader actually multiplying `tint`. Keep it declarative: params feed named emitters, not a
+    scripting hook.
+27. **No animation notify / contact events.** Fury's hit-location model is a table keyed by
+    animation: `VFX_AnimationContacts` (217 rows: `weaponTypeCode × animationName → frame,
+    contactHeightCode, contactArcCode, contactStrengthCode, strikeDirectionCode`), i.e. gameplay
+    reads **a frame of a clip**. Our animation runtime exposes clip changes and a countdown, never a
+    per-frame notify, so gameplay approximates from the clock instead. Gap #20 already names the
+    extraction shape ("clip events surfaced as signal entities"); this is the concrete consumer that
+    justifies it — contact-frame FX, hit windows, and the footstep/landing events the Ryzom export
+    manifest already carries (`content/ryzom-derived/homin/animation-manifest.json`).
+28. **A playback cannot travel.** ✅ **FIXED** (wroth W43, 2026-11-22: `ParticlePlayback.travel` on
+    `plugins/particles/playbacks.ts`, evaluated per particle in the arena's spawn table; the flight
+    time is `distance / MAGICFX::PROJECTILE_SPEED` = 20 m/s). Kept for the reasoning and the shape it
+    settled on. What was built, and why in that place: the origin of the asset's nodes interpolates
+    `from → to` over `seconds` **as a function of each particle's birth time**, so a stream leaves a
+    trail instead of a cloud sliding (`travelProgress`, `arena.writeLayer`); the interpolation is
+    spent once, in the spawn-table write that already bakes every other analytic term, so a moving
+    playback costs **nothing** per frame — the pose ring's "sample the emitter at birth" trick, made
+    exact instead of 30 Hz-quantised, and without a second per-instance channel. `travel` absent is
+    exactly the old behaviour; past `seconds` the origin holds at `to`; a travelling playback
+    supersedes the bone binding, since the line is the origin. Not built, and named in `particles.md`
+    §6.3: rotating the emitter onto the line, Ryzom's `Bomb` parabola, and `Chain`/`Spray`
+    (`MAGICFX::TSpellMode`, `magic_fx.h:29-35`).
+
+    The gap as first recorded: a projectile's visual is one effect whose node moves from the
+    launch point to the target over `distance / speed`, and the arena's analytic path has no
+    translate-over-time input — so wroth plays release-on-caster and impact-on-target and nothing
+    crosses the gap (documented as a content gap in `content/particles/ability-fx.md` when it is in
+    fact an engine shape). Wanted: `travel?: { from: Vec3; to: Vec3; seconds: number }` on a
+    playback, evaluated in the same analytic pass as the rest of the motion, so a missile is still
+    one arena run and zero per-frame JS.
+29. **Particle collision / zone fields are decoded and ignored.** NeL's `.ps` graph carries kill and
+    containment volumes — `CPSZonePlane/Sphere/Cylinder/Rectangle` with a `CPSAttrib` normal, radius,
+    basis and dimensions, owned by a force located and targeting an emitter's located. The converter
+    reads them (`tools/ryzom/ps_decode.py`, repaired in wroth W42) and the runtime evaluates none of
+    them, so a closed-form motion integrates gravity for the particle's whole life. wroth's first
+    asset to hit this is `ryzom.ability.resist`, whose ground plane stops a 10 m/s² fall at 2 s: the
+    baked envelope reads *travel 11.48 m* where the source's particles drop ~1 m, so the asset is
+    marked environment-scale on a measurement the engine made wrong (`content/particles/ability-fx.md`
+    §"The bake, and its one threshold failure"). Shape: a per-layer convex/plane kill test in the
+    analytic pass (a particle that crosses a plane dies or bounces, decided per zone class), still
+    zero per-frame JS and no per-particle state — the zones are the same kind of closed form as
+    gravity. Until then every Ryzom effect with a ground plane over-reports its reach.
+
 ## Plugin extraction candidates (source: project code)
 
 Ranked by leverage. Each names the donor implementation.

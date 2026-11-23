@@ -118,18 +118,28 @@ NeL decoding work.
     `particles.md` §6.4 and proved by `scratchpad/w44-fx-placement-sanity.mjs`. **Still missing:**
     `ParticlePlayback.params?: readonly number[4]` (the four `userParam` floats Ryzom's power tiers
     drive, and Fury's `property1..5Value` per track), the importers that would bind a param to a
-    float maker or property slot, and `tint` actually reaching the shader. Wroth's `ParticlePlayback`
-    still carries `tint` with the note *"reserved: per-playback colour multiply (carried, not yet
-    applied in the shader)"*, and has no parameter array at all. Two unrelated corpora ask for
+    float maker or property slot. The `tint` half is now **done** (wroth E1/issue 001,
+    2026-11-22): `tint` is a per-instance `aTint` vec3 attribute, default (1,1,1), multiplied into
+    `colour.rgb` in `shaders.ts` before the kind branches — per instance rather than per material for
+    the same reason `aScale` is, so one pool serves differently tinted playbacks in one frame, and
+    `ParticleArena.setTint` can re-tint a **live** playback without restarting it. Wroth's
+    `ParticlePlayback` has no parameter array at all. Two unrelated corpora ask for
     exactly that: Ryzom instances every cast and impact `.ps` once per **power tier** (5 tiers, 4
     `userParam` floats progressively switched on — `CCharacterCL::playCastFX`, `CCharacterCL::impact()`),
     and Fury's per-ability track table carries `property1..5Value` **per track on every row**
     (`VFX_AbilityTracks.bin`, 3,230 rows in wroth's `content/fury/derived/ability-tracks.json`). So
     an effect's look is a *runtime argument* in both sources and a compile-time constant here.
     Wanted shape for the rest: `ParticlePlayback.params?: readonly number[4]`, with the `.ps`/track
-    importers binding a param to whichever float maker or property slot the source used, plus the
-    shader actually multiplying `tint`. Keep it declarative: params feed named emitters, not a
-    scripting hook.
+    importers binding a param to whichever float maker or property slot the source used. Keep it
+    declarative: params feed named emitters, not a scripting hook.
+
+    **Standing rule this exposed** (wroth E1): the `InstanceScratch` packing in `pools.ts` and the
+    attribute read order in `shaders.ts` are a contract with no type between them. A vec4 that packed
+    `[sizeX, alpha, colour, unused]` while the shader read `y` as `sizeY` compiled fine, ran, and
+    silently distorted every effect while killing the alpha channel — the bug survived long enough to
+    be found by audit, not by the build. Any change to either side must change both, and a sanity
+    check should assert a curve authored on one axis stays on that axis. Current order:
+    `x = sizeX, y = sizeY, z = colour, w = alpha`.
 27. **No animation notify / contact events.** Fury's hit-location model is a table keyed by
     animation: `VFX_AnimationContacts` (217 rows: `weaponTypeCode × animationName → frame,
     contactHeightCode, contactArcCode, contactStrengthCode, strikeDirectionCode`), i.e. gameplay
@@ -171,6 +181,19 @@ NeL decoding work.
     analytic pass (a particle that crosses a plane dies or bounces, decided per zone class), still
     zero per-frame JS and no per-particle state — the zones are the same kind of closed form as
     gravity. Until then every Ryzom effect with a ground plane over-reports its reach.
+
+    **✅ PLANE HALF BUILT** (wroth E3/issue 014, 2026-11-22). `ParticleAssetLayer.killBelowY?` is a
+    per-layer height in the node's frame; `assets.compileLayer` defaults it to `+Infinity` (absent =
+    no behaviour change) and — this is the part that bit once already — includes the **value** in
+    `poolKey` (`|ky:${killBelowY}`), the way `|z:${zBias}` does, because a key that encodes presence
+    instead of value is the pre-001 pool-collision bug. `arena.writeInstance` transforms the plane by
+    the node matrix per spawned instance (`nodeMatrix · (0, killBelowY, 0)`) into a per-instance
+    `aFloor` vec3-less float attribute, and `shaders.ts` clips by the **evaluated vertex world Y**
+    below it — so a large sprite straddling the plane is cut, not vanished whole. Still open from the
+    recorded shape: sphere/cylinder/rectangle containment and the per-zone bounce decision; only the
+    plane kill is evaluated today. Per-layer `frameRate?` landed alongside it and drives Ryzom
+    `CTextureGrouped` flipbook sheets (`uSpriteFps` advances the cell inside the analytic pass), which
+    is the same shape as `aScale`: per-layer value, one uniform per pool, zero per-particle state.
 
 ## Plugin extraction candidates (source: project code)
 

@@ -162,6 +162,28 @@ export type ParticleAssetLayer = {
      * with, it does not stop a body occluding it. Absent ⇒ 0.
      */
     zBias?: number;
+    /**
+     * Where this layer's particles stop existing, in the **asset's own Y**, in metres: the ground
+     * kill plane a producer can export from its source format (Ryzom's `CPSZone*`, a zone whose plane
+     * faces up). A particle whose evaluated world Y falls below the plane is collapsed.
+     *
+     * Absent ⇒ nothing is clipped, which is every asset written before this field existed. The arena
+     * transforms the plane by the node matrix that places the effect
+     * (`nodeMatrix · (0, killBelowY, 0)`), so a bone-attached, ground-anchored or travelling effect
+     * clips against the floor it is really over rather than against a parent's local origin. It is a
+     * *kill*, not a bounce: a producer whose source bounces says so in `meta.warnings` and accepts the
+     * clip, because the analytic path in `shaders.ts` has no velocity history to reflect.
+     */
+    killBelowY?: number;
+    /**
+     * Sprite-cell playback rate in **cells per second**: 0 or absent = a particle keeps the cell it
+     * was born with (a single sprite, or one tile of a grid). Non-zero steps the UV cell over the
+     * particle's own life, which is what an animated sprite sheet means.
+     *
+     * Per layer, because the rate belongs to the renderer that authored it; the runtime deliberately
+     * does not invent one (a static sheet animated at a guess shimmers).
+     */
+    frameRate?: number;
     /** Curve references, evaluated over normalised life. */
     curves?: {
         sizeX?: CurveRef;
@@ -285,6 +307,14 @@ export type CompiledLayer = {
      * see `ParticleAssetLayer.zBias`). Lifts a coplanar effect off the floor.
      */
     zBias: number;
+    /**
+     * The layer's ground kill plane in **asset Y** (metres), `+Infinity` when it has none. The arena
+     * turns it into a world height per spawned instance (`nodeMatrix · (0, killBelowY, 0)`) and the
+     * vertex shader collapses anything evaluated below it.
+     */
+    killBelowY: number;
+    /** Sprite-cell playback rate in cells per second; 0 = the spawn cell is kept for life. */
+    frameRate: number;
     tailFade: boolean;
     textureUrl: string;
     grid: Vec2;

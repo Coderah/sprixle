@@ -15,6 +15,7 @@ import { PoseTable } from './pose';
 import {
     markPlaybackFinished,
     planPlaybackChanges,
+    routePlaybackEvent,
     startPlayback,
     stopPlaybacks,
     stopPlaybacksWhere,
@@ -50,11 +51,13 @@ export {
     nextPlaybackId,
     normalizeOffset,
     normalizeScale,
+    normalizeTint,
     normalizeTravel,
     playbackKey,
     playbackSeconds,
     playbackWindow,
     planPlaybackChanges,
+    routePlaybackEvent,
     sameOffset,
     samePlaybackRequest,
     sameTravel,
@@ -99,6 +102,15 @@ export type ParticlePlayOptions = {
      * emitter.
      */
     attachMode?: 'pose' | 'bake';
+    /**
+     * RGB multiply on every particle this playback emits — a look override for one play (`1, 1, 1` =
+     * as authored). Spent as the per-instance `aTint` column, so two playbacks of one asset in the same
+     * pool can carry different colours (a fire hit and a water hit of the same burst).
+     *
+     * Editing it on a live playback does not restart the effect (`playbacks.samePlaybackRequest`
+     * ignores it); the new value reaches the particles emitted after the edit, while those already in
+     * flight keep the colour they were born with.
+     */
     tint?: [number, number, number];
     /**
      * Displace the effect's origin from its anchor, in metres **in the anchor's own axes**
@@ -166,8 +178,24 @@ export type ParticlePluginOptions = {
     /** Pose-history resolution: `frames / hz` seconds of history (default 64 / 30 ≈ 2.1 s). */
     poseFrames?: number;
     poseHz?: number;
-    /** Playback events. Without this a `particleSignal` entity is created instead. */
+    /**
+     * Playback events (`CPSSound` sounds, gameplay signals, playback ends).
+     *
+     * The handler is the only way an event leaves the plugin: without it nothing is emitted at all
+     * unless `emitSignalEntities` is turned on, because a `particleSignal` entity has no owner until a
+     * project registers the component *and* destroys it — emitting one by default leaked an ECS entity
+     * per cast, hit and resist (issue 001).
+     */
     onEvent?: (event: { kind: string; asset: string; name: string }) => void;
+    /**
+     * Emit a `particleSignal` ECS entity per playback event instead of calling `onEvent`.
+     *
+     * **Off by default, and opt-in on purpose.** The entity is a hand-off: the consumer is expected to
+     * register the `particleSignal` component, read it and destroy the entity. A project that never
+     * registered it leaked one entity per event forever — every cast, every hit, every resist — so the
+     * default is now "no entity". Set this (and destroy what you read) or pass `onEvent`.
+     */
+    emitSignalEntities?: boolean;
     /** Assets bundled with the app — registered at init, no fetch needed. */
     assets?: ParticleAsset[];
     /**
@@ -325,15 +353,33 @@ export default sprixlePlugin(function particlePlugin<
     );
 
     function emitEvent(kind: 'sound' | 'signal' | 'end', asset: string, name: string) {
-        if (options.onEvent) {
-            options.onEvent({ kind, asset, name });
+        // One rule, in the pure module, so the default is testable: "no handler, no opt-in" = nothing
+        // is created. A `particleSignal` entity has no owner until a project registers the component
+        // *and* destroys it, so emitting one by default leaked an entity per event — every cast, hit
+        // and resist (issue 001).
+        const route = routePlaybackEvent(options);
+
+        if (route === 'handler') {
+            options.onEvent!({ kind, asset, name });
 
             return;
         }
 
-        em.quickEntity({
-            particleSignal: { kind, asset, name },
-        } as any);
+        if (route === 'entity') {
+            em.quickEntity({
+                particleSignal: { kind, asset, name },
+            } as any);
+
+            return;
+        }
+
+        // Never silent, but said once (the message carries no asset/event names for that reason — a
+        // corpus with 113 assets of `CPSSound` events would otherwise print one warning per event).
+        warnOnce(
+            'a playback event was dropped (sound/signal/end): pass the plugin an `onEvent` handler, ' +
+                'or `emitSignalEntities: true` to spawn a `particleSignal` entity for a consumer to ' +
+                'read and destroy.'
+        );
     }
 
     arena.onFinished = (info: PlaybackInfo) => finishPlayback(info);
@@ -461,7 +507,8 @@ export default sprixlePlugin(function particlePlugin<
                     playback.attachMode,
                     playback.travel,
                     playback.offset,
-                    playback.scale
+                    playback.scale,
+                    playback.tint
                 );
 
                 if (!started) {
@@ -477,6 +524,14 @@ export default sprixlePlugin(function particlePlugin<
                     if (event.type === 'sound') emitEvent('sound', asset.id, event.name);
                     else emitEvent('signal', asset.id, event.name);
                 }
+            }
+
+            // `tint` is a look override rather than a request change (`samePlaybackRequest` ignores it,
+            // so a colour edit never restarts the effect), which means the arena has to be told about it
+            // here or it would never reach the draw state at all. Runs at component-write frequency
+            // (play/stop), and `setTint` returns immediately when nothing changed.
+            for (const playback of fx.playbacks) {
+                if (playback.playing) arena.setTint(key, playback.id, playback.tint);
             }
         },
 
@@ -608,7 +663,12 @@ export default sprixlePlugin(function particlePlugin<
 
         /** Fetch + compile + register (a URL, not a webpack import). */
         loadAsset(url: string) {
-            return loadParticleAsset(url, registry, curves);
+            // The same compile ceilings `registerAsset` passes: an asset fetched from a URL must not be
+            // held to a different `maxLayers` / `maxNodes` than an in-memory one.
+            return loadParticleAsset(url, registry, curves, {
+                maxLayers: options.maxLayers,
+                maxNodes: options.maxNodes,
+            });
         },
 
         /**

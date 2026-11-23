@@ -40,6 +40,21 @@ const DEFAULT_NOISE_FREQUENCY = 1;
 const MAX_NOISE_AMPLITUDE = 1;
 const MAX_NOISE_FREQUENCY = 10;
 
+/**
+ * The blend modes the runtime draws, exactly as `schema.ts` spells them.
+ *
+ * `modulate` is NeL's name for the same blend: `CPSMaterial::setBlendingMode(modulate)` sets
+ * `BlendFunc(zero, srccolor)` — destination × source, i.e. a multiply (`ps_particle_basic.cpp:581-587`),
+ * which is what three's `MultiplyBlending` is. Accepting the corpus's own word and compiling it to
+ * `multiply` keeps one draw identity for one blend state: a producer that writes `modulate` (as
+ * `tools/ryzom/ps_bake.py:50` does, from `CPSMaterial::TBlendingMode`,
+ * `nel/include/nel/3d/ps_particle_basic.h:806`) and one that writes `multiply` share a pool instead of
+ * throwing or drawing twice.
+ */
+const BLEND_ALIASES: Record<string, ParticleBlend> = { modulate: 'multiply' };
+
+const BLENDS: readonly string[] = ['add', 'multiply', 'alphaBlend', 'alphaTest'];
+
 function fail(message: string): never {
     throw new Error(`[particles] ${message}`);
 }
@@ -157,11 +172,14 @@ function compileLayer(
         }
     }
 
-    const blend: ParticleBlend = layer.blend ?? raw.render.blend ?? 'add';
+    const blendAuthored = (layer.blend ?? raw.render.blend ?? 'add') as string;
+    const blendResolved = BLEND_ALIASES[blendAuthored] ?? blendAuthored;
 
-    if (!['add', 'multiply', 'alphaBlend', 'alphaTest'].includes(blend)) {
-        fail(`${where} has unsupported blend "${blend}"`);
+    if (!BLENDS.includes(blendResolved)) {
+        fail(`${where} has unsupported blend "${blendAuthored}"`);
     }
+
+    const blend = blendResolved as ParticleBlend;
 
     /**
      * Depth test on unless the asset says otherwise — `true` is what every asset written before the
@@ -195,9 +213,23 @@ function compileLayer(
         );
     }
 
+    /**
+     * Curve rows, in the channel order the shader reads them (`w = alpha`, `y = sizeY`).
+     *
+     * `sizeY` falls back to the `sizeX` curve rather than to the identity row: a layer that authors
+     * only a width curve means an **isotropic** particle (every one of the three demo assets that do
+     * this calls it `...Width` on a round sprite), and letting the two axes diverge would squash it
+     * into a sliver. `curves.add` dedupes, so the inherited row costs nothing.
+     */
     const curveRows = {
         sizeX: curves.add(layer.curves?.sizeX ? raw.curves?.[layer.curves.sizeX] : undefined),
-        sizeY: curves.add(layer.curves?.sizeY ? raw.curves?.[layer.curves.sizeY] : undefined),
+        sizeY: curves.add(
+            layer.curves?.sizeY
+                ? raw.curves?.[layer.curves.sizeY]
+                : layer.curves?.sizeX
+                  ? raw.curves?.[layer.curves.sizeX]
+                  : undefined
+        ),
         alpha: curves.add(layer.curves?.alpha ? raw.curves?.[layer.curves.alpha] : undefined),
         color: curves.add(layer.curves?.color ? raw.curves?.[layer.curves.color] : undefined),
     };
@@ -213,17 +245,57 @@ function compileLayer(
         }
     }
 
+    /**
+     * The soft-depth opt-in, resolved **once, before the pool key**: the key used to read
+     * `layer.softDepth ?? raw.render.softDepth` (falsy when both are omitted) while the layer field
+     * defaulted to `true`, so an asset that said nothing and an asset that said `softDepth: true`
+     * landed in two different pools running the same draw state — two shader programs, two pools, two
+     * uploads for one look.
+     */
+    const softDepth = layer.softDepth ?? raw.render.softDepth ?? true;
+    /** The depth nudge, resolved once for the same reason: the key has to carry the value. */
+    const zBias = num(layer.zBias ?? raw.render.zBias, 0);
+
+    /**
+     * Where this layer's particles stop existing, in the *asset's* Y (metres): a producer's kill
+     * plane (a Ryzom `CPSZone` ground zone). Absent ⇒ `+Infinity` = clip nothing, which is the
+     * behaviour of every asset written before the field existed.
+     *
+     * Per layer, not per asset or per playback: a zone bounds the particles of the located it
+     * targets, and a layer *is* one located's renderer — two layers of one effect can legitimately
+     * sit above and below the ground. Per playback would be the other candidate and it is wrong:
+     * the plane is authored in asset space, so the arena can transform it by the node matrix that
+     * places the effect (a bone, a ground anchor, a flight) without the caller knowing it exists.
+     */
+    const killBelowY = num(layer.killBelowY, Number.POSITIVE_INFINITY);
+
+    /**
+     * Sprite-cell playback rate, in cells per second: 0 = a particle keeps the cell it was born
+     * with (every asset before this field). A producer's animated sheet steps its UV over life
+     * instead of picking one tile.
+     */
+    const frameRate = Math.max(0, num(layer.frameRate, 0));
+
     return {
         id: index === 0 ? raw.id : `${raw.id}#${index}`,
         // Everything that changes the compiled program or the draw state is part of the identity,
         // so two layers with the same look share one pool (one draw call).
         poolKey:
             `${kind}|${trailStyle}|${orient}|${blend}|${textureUrl}|${grid[0]}x${grid[1]}` +
-            `${basisKeyFor(basis)}${(layer.softDepth ?? raw.render.softDepth) ? '|soft' : ''}` +
-            `${num(layer.zBias ?? raw.render.zBias, 0) !== 0 ? '|z' : ''}` +
+            `${basisKeyFor(basis)}${softDepth ? '|soft' : ''}` +
+            // The **value**, not a flag: `zBias` is a pool uniform, so two layers that differ only in
+            // its magnitude (`cast-hand-life`'s -1 and -2) must not share one `uZBias`.
+            `${zBias !== 0 ? `|z:${zBias}` : ''}` +
             // A no-z-test layer compiles a different material state (and takes no soft fade), so it
             // must not share a draw call with a depth-tested layer of the same look.
-            `${zTest ? '' : '|noztest'}`,
+            `${zTest ? '' : '|noztest'}` +
+            // **`killBelowY` is deliberately absent from this key.** The plane is a per-instance
+            // attribute (`aFloor`, written in `arena.ts` from the node matrix), not a pool uniform, so
+            // two layers that differ only in plane height compile the same program and *can* share a
+            // draw call. Keying on it split the pool for nothing — and, worse, suggested a uniform
+            // that no longer exists. (`zBias` above is the case that really is a uniform, which is why
+            // that value is keyed and this one is not.)
+            `${frameRate > 0 ? `|fps:${frameRate}` : ''}`,
         blend,
         kind,
         trailStyle,
@@ -233,9 +305,11 @@ function compileLayer(
         // Default ON: absent means "fade me if the project supplied a depth pass" (the pool only
         // compiles the define when both the capability and this flag are true). An asset that must not
         // fade says `softDepth: false`.
-        softDepth: layer.softDepth ?? raw.render.softDepth ?? true,
+        softDepth,
         zTest,
-        zBias: num(layer.zBias ?? raw.render.zBias, 0),
+        zBias,
+        killBelowY,
+        frameRate,
         tailFade: layer.tailFade ?? true,
         textureUrl,
         grid,
@@ -662,11 +736,17 @@ export class ParticleAssetRegistry {
 /**
  * Fetch + validate + register. `curves` is shared by the whole app so that every asset's curves
  * live in one texture (see `curves.ts`).
+ *
+ * `limits` is the plugin's compile ceiling (`maxLayers` / `maxNodes`), forwarded here for the same
+ * reason `registerAsset` forwards it: an asset loaded from a URL must compile under the same limits
+ * as an in-memory one, or a project that raised the ceiling for its corpus would still be refused the
+ * moment it fetched the file. Omitted = the schema defaults.
  */
 export async function loadParticleAsset(
     url: string,
     registry: ParticleAssetRegistry,
-    curves: CurveAtlas
+    curves: CurveAtlas,
+    limits: CompileLimits = {}
 ): Promise<CompiledParticleAsset> {
     const response = await fetch(url);
 
@@ -675,7 +755,7 @@ export async function loadParticleAsset(
     }
 
     const raw = (await response.json()) as ParticleAsset;
-    const { asset, warnings } = compileParticleAsset(raw, curves);
+    const { asset, warnings } = compileParticleAsset(raw, curves, limits);
 
     if (warnings.length) {
         console.warn(`[particles] ${asset.id}:\n  - ${warnings.join('\n  - ')}`);

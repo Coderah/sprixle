@@ -26,6 +26,21 @@ import type { CurveAtlas } from './curves';
 
 const BLOCK_SIZE = 32;
 
+/**
+ * "This instance has no ground kill plane", as a **finite** number: `-1e20` written into `aFloor`.
+ *
+ * It used to be `Number.NEGATIVE_INFINITY`, and that is undefined behaviour in GLSL ES: the WebGL
+ * 2.0 spec's IEEE-754 assumptions are not normative for infinities reaching a vertex attribute, so a
+ * driver is free to clamp, flush to zero or propagate NaN, and the shader's `aFloor > -1.0e19`
+ * compare then fires on a layer that has no plane at all (every particle collapses off-screen).
+ * -1e20 is far below any real plane (a height in metres, and the deep sea is -11 km) and far above
+ * the precision at which a float32 comparison against -1.0e19 is ambiguous, so the sentinel is
+ * unmistakeable and portable.
+ *
+ * The comparison threshold in `shaders.ts` is `-1.0e19`: between the sentinel and any real plane.
+ */
+export const NO_FLOOR = -1e20;
+
 /** Mutable instance row written by the spawner. One scratch object for the whole app — see §8 of
  * `Sprixle Docs/particles.md`: the hot path allocates nothing, so this shape must not be `new`ed
  * per particle. */
@@ -57,9 +72,23 @@ export type InstanceScratch = {
     noiseAmplitude: number;
     noiseFrequency: number;
     noiseSeed: number;
+    /**
+     * Curve-atlas **rows**, in the order the shader reads them out of `aCurves`:
+     * `x = sizeX`, `y = sizeY`, `z = colour`, `w = alpha` (`shaders.ts` → `main()`).
+     *
+     * The four rows are one `vec4` because that is the whole curve budget of an instance, and the
+     * order is the shader's read order — not the order they are authored in. Keeping the two in step
+     * is `writeInstance`'s only job here; when they disagreed, a `sizeY` row landed in the alpha
+     * channel (a permanently dead fade) and an alpha row landed in `sizeY` (a stretched sliver).
+     */
     curveSizeX: number;
-    curveAlpha: number;
+    curveSizeY: number;
     curveColor: number;
+    curveAlpha: number;
+    /** Per-playback RGB tint (`ParticlePlayback.tint`), 1 = as authored. */
+    tintR: number;
+    tintG: number;
+    tintB: number;
     r: number;
     g: number;
     b: number;
@@ -71,6 +100,15 @@ export type InstanceScratch = {
      * ask for different sizes at the same moment.
      */
     scale: number;
+    /**
+     * The **world** height of this particle's ground kill plane (`aFloor`), `NO_FLOOR` (`-1e20`) when
+     * the layer has none: one value per instance, computed at spawn as `nodeMatrix · (0, killBelowY, 0)` so an
+     * attached or travelling emitter clips against the floor it is over rather than a shared origin.
+     *
+     * Per instance rather than a pool uniform for the same reason `scale` and `tint` are: one pool is
+     * shared by every playback of a draw identity, and two casters stand on two different floors.
+     */
+    floor: number;
 };
 
 export function createInstanceScratch(): InstanceScratch {
@@ -81,14 +119,23 @@ export function createInstanceScratch(): InstanceScratch {
         sprite: 0, nodeId: -1, segment: 0, segments: 1, segmentDelay: 0, tailFade: 1,
         ax: 0, ay: 0, az: 0, drag: 0,
         noiseAmplitude: 0, noiseFrequency: 1, noiseSeed: 0,
-        curveSizeX: 0, curveAlpha: 0, curveColor: 0,
+        curveSizeX: 0, curveSizeY: 0, curveColor: 0, curveAlpha: 0,
+        tintR: 1, tintG: 1, tintB: 1,
         r: 1, g: 1, b: 1, a: 1,
         scale: 1,
+        floor: NO_FLOOR,
     };
 }
 
-/** Per-instance bytes: 8 × vec4 float + 1 × float + 1 × vec4 u8 = 136. */
-const INSTANCE_BYTES = 4 * 4 * 8 + 4 + 4;
+/**
+ * Per-instance bytes: 8 × vec4 float (sim, vel, size, meta, trail, dyn, noise, curves)
+ * + 1 × vec3 float (tint) + 2 × float (scale, floor) + 1 × vec4 u8 (colour) = 152.
+ */
+const INSTANCE_BYTES = 4 * 4 * 8 + 4 * 3 + 4 + 4 + 4;
+
+/** Floats per instance in `aTint`. Named because `flushTint` computes its update range from it: a
+ * wrong item size uploads from the wrong offset, silently. */
+const TINT_ITEM_SIZE = 3;
 
 /**
  * The camera depth range a `zBias` is resolved against when the project supplies no depth pass (and
@@ -132,11 +179,27 @@ export class ParticlePool {
     readonly noise: Float32Array;
     readonly curves: Float32Array;
     readonly color: Uint8Array;
+    /**
+     * Three floats per instance: the playback's RGB multiply (`ParticlePlayback.tint`), 1 = as
+     * authored. An attribute rather than a uniform for the same reason `aScale` is: one pool holds
+     * every playback of a draw identity, so two hits of the same asset can be tinted differently in
+     * the same frame.
+     */
+    readonly tint: Float32Array;
     /** One float per instance: the uniform size multiplier (`ParticlePlayback.scale`). */
     readonly scale: Float32Array;
+    /**
+     * One float per instance: the world Y of the layer's ground kill plane (`aFloor`), written once at
+     * spawn from the node matrix. `NO_FLOOR` = no plane, and the shader's compare then never fires —
+     * which is why the attribute is allocated unconditionally instead of adding a program permutation
+     * for the layers that have one.
+     */
+    readonly floor: Float32Array;
 
     /** Each attribute with the item size its update ranges are computed from. */
     private readonly attrs: { attribute: InstancedBufferAttribute; itemSize: number }[] = [];
+    /** The `aTint` column on its own, so a live re-tint can upload exactly that lane. */
+    private readonly tintAttribute: InstancedBufferAttribute;
     private readonly blockCount: number;
     private readonly bitmap: Uint32Array;
     private usedBlocks = 0;
@@ -168,7 +231,9 @@ export class ParticlePool {
         this.noise = new Float32Array(this.capacity * 4);
         this.curves = new Float32Array(this.capacity * 4);
         this.color = new Uint8Array(this.capacity * 4);
+        this.tint = new Float32Array(this.capacity * 3).fill(1);
         this.scale = new Float32Array(this.capacity).fill(1);
+        this.floor = new Float32Array(this.capacity).fill(NO_FLOOR);
 
         // Base quad: four corners, **two indexed triangles**.
         //
@@ -200,10 +265,17 @@ export class ParticlePool {
         this.addAttribute('aNoise', this.noise);
         this.addAttribute('aCurves', this.curves);
         this.addAttribute('aColor', this.color, true);
+        // The playback tint, item size 3: three floats per instance, default (1, 1, 1) = identity.
+        this.tintAttribute = this.addAttribute('aTint', this.tint, false, TINT_ITEM_SIZE);
         // Ryzom's `ScaleFX` as one float per instance: a pool is shared by every playback of a draw
         // identity, so the size cannot be a per-material uniform. Item size 1 — `flush` computes each
         // attribute's update range from the size recorded beside it.
         this.addAttribute('aScale', this.scale, false, 1);
+        // The ground kill plane's world Y, one float per instance (`shaders.ts` -> `main()`). A new
+        // channel, never a reuse: `aCurves`' packing (`x sizeX, y sizeY, z colour, w alpha`) and the
+        // separate `aTint` vec3 are a contract 001 fixed, and repurposing a lane of either is how a
+        // colour becomes an alpha.
+        this.addAttribute('aFloor', this.floor, false, 1);
 
         this.geometry.instanceCount = 0;
 
@@ -247,7 +319,21 @@ export class ParticlePool {
                 // Per-pool:
                 uMap: { value: texture },
                 uGrid: { value: new Vector2(layer.grid[0], layer.grid[1]) },
+                /**
+                 * How many cells of the grid the sheet actually uses (`ParticleAssetLayer.spriteCount`).
+                 *
+                 * A pool uniform is fine even though the grid is: both are properties of the one
+                 * texture this pool draws, so every instance of the pool agrees. It is *not*
+                 * `grid.x * grid.y` — a 4×4 sheet with 10 authored frames has six empty tiles, and
+                 * wrapping the flipbook by the grid rendered those as blank frames once per cycle
+                 * (`shaders.ts` → `main()`).
+                 */
+                uSpriteCount: { value: Math.max(1, Math.min(layer.spriteCount, layer.grid[0] * layer.grid[1])) },
                 uZBias: { value: layer.zBias },
+                // Sprite-cell playback rate (cells/s). A uniform rather than a per-instance attribute:
+                // it is one renderer's authored rate, so every particle of the layer steps together.
+                // 0 compiles no stepping at all (`shaders.ts` branches on it).
+                uSpriteFps: { value: layer.frameRate },
                 uBasisX: { value: new Vector3(...(layer.basis?.[0] ?? [1, 0, 0])) },
                 uBasisY: { value: new Vector3(...(layer.basis?.[1] ?? [0, 0, -1])) },
                 uAlphaTest: { value: layer.blend === 'alphaTest' ? 0.5 : 0 },
@@ -394,17 +480,26 @@ export class ParticlePool {
         this.noise[i4 + 2] = 0;
         this.noise[i4 + 3] = 0;
 
+        // The channel order is the shader's read order (`aCurves` in `shaders.ts`):
+        // x = sizeX row, y = sizeY row, z = colour row, w = alpha row.
         this.curves[i4] = r.curveSizeX;
-        this.curves[i4 + 1] = r.curveAlpha;
+        this.curves[i4 + 1] = r.curveSizeY;
         this.curves[i4 + 2] = r.curveColor;
-        this.curves[i4 + 3] = 0;
+        this.curves[i4 + 3] = r.curveAlpha;
 
         this.color[i4] = (r.r * 255) | 0;
         this.color[i4 + 1] = (r.g * 255) | 0;
         this.color[i4 + 2] = (r.b * 255) | 0;
         this.color[i4 + 3] = (r.a * 255) | 0;
 
+        const i3 = index * 3;
+
+        this.tint[i3] = r.tintR;
+        this.tint[i3 + 1] = r.tintG;
+        this.tint[i3 + 2] = r.tintB;
+
         this.scale[index] = r.scale;
+        this.floor[index] = r.floor;
     }
 
     /**
@@ -423,6 +518,23 @@ export class ParticlePool {
             attribute.addUpdateRange(instanceStart * itemSize, count * itemSize);
             attribute.needsUpdate = true;
         }
+    }
+
+    /**
+     * Upload **only** the `aTint` lane for one live run — the `ParticleArena.setTint` path.
+     *
+     * A live re-tint touches one vec3 per instance and nothing else, so it must not re-send the other
+     * ten attributes the way `flush` does; but it *must* reach the GPU at all, which is what
+     * `setTint` used to skip: it wrote the arena's own mirror and stopped there, so a one-shot
+     * (whose only spawn is behind it) never showed the new colour, and a loop waited for its next
+     * cycle. Same units as `flush` — three's update ranges are *array element* indices, so a run of
+     * `count` instances is `count * TINT_ITEM_SIZE` elements.
+     */
+    flushTint(instanceStart: number, count: number) {
+        if (count <= 0) return;
+
+        this.tintAttribute.addUpdateRange(instanceStart * TINT_ITEM_SIZE, count * TINT_ITEM_SIZE);
+        this.tintAttribute.needsUpdate = true;
     }
 
     dispose() {

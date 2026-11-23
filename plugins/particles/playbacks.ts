@@ -69,10 +69,29 @@ export const MAX_PLAYBACKS_PER_ENTITY = 6;
 export type ParticleTravel = {
     /** Launch point in world space — the caster's bone, resolved by the client when the cast fires. */
     from: readonly [number, number, number];
-    /** Arrival point in world space — the target's aiming bone. */
+    /**
+     * Arrival point in world space — the target's aiming bone, **kept live**: a homing bolt is
+     * re-aimed every frame (`ParticleArena.setTravel`), because a bolt aimed at where the target was
+     * detonates in empty air while the impact burst lands on the body it actually hit
+     * (`ryzom/client/src/projectile_manager.cpp:205` calls `updateTargetPos()` for exactly this).
+     */
     to: readonly [number, number, number];
     /** Flight time. The line is traversed linearly over it, then the origin holds at `to`. */
     seconds: number;
+    /**
+     * Apex height above the chord, in metres: `0`/absent = a straight line, non-zero = a **parabolic
+     * arc** that leaves and arrives on the chord and bulges `arcHeight` above it at the midpoint.
+     *
+     * The shape is the `MAGICFX::Bomb` trajectory (`ryzom/client/src/projectile_manager.cpp:247-251,
+     * 275-280`). The *value* is `Authored`: that file is not on this machine, so the constant Ryzom
+     * used for a bomb's apex cannot be read — what is ported is the trajectory and the fact that the
+     * emitter's frame follows the parabola's tangent rather than its chord (`arena.ts` →
+     * `flightBasis`), so a lobbed bolt noses up on the way out and down on the way in.
+     *
+     * It is *presentation*: `seconds` still comes from the gameplay's flight time, so an arcing bolt
+     * arrives on the frame the Form loss does.
+     */
+    arcHeight?: number;
 };
 
 /** One live-or-finished playback on an entity. */
@@ -120,7 +139,20 @@ export type ParticlePlayback = {
      * from it*, not a parent relationship. `'bake'` makes that structurally true.
      */
     attachMode?: 'pose' | 'bake';
-    /** Reserved: per-playback colour multiply (carried, not yet applied in the shader). */
+    /**
+     * Per-playback RGB multiply on the emitted colour — a *look* override, not a request change.
+     *
+     * Absent = `(1, 1, 1)` = as authored. It is spent as the per-instance `aTint` column, written
+     * into the spawn table beside every other spawn column, so a tint costs one multiply per particle
+     * at spawn and nothing per frame, and two playbacks of one asset in the same pool can be tinted
+     * differently. A non-finite component is dropped to the identity (`normalizeTint`) for the same
+     * reason `normalizeOffset` drops one: a NaN in the spawn table is silent and total.
+     *
+     * **It never restarts a playback** (`samePlaybackRequest` ignores it — restarting would drop
+     * every particle in flight), so a change reaches the arena as `ParticleArena.setTint` instead,
+     * which rewrites the live run's `aTint` column and uploads it: the colour the caller asks for is
+     * the colour on screen, for the particles already emitted as much as for the next spawn.
+     */
     tint?: [number, number, number];
     /**
      * Displace the effect's origin from its anchor, in metres **in the anchor's own space**.
@@ -263,10 +295,16 @@ export function resolvedNodeBone(
 export function normalizeTravel(travel: ParticleTravel | undefined): ParticleTravel | undefined {
     if (!travel) return undefined;
 
-    const { from, to, seconds } = travel;
+    const { from, to, seconds, arcHeight } = travel;
     const values = [from[0], from[1], from[2], to[0], to[1], to[2], seconds];
 
     for (const value of values) if (!Number.isFinite(value)) return undefined;
+
+    // A non-finite arc is dropped rather than the whole line: the flight is still a flight, and a
+    // straight bolt is the behaviour every caller had before the field existed.
+    if (arcHeight !== undefined && (!Number.isFinite(arcHeight) || arcHeight <= 0)) {
+        return { from, to, seconds };
+    }
 
     return travel;
 }
@@ -297,6 +335,25 @@ export function normalizeOffset(
  */
 export function normalizeScale(scale: number | undefined): number {
     return typeof scale === 'number' && Number.isFinite(scale) && scale > 0 ? scale : 1;
+}
+
+/**
+ * A tint as the arena stores it: the caller's RGB, or `undefined` (= `(1, 1, 1)`, as authored) when
+ * any component is not a finite number.
+ *
+ * `undefined` rather than a black or a white stand-in: "no tint" has to stay distinguishable from
+ * "tint to black", which is a legal request (a fully black multiply is how a layer is hidden).
+ */
+export function normalizeTint(
+    tint: readonly [number, number, number] | undefined
+): [number, number, number] | undefined {
+    if (!tint) return undefined;
+
+    const [r, g, b] = tint;
+
+    if (!Number.isFinite(r) || !Number.isFinite(g) || !Number.isFinite(b)) return undefined;
+
+    return [r, g, b];
 }
 
 /**
@@ -338,6 +395,7 @@ export function sameTravel(
 
     return (
         before.seconds === after.seconds &&
+        (before.arcHeight ?? 0) === (after.arcHeight ?? 0) &&
         before.from[0] === after.from[0] &&
         before.from[1] === after.from[1] &&
         before.from[2] === after.from[2] &&
@@ -410,7 +468,7 @@ export function startPlayback(
         seed: request.seed ?? 0,
         bone: request.bone,
         attachMode: request.attachMode,
-        tint: request.tint,
+        tint: normalizeTint(request.tint),
         offset: normalizeOffset(request.offset),
         scale: normalizeScale(request.scale),
         travel: normalizeTravel(request.travel),
@@ -457,6 +515,29 @@ export function stopPlaybacksWhere(
 }
 
 /**
+ * Where a playback event goes — the one rule that decides whether the ECS sees an entity at all.
+ *
+ * It is here, in the pure decision module, because it has a default that costs something: the plugin
+ * used to fall through to `em.quickEntity({ particleSignal })` whenever no `onEvent` handler was set,
+ * and nothing in the tree ever read or destroyed that entity — so every cast, hit and resist leaked
+ * one, permanently (issue 001). Making the fall-through explicit makes the default auditable in node,
+ * which is the point: `particles-lifecycle-sanity.mjs` asserts `drop`.
+ *
+ * - `'handler'` — the project passed `onEvent`; it owns the event.
+ * - `'entity'` — the project opted in to `particleSignal` entities (`emitSignalEntities: true`) and
+ *   is responsible for reading and destroying them.
+ * - `'drop'` — nobody asked, so nothing is created; the plugin says so once instead of leaking.
+ */
+export function routePlaybackEvent(options: {
+    onEvent?: unknown;
+    emitSignalEntities?: boolean;
+}): 'handler' | 'entity' | 'drop' {
+    if (options.onEvent) return 'handler';
+
+    return options.emitSignalEntities ? 'entity' : 'drop';
+}
+
+/**
  * The handler for "the arena retired this playback on its own" (natural end, or a budget/eviction
  * stop). Returns `null` the second time, which is the property the lifecycle rests on: the component
  * entry now says `playing: false`, so the next reconcile sees an unchanged finished entry instead of
@@ -474,8 +555,9 @@ export function markPlaybackFinished(
  * parameters, same lifetime, same travel line.
  *
  * `tint` is deliberately not compared — it is a look override that should reach a *live* playback, and
- * restarting an effect because a colour changed would drop every particle in flight. `travel` **is**
- * compared: the line is baked into the spawn table, so a new `to` cannot reach particles already
+ * restarting an effect because a colour changed would drop every particle in flight. (The arena
+ * carries the edit instead: `ParticleArena.setTint`, called from the plugin's reconcile pass.) `travel`
+ * **is** compared: the line is baked into the spawn table, so a new `to` cannot reach particles already
  * emitted — the only honest answer is a restart. `offset` and `scale` are compared for the same
  * reason: both are spent in the spawn matrix (and the scale in a per-instance column), so a particle
  * already alive cannot be re-placed or re-sized — it would have to be respawned, which is a restart.

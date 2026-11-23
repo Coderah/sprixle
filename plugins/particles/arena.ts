@@ -7,6 +7,7 @@ import {
     nextCycleEnd,
     normalizeOffset,
     normalizeScale,
+    normalizeTint,
     normalizeTravel,
     playbackKey,
     playbackWindow,
@@ -16,6 +17,7 @@ import {
 } from './playbacks';
 import {
     createInstanceScratch,
+    NO_FLOOR,
     type InstanceScratch,
     type ParticlePool,
     type ParticlePoolRegistry,
@@ -36,6 +38,64 @@ const displacedNode = new Matrix4();
 const travelFrom = new Vector3();
 const travelTo = new Vector3();
 const travelOffset = new Vector3();
+/**
+ * The **instantaneous flight frame**: `I` = the tangent the emitter is pointing along, `J` = world up
+ * orthogonalised against it, `K` = `I x J`. Rebuilt per particle (the arc's tangent changes along the
+ * parabola) and per frame (a homing line moves), and never stored: it is three vectors and a matrix
+ * in module scratch.
+ *
+ * This is the port of `projectile_manager.cpp`'s orthonormal basis (`:246-259`), and the fix for the
+ * sideways missile: a travelling emitter used to keep the *caster's* yaw (`effectRotation`), so an
+ * off-axis or elevated shot — the common case, because a bolt leaves a hand and arrives at a torso —
+ * flew pointing where the caster happened to face.
+ */
+const flightForward = new Vector3();
+const flightUp = new Vector3();
+const flightRight = new Vector3();
+const flightMatrix = new Matrix4();
+/** `world up`, the reference `J` is orthogonalised against. */
+const WORLD_UP = new Vector3(0, 1, 0);
+/** Fallback reference when the tangent is vertical (a mortar shot straight up). */
+const WORLD_RIGHT = new Vector3(1, 0, 0);
+/** `(to - from)` plus the arc's vertical derivative: the path's tangent, not its chord. */
+const tmpArcTangent = new Vector3();
+/** `flightMatrix * nodeMatrix`, per particle, for a travelling emitter. */
+const travelNodeMatrix = new Matrix4();
+/** The kill plane's world point, per particle (see `aFloor`). */
+const tmpFloor = new Vector3();
+
+/**
+ * How far a homing line must move before the spawn table is re-baked, in metres.
+ *
+ * One centimetre: below that the correction is invisible and the upload is not free (one buffer
+ * write per attribute per layer). It is a *squared* distance in the comparison, and it is not a
+ * tolerance on where the bolt lands — the line is always the live one, this only decides when the
+ * stream is redrawn along it.
+ */
+const MOVE_EPSILON = 0.01;
+
+/**
+ * Build the orthonormal flight frame: `makeBasis(right, up, forward)`.
+ *
+ * `forward` is the trajectory's instantaneous tangent, `up` is world up orthogonalised against it,
+ * and `right = up x forward` closes it right-handed. This is
+ * `ryzom/client/src/projectile_manager.cpp:246-259`'s `(I, J, K)` construction, and the reason a
+ * missile's plume, its sprite plane and its emission cone all point along the shot instead of along
+ * whatever direction the caster was facing. Assets are authored **+Y up / +Z forward** (the same
+ * convention `particleSystem.ts`'s `getTransform` uses), so mapping the asset's +Z onto the tangent
+ * is what "nose-first" means.
+ *
+ * A vertical tangent gets `WORLD_RIGHT` as the reference instead of `WORLD_UP`, which the
+ * orthogonalisation would otherwise cancel to zero.
+ */
+function flightBasis(forward: Vector3) {
+    flightUp.copy(WORLD_UP);
+    if (Math.abs(forward.dot(WORLD_UP)) > 0.999) flightUp.copy(WORLD_RIGHT);
+
+    flightUp.addScaledVector(forward, -flightUp.dot(forward)).normalize();
+    flightRight.copy(flightUp).cross(forward).normalize();
+    flightMatrix.makeBasis(flightRight, flightUp, forward);
+}
 
 /** Default cap on bound nodes per effect — a sizing decision, tunable via the plugin's `maxNodes`. */
 const DEFAULT_NODES_PER_ASSET = DEFAULT_MAX_NODES;
@@ -200,6 +260,13 @@ export class ParticleArena {
     /** Per slot: the playback's uniform `scale`, 1 = as authored. */
     private scaleOf: Float32Array;
     /**
+     * Per slot: the playback's RGB tint (`ParticlePlayback.tint`), flat as `[r, g, b]` per slot,
+     * defaulting to `(1, 1, 1)`. Spent per particle in the spawn table (`aTint`), and pushed to the
+     * draw state by `setTint` — the arena's mirror is written first, then the pool's `aTint` lane, so
+     * the two can never disagree about a live playback's colour.
+     */
+    private tintOf: Float32Array;
+    /**
      * Per slot: a travelling emitter (`ParticleTravel`), or `undefined` for a stationary one. The
      * line is baked into the spawn table, so this is read at spawn time only — never per frame.
      */
@@ -288,6 +355,7 @@ export class ParticleArena {
         this.offsetOf = new Float32Array(maxPlaybacks * 3);
         this.hasOffsetOf = new Uint8Array(maxPlaybacks);
         this.scaleOf = new Float32Array(maxPlaybacks).fill(1);
+        this.tintOf = new Float32Array(maxPlaybacks * 3).fill(1);
 
         for (let i = 0; i < maxPlaybacks; i++) this.free[i] = maxPlaybacks - 1 - i;
         this.freeTop = maxPlaybacks;
@@ -328,6 +396,10 @@ export class ParticleArena {
      * (`primePose` / `updatePoses`) or into the spawn matrix, the scale into that same spawn matrix
      * plus the per-instance `aScale` column. Neither costs anything per particle, and neither exists
      * at all when the caller says nothing.
+     *
+     * `tint` is the per-playback RGB multiply (`ParticlePlayback.tint`): it is written into the spawn
+     * table as the per-instance `aTint` column, so it costs one write per particle at spawn and
+     * nothing per frame. Absent (or malformed) = `(1, 1, 1)` = exactly the old behaviour.
      */
     play(
         entityKey: string,
@@ -341,7 +413,8 @@ export class ParticleArena {
         attachMode?: 'pose' | 'bake',
         travel?: ParticleTravel,
         offset?: readonly [number, number, number],
-        scale?: number
+        scale?: number,
+        tint?: readonly [number, number, number]
     ): boolean {
         const key = playbackKey(entityKey, handle);
 
@@ -398,6 +471,7 @@ export class ParticleArena {
         this.travelOf[slot] = normalizeTravel(travel);
         this.setOffset(slot, normalizeOffset(offset));
         this.scaleOf[slot] = normalizeScale(scale);
+        this.setTintOf(slot, normalizeTint(tint));
 
         this.slotOfKey.set(key, slot);
         this.totalPlaybacks++;
@@ -472,6 +546,73 @@ export class ParticleArena {
         this.offsetOf[base + 2] = offset?.[2] ?? 0;
     }
 
+    /** Store one slot's RGB tint; `undefined` is the identity `(1, 1, 1)`. */
+    private setTintOf(slot: number, tint: readonly [number, number, number] | undefined) {
+        const base = slot * 3;
+
+        this.tintOf[base] = tint?.[0] ?? 1;
+        this.tintOf[base + 1] = tint?.[1] ?? 1;
+        this.tintOf[base + 2] = tint?.[2] ?? 1;
+    }
+
+    /**
+     * Re-tint a **live** playback — a look override that must not restart the effect.
+     *
+     * `playbacks.samePlaybackRequest` deliberately ignores `tint`, so a colour edit reaches the arena
+     * through this call (the plugin's reconcile pass) rather than as a restart that would drop every
+     * particle in flight. It re-colours the playback's **whole live run**, not just the particles
+     * emitted after the call: the run is the `aTint` column the shader multiplies into the sprite
+     * colour, so writing it is what makes the new tint visible at all — a one-shot has no spawn left
+     * to bake it into, and a loop would otherwise wait a full cycle. Bytes are pushed per layer run
+     * (`ParticlePool.flushTint`), so a re-tint is one `bufferSubData` of three floats per instance and
+     * no other attribute traffic. Cheap and idempotent — a no-op when the value is unchanged, and a
+     * missing slot is simply a playback that is not live.
+     */
+    setTint(entityKey: string, handle: number, tint: readonly [number, number, number] | undefined) {
+        const slot = this.slotOfKey.get(playbackKey(entityKey, handle));
+
+        if (slot === undefined) return;
+
+        const normalised = normalizeTint(tint);
+        const base = slot * 3;
+        // `Math.fround`: the mirror is a `Float32Array`, so 0.2 comes back as 0.20000000298… and a
+        // naive compare against the caller's double is never equal — every reconcile pass would then
+        // re-upload a run that did not change. Rounding the request the way the store rounds it is what
+        // makes "idempotent" true for the colours callers actually write.
+        const r = Math.fround(normalised?.[0] ?? 1);
+        const g = Math.fround(normalised?.[1] ?? 1);
+        const b = Math.fround(normalised?.[2] ?? 1);
+
+        if (this.tintOf[base] === r && this.tintOf[base + 1] === g && this.tintOf[base + 2] === b) {
+            return;
+        }
+
+        this.setTintOf(slot, normalised);
+
+        // The arena's mirror is not the draw state: every instance of every layer run this slot owns
+        // is written into the pool's `aTint` column and uploaded. Runs are per layer (`maxLayers`
+        // entries per slot), so a multi-layer effect is re-tinted layer by layer, each in its own pool.
+        for (let layer = 0; layer < this.maxLayers; layer++) {
+            const run = slot * this.maxLayers + layer;
+            const pool = this.poolOf[run];
+            const runStart = this.runStart[run];
+            const runCount = this.runCount[run];
+
+            if (!pool || runCount <= 0) continue;
+
+            const first = runStart * 3;
+            const end = first + runCount * 3;
+
+            for (let i = first; i < end; i += 3) {
+                pool.tint[i] = r;
+                pool.tint[i + 1] = g;
+                pool.tint[i + 2] = b;
+            }
+
+            pool.flushTint(runStart, runCount);
+        }
+    }
+
     /**
      * The matrix a particle's node-local position is multiplied by: `anchor * T(offset)`.
      *
@@ -495,6 +636,74 @@ export class ParticleArena {
         return displacedNode.multiplyMatrices(anchor, offsetMatrix);
     }
 
+    /**
+     * Move a **live** travelling playback's line — the homing half of the missile (`W43`).
+     *
+     * A bolt that aims at where the target *was* detonates in empty air while the impact burst lands
+     * on the body it actually hit. Ryzom answers this by re-reading the target's position every frame
+     * (`projectile_manager.cpp:205` → `updateTargetPos()`); the engine's answer has to be the same
+     * thing expressed in the spawn table, because that is where a travelling emitter's positions and
+     * its flight frame are baked.
+     *
+     * So this **re-bakes the run**: the emitter seed and the playback seed are untouched, so every
+     * particle gets the same size, life, spin and sprite it had — only its position along the new line
+     * changes. That is why it is not a restart: a restart would drop the bolt and re-spawn it, which
+     * on a per-frame homing correction is a strobe. The cost is one upload per layer per corrected
+     * frame, and it is bounded by `MOVE_EPSILON` — a jitter of less than a centimetre is not worth an
+     * upload, and a 20 Hz-consistent bolt (Fury's own server rate) moves 25 cm in that time.
+     *
+     * Not routed through the component on purpose: `samePlaybackRequest` treats a changed `travel` as
+     * a *restart*, which is the correct rule for a request and the wrong one for a correction, so the
+     * caller that owns a live target (the client's FX adaptor) reaches this directly.
+     */
+    setTravelTo(
+        entityKey: string,
+        handle: number,
+        to: readonly [number, number, number],
+        now?: number
+    ): boolean {
+        const slot = this.slotOfKey.get(playbackKey(entityKey, handle));
+
+        if (slot === undefined) return false;
+
+        const current = this.travelOf[slot];
+
+        if (!current) return false;
+        if (!Number.isFinite(to[0]) || !Number.isFinite(to[1]) || !Number.isFinite(to[2])) {
+            return false;
+        }
+
+        const dx = to[0] - current.to[0];
+        const dy = to[1] - current.to[1];
+        const dz = to[2] - current.to[2];
+
+        if (dx * dx + dy * dy + dz * dz < MOVE_EPSILON * MOVE_EPSILON) return false;
+
+        // **Only the arrival point moves.** `from` is where the bolt actually left, `seconds` is the
+        // gameplay's arrival (Fury's `GetProjectileFlightTime`, resolved once by
+        // `combat/abilityFx.ts`) and `arcHeight` is the lob the step asked for — re-deriving any of
+        // the three from a correction would make the visual arrival disagree with the Form loss on
+        // the exact frame 008 pinned.
+        this.travelOf[slot] = { ...current, to: [to[0], to[1], to[2]] };
+
+        // Re-bake against the playback's own start, so the birth times — and therefore the whole
+        // spawn table except the line — are identical to the first write.
+        //
+        // **Particles already emitted keep the position they were drawn at.** A bolt's stream is a
+        // table of births, and a correction is about the *rest* of the flight: re-baking a particle
+        // that is already in the air teleports it sideways by however far the target moved since it
+        // left (`birthAt < now` is exactly that set). The caller supplies the playback clock; when it
+        // does not, every particle is re-baked — the pre-fix behaviour, kept because a caller with no
+        // clock cannot distinguish the two.
+        this.writeRun(
+            slot,
+            this.startedAt[slot],
+            now !== undefined && Number.isFinite(now) ? now : Number.NEGATIVE_INFINITY
+        );
+
+        return true;
+    }
+
     stop(slot: number) {
         if (!this.alive[slot]) return;
 
@@ -514,6 +723,7 @@ export class ParticleArena {
         this.travelOf[slot] = undefined;
         this.hasOffsetOf[slot] = 0;
         this.scaleOf[slot] = 1;
+        this.setTintOf(slot, undefined);
 
         this.releaseSlot(slot);
     }
@@ -804,7 +1014,7 @@ export class ParticleArena {
      * `(asset, emitter.seed, playback seed)` and writes straight into the pool's attribute arrays —
      * no intermediate arrays, no garbage.
      */
-    private writeRun(slot: number, baseTime: number) {
+    private writeRun(slot: number, baseTime: number, rebaseAfter = Number.NEGATIVE_INFINITY) {
         const asset = this.assetOf[slot]!;
         const playbackSeed = this.seeds[slot] || 1;
 
@@ -813,7 +1023,14 @@ export class ParticleArena {
         this.birthNewest[slot] = 0;
 
         for (let layerIndex = 0; layerIndex < asset.layers.length; layerIndex++) {
-            this.writeLayer(slot, asset.layers[layerIndex], layerIndex, baseTime, playbackSeed);
+            this.writeLayer(
+                slot,
+                asset.layers[layerIndex],
+                layerIndex,
+                baseTime,
+                playbackSeed,
+                rebaseAfter
+            );
         }
     }
 
@@ -823,7 +1040,9 @@ export class ParticleArena {
         layer: CompiledLayer,
         layerIndex: number,
         baseTime: number,
-        playbackSeed: number
+        playbackSeed: number,
+        /** Re-bake floor (`setTravelTo`): a particle born before this keeps the values it already has. */
+        rebaseAfter = Number.NEGATIVE_INFINITY
     ) {
         const asset = this.assetOf[slot]!;
         const run = slot * this.maxLayers + layerIndex;
@@ -838,6 +1057,10 @@ export class ParticleArena {
         const travel = this.travelOf[slot];
         const travelStartedAt = this.startedAt[slot];
         const scale = this.scaleOf[slot];
+        const tintBase = slot * 3;
+        const tintR = this.tintOf[tintBase];
+        const tintG = this.tintOf[tintBase + 1];
+        const tintB = this.tintOf[tintBase + 2];
 
         const runStart = this.runStart[run];
         const runEnd = runStart + this.runCount[run];
@@ -871,13 +1094,11 @@ export class ParticleArena {
             }
 
             if (travel) {
-                // **A travelling emitter keeps only the effect's rotation here.** The origin is added
-                // per particle below (`travelProgress` on that particle's own birth time), so this
-                // matrix must contribute no translation of its own: the asset's node offsets are
-                // added on top of the travelled origin, never rotated around a stale one. The bone
-                // is bypassed for the same reason — `from` already came from the caster's hand.
-                effectRotation.copy(effectMatrix).setPosition(0, 0, 0);
-                nodeMatrix.premultiply(effectRotation);
+                // **No anchor rotation of its own.** The frame a travelling emitter is oriented in
+                // is the *trajectory's* (below, per particle), not the caster's: keeping the effect's
+                // rotation here is what made every off-axis or elevated shot fly sideways. The node
+                // matrix keeps only the node's own offset and scale, so the plume trails behind the
+                // bolt in the flight frame instead of behind the caster.
                 nodeSlot = -1;
 
                 // An offset **displaces the whole line**: both endpoints are shifted, because the
@@ -890,6 +1111,11 @@ export class ParticleArena {
                 if (this.hasOffsetOf[slot]) {
                     const base = slot * 3;
 
+                    // The offset is expressed in the *anchor's* axes, and the anchor a travelling
+                    // playback has is the effect transform (it supersedes the bone) — so it is the
+                    // effect's rotation that turns the offset into a world direction, even though
+                    // that same rotation is deliberately *not* applied to the flight frame.
+                    effectRotation.copy(effectMatrix).setPosition(0, 0, 0);
                     travelOffset
                         .set(this.offsetOf[base], this.offsetOf[base + 1], this.offsetOf[base + 2])
                         .applyMatrix4(effectRotation);
@@ -966,21 +1192,70 @@ export class ParticleArena {
                 );
 
                 // Local → world, baked once: particles already alive must not follow the emitter.
-                tmpPos.applyMatrix4(nodeMatrix);
+                //
+                // A travelling emitter is the exception, and it is the whole of W43's second half: its
+                // origin is a function of *this particle's* birth time (one moving origin becomes a
+                // stream that trails behind it instead of a cloud that slides), and its **frame** is
+                // the instantaneous tangent at that same progress — rebuilt per particle because an
+                // arc's tangent turns along the parabola, and re-baked per frame because a homing line
+                // moves (`setTravelTo`).
+                // Hoisted out of the branch: the kill plane below needs the same progress the
+                // position was placed at (a bolt's corridor moves with it).
+                let progress = 0;
+                let lift = 0;
 
-                // ...and a travelling emitter's origin is a function of *this particle's* birth
-                // time, which is what turns one moving origin into a stream that trails behind it
-                // instead of a cloud that slides. No allocation, no per-frame work: the line is
-                // spent here, once, exactly like the rest of the spawn table.
                 if (travel) {
-                    const progress = travelProgress(travel, travelStartedAt, birthAt);
-                    tmpPos.x += travelFrom.x + (travelTo.x - travelFrom.x) * progress;
-                    tmpPos.y += travelFrom.y + (travelTo.y - travelFrom.y) * progress;
-                    tmpPos.z += travelFrom.z + (travelTo.z - travelFrom.z) * progress;
-                }
+                    progress = travelProgress(travel, travelStartedAt, birthAt);
+                    const arc = travel.arcHeight ?? 0;
 
-                tmpDir.transformDirection(nodeMatrix);
-                tmpAccel.transformDirection(nodeMatrix);
+                    // The parabolic arc: `4 h p (1 - p)` peaks at `h` when `p = 1/2` and is 0 at both
+                    // ends, i.e. the bolt leaves and arrives on the chord and bulges above it.
+                    lift = arc > 0 ? 4 * arc * progress * (1 - progress) : 0;
+
+                    flightForward.copy(travelTo).sub(travelFrom);
+                    tmpArcTangent.copy(flightForward);
+
+                    // **The tangent of the parabola, not the chord.** Its slope is `4h(1 - 2p)`, so a
+                    // lobbed bolt points up on the way out, level at the apex and down on the way in.
+                    if (arc > 0) tmpArcTangent.y += 4 * arc * (1 - 2 * progress);
+                    if (tmpArcTangent.lengthSq() < 1e-12) tmpArcTangent.copy(flightForward);
+                    if (tmpArcTangent.lengthSq() < 1e-12) tmpArcTangent.copy(WORLD_UP);
+                    flightBasis(tmpArcTangent.normalize());
+
+                    travelNodeMatrix.multiplyMatrices(flightMatrix, nodeMatrix);
+                    tmpPos.applyMatrix4(travelNodeMatrix);
+
+                    tmpPos.x += travelFrom.x + (travelTo.x - travelFrom.x) * progress;
+                    tmpPos.y += travelFrom.y + (travelTo.y - travelFrom.y) * progress + lift;
+                    tmpPos.z += travelFrom.z + (travelTo.z - travelFrom.z) * progress;
+
+                    tmpDir.transformDirection(travelNodeMatrix);
+                    // **Acceleration is not a direction, and gravity is world-space.** Both halves of
+                    // that were wrong here:
+                    //
+                    // - `Vector3.transformDirection` *normalises*, so a baked `-10 m/s²` gravity
+                    //   arrived in `aDyn` as **-1 m/s²** — every particle fell ten times too slowly
+                    //   and lived long enough to drift out of the effect;
+                    // - `travelNodeMatrix` carries the flight frame (`flightMatrix`, below), whose
+                    //   forward axis is the bolt's tangent. Rotating world gravity by it *pitched
+                    //   gravity sideways* on a parabolic or elevated shot: the bolt fell along its
+                    //   own nose instead of down, and an arcing `MAGICFX::Bomb`
+                    //   (`projectile_manager.cpp:247-251`) pulled backwards at the apex.
+                    //
+                    // So a travelling emitter's acceleration is used exactly as authored, in world
+                    // axes (the frame it is authored in is world gravity — `emitters[].acceleration`
+                    // is baked by `ps_bake.py` from `CPSGravity`/`CPSDirectionalForce`, which are
+                    // world forces in NeL, not asset-local ones).
+                } else {
+                    tmpPos.applyMatrix4(nodeMatrix);
+                    tmpDir.transformDirection(nodeMatrix);
+                    // Rotation only, magnitude preserved: this is the same normalisation bug in the
+                    // non-travelling path (`-10` -> `-1 m/s²`). An anchored effect's gravity is
+                    // still turned by the anchor's yaw, because that is the frame its author saw.
+                    const accelLength = tmpAccel.length();
+                    tmpAccel.transformDirection(nodeMatrix);
+                    tmpAccel.multiplyScalar(accelLength);
+                }
 
                 scratch.p0x = tmpPos.x;
                 scratch.p0y = tmpPos.y;
@@ -1007,13 +1282,58 @@ export class ParticleArena {
                 scratch.noiseFrequency = layer.noiseFrequency;
                 scratch.noiseSeed = noisePhase(i, emitter.seed ^ playbackSeed);
                 scratch.curveSizeX = layer.curveRows.sizeX;
+                scratch.curveSizeY = layer.curveRows.sizeY;
                 scratch.curveAlpha = layer.curveRows.alpha;
                 scratch.curveColor = layer.curveRows.color;
+                // The ground kill plane's **world** height for this instance (`aFloor`): the layer's
+                // asset-space plane through the matrix that placed the effect. Per instance, because
+                // one pool holds playbacks of two casters on two different floors; computed here,
+                // once per particle, from the same matrix the position came from.
+                //
+                // One limitation, stated rather than hidden: a **pose-attached** (bone-bound) node's
+                // matrix is node-local, because the shader applies the pose — so such a layer's plane
+                // would be read in the asset's frame rather than in the bone's. Every zone in the
+                // corpus sits on a located with a free origin (`mag_def_impact_resist.ps`'s zone is
+                // owned by `Forces`, 0.1 m up — see `ps_bake.py` → `zone_plane_height`), so no shipped
+                // asset hits it; an asset that needs both would have to carry the plane in the
+                // shader's pose space instead.
+                if (Number.isFinite(layer.killBelowY)) {
+                    tmpFloor.set(0, layer.killBelowY, 0).applyMatrix4(
+                        travel ? travelNodeMatrix : nodeMatrix
+                    );
+                    if (travel) {
+                        // The travelled origin is added to the position after the matrix, so the plane
+                        // moves with it — a bolt's plane is the corridor it is flying through.
+                        tmpFloor.y +=
+                            travelFrom.y + (travelTo.y - travelFrom.y) * progress + lift;
+                    }
+                    scratch.floor = tmpFloor.y;
+                } else {
+                    // `NO_FLOOR`: a finite sentinel, because GLSL ES has no -Infinity (`pools.ts`).
+                    scratch.floor = NO_FLOOR;
+                }
+
+                scratch.tintR = tintR;
+                scratch.tintG = tintG;
+                scratch.tintB = tintB;
                 scratch.r = emitter.color[0];
                 scratch.g = emitter.color[1];
                 scratch.b = emitter.color[2];
                 scratch.a = 1;
                 scratch.scale = scale;
+
+                // A correction must not move a particle that has already been emitted — it is on
+                // screen, at the position the player is reading. The slot still advances (the run was
+                // reserved by count, and every later particle must land in its own), but nothing is
+                // written, so the born particle keeps the spawn values it was drawn with.
+                //
+                // Placed *after* the emitter's RNG draws on purpose: the seed stream has to advance
+                // identically on a re-bake, or the surviving particles would draw different sizes,
+                // lives and spins than the first write gave them.
+                if (birthAt < rebaseAfter) {
+                    index = Math.min(index + segments, runEnd);
+                    continue;
+                }
 
                 for (let segment = 0; segment < segments; segment++) {
                     if (index >= runEnd) break;

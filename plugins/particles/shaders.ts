@@ -34,8 +34,15 @@ export const particleVertexShader = glsl`
     attribute vec4 aTrail;  // segments, segmentDelay (s), tailFade (0|1), unused
     attribute vec4 aDyn;    // acceleration.xyz, drag k (1/s)
     attribute vec4 aNoise;  // turbulence amplitude (m), base-octave frequency (cycles/s), unused ×2
-    attribute vec4 aCurves; // sizeX row, alpha row, colour row, unused
+    attribute vec4 aCurves; // curve-atlas rows: x = sizeX, y = sizeY, z = colour, w = alpha
     attribute vec4 aColor;  // base colour (linear RGBA)
+    /**
+     * Per-instance RGB multiply — the playback's tint (ParticlePlayback.tint). (1, 1, 1) is the
+     * identity, which is what an un-tinted playback carries. Per instance rather than per material
+     * for the same reason aScale is: one pool is shared by every playback of a draw identity, and a
+     * fire hit and a water hit of the same burst are tinted differently in the same frame.
+     */
+    attribute vec3 aTint;
     /**
      * Per-instance uniform size multiplier — Ryzom's ScaleFX (ParticlePlayback.scale), 1 = as
      * authored. An attribute rather than a uniform because a pool is shared by every playback of a
@@ -44,6 +51,18 @@ export const particleVertexShader = glsl`
      * is per-fragment, so neither depends on how big the quad is.
      */
     attribute float aScale;
+    /**
+     * Per-instance ground kill plane: the **world** Y of the plane this particle dies at
+     * ('ParticleAssetLayer.killBelowY' through the node matrix that placed the effect), written at
+     * spawn. 'NO_FLOOR' ('pools.ts', -1e20) = no plane, which is every layer that never asked for
+     * one, so the compare in 'main()' is simply false and no program variant is needed for the
+     * layers that did. Finite on purpose: GLSL ES has no -Infinity (see 'NO_FLOOR').
+     *
+     * A per-instance attribute, not a pool uniform: one pool is shared by every playback of a draw
+     * identity and two playbacks can stand on two different floors (a bone-anchored burst, a
+     * ground-anchored one, a bolt in flight).
+     */
+    attribute float aFloor;
 
     uniform float uTime;
     uniform float uCurveRows;
@@ -62,6 +81,17 @@ export const particleVertexShader = glsl`
 
     uniform sampler2D uCurves;
     uniform vec2 uGrid;
+    /**
+     * The number of grid cells the sheet actually uses ('ParticleAssetLayer.spriteCount'). Not
+     * 'uGrid.x * uGrid.y': a partly-filled sheet must wrap on its own frame count, or the flipbook
+     * renders the empty tail of the grid once per cycle.
+     */
+    uniform float uSpriteCount;
+    /**
+     * Sprite cells per second, for an animated sheet: 0 = the cell the particle was born with is
+     * kept for its whole life (every asset written before this uniform existed).
+     */
+    uniform float uSpriteFps;
 
     uniform sampler2D uPose;
     /**
@@ -240,14 +270,64 @@ export const particleVertexShader = glsl`
             return;
         }
 
+        // The pose time this vertex is posed at. Hoisted above the kill test because the plane has to
+        // be evaluated on the same world position the sprite is drawn at, and it is this pair the two
+        // share (see 'worldAt').
+        //
+        // A free particle keeps the pose it was emitted with; a trail segment asks for the pose at
+        // its own offset back in time, which is what turns a bone's swing into a ribbon.
+        #ifdef KIND_QUAD
+            // A particle older than the pose ring would ask for a frame the ring has already
+            // overwritten — and would then be posed by a *recent* matrix, i.e. it would appear to
+            // follow the bone. Clamping to the oldest surviving frame keeps such a particle frozen
+            // (slightly stale) instead of gluing it to the emitter. uPoseLive is the debug switch.
+            float birthTime = max(aVel.w, uTime - uPoseWindow);
+            float poseTime = mix(birthTime, uTime, clamp(uPoseLive, 0.0, 1.0));
+        #else
+            float poseTime = uTime - segment * aTrail.y;
+        #endif
+
+        // The ground kill plane ('ParticleAssetLayer.killBelowY'). Collapsing the *vertex* rather than
+        // the instance is what makes a plane a plane: a sprite straddling the floor is cut, not
+        // deleted whole. It compares the *evaluated world Y of this vertex*, not the instance's spawn
+        // point, because gravity is an acceleration the analytic path integrates — the fall only
+        // shows in the evaluated position. 'mag_def_impact_resist.ps' fell 11.48 m below its own floor
+        // before this existed (its 'CPSZoneRectangle' was decoded and ignored).
+        //
+        // Wrapped in a branch on the plane itself, not only on its value: the sentinel a layer without
+        // a zone carries is 'NO_FLOOR' (-1e20), so such a layer skips the compare entirely. The
+        // branch is per instance, and a pool's instances almost always agree (one layer, one plane).
+        // The threshold sits between the sentinel and the lowest real plane: -1.0e19 is 1e19 metres
+        // below the sea, and -1e20 is the sentinel, so nothing real is ever mistaken for it. (A
+        // literal -Infinity would be undefined behaviour here: GLSL ES has no infinity.)
         float t = min(sampleAge, life);
         float lifeRatio = clamp(t / life, 0.0, 1.0);
+
+        // **One** evaluation of the particle's world position per vertex, shared by the kill plane and
+        // by every expansion below. 'worldAt' is up to eight pose fetches (plus the noise field), and
+        // it used to run twice per vertex: the plane sampled
+        // 'worldAt(min(max(sampleAge, 0.0), life), poseTime)', which is exactly 't', because a
+        // not-yet-born vertex already returned above.
+        vec3 world = worldAt(t, poseTime);
+
+        if (aFloor > -1.0e19) {
+            if (world.y < aFloor) {
+                gl_Position = vec4(2.0, 2.0, 2.0, 1.0);
+                vUv = vec2(0.0);
+                vColor = vec4(0.0);
+                return;
+            }
+        }
 
         float sizeX = aSize.x * aScale * curveFetch(aCurves.x, lifeRatio).r;
         float sizeY = aSize.y * aScale * curveFetch(aCurves.y, lifeRatio).r;
 
         vec4 colour = aColor * curveFetch(aCurves.z, lifeRatio);
+        // The authored alpha curve is its own row (aCurves.w), *not* the colour curve's alpha: a
+        // gradient that happens to carry an alpha must not silently become the life fade.
         colour.a *= curveFetch(aCurves.w, lifeRatio).r;
+        // The playback tint, RGB only — it is a colour override, not an opacity one.
+        colour.rgb *= aTint;
 
         #ifndef KIND_QUAD
             if (aTrail.z > 0.5) {
@@ -263,28 +343,23 @@ export const particleVertexShader = glsl`
         // Sprite cell in the pool's grid; y flipped because texture row 0 is the top.
         vec2 cellSize = 1.0 / uGrid;
         float cols = uGrid.x;
-        vec2 cellOrigin = vec2(mod(aMeta.x, cols), floor(aMeta.x / cols));
+        // An animated sheet advances its cell over the particle's own life ('uSpriteFps' cells per
+        // second, wrapping inside the *used* cells of the grid — 'uSpriteCount', not the grid's
+        // capacity), which is what 'CTextureGrouped''s frame list means. At 0 the cell is the one the
+        // particle was born with, exactly as before the uniform existed.
+        float cell = aMeta.x;
+        if (uSpriteFps > 0.0) {
+            cell = mod(cell + floor(t * uSpriteFps), max(uSpriteCount, 1.0));
+        }
+        vec2 cellOrigin = vec2(mod(cell, cols), floor(cell / cols));
         vUv = (cellOrigin + vec2(position.x + 0.5, 0.5 - position.y)) * cellSize;
         vColor = colour;
-
-        // A free particle keeps the pose it was emitted with; a trail segment asks for the pose at
-        // its own offset back in time, which is what turns a bone's swing into a ribbon.
-        #ifdef KIND_QUAD
-            // A particle older than the pose ring would ask for a frame the ring has already
-            // overwritten — and would then be posed by a *recent* matrix, i.e. it would appear to
-            // follow the bone. Clamping to the oldest surviving frame keeps such a particle frozen
-            // (slightly stale) instead of gluing it to the emitter. uPoseLive is the debug switch.
-            float birthTime = max(aVel.w, uTime - uPoseWindow);
-            float poseTime = mix(birthTime, uTime, clamp(uPoseLive, 0.0, 1.0));
-        #else
-            float poseTime = uTime - segment * aTrail.y;
-        #endif
 
         #ifdef KIND_TRAIL_STRIP
             // Stretch this segment between two samples of the same path, in view space, so a chain
             // of independent quads reads as one continuous ribbon (tiny overlap at the joins).
             float tB = clamp(sampleAge - aTrail.y, 0.0, life);
-            vec3 pA = worldAt(t, poseTime);
+            vec3 pA = world;
             vec3 pB = worldAt(tB, poseTime - aTrail.y);
             vec4 vA = modelViewMatrix * vec4(pA, 1.0);
             vec4 vB = modelViewMatrix * vec4(pB, 1.0);
@@ -299,7 +374,6 @@ export const particleVertexShader = glsl`
 
             gl_Position = projectionMatrix * vec4(centre + offset, mix(vA.z, vB.z, 0.5), 1.0);
         #else
-            vec3 world = worldAt(t, poseTime);
             vec4 mv = modelViewMatrix * vec4(world, 1.0);
 
             #ifdef ORIENT_BASIS
